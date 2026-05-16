@@ -219,14 +219,23 @@ func EmitConvertedDLLStub(b *amd64.Builder, plan transform.Plan, rounds []poly.R
 	// Resolver + PEB patch + CreateThread spawn — emitted via the
 	// shared helper. Trailing-data args descriptor is only set when
 	// DefaultArgs is non-empty; nil means "skip PEB patch".
+	//
+	// When RunWithArgs is enabled the operator drives the spawn via
+	// `GetProcAddress("RunWithArgs")`, so DllMain MUST NOT auto-spawn
+	// the OEP — running the Go runtime twice in the same process
+	// (once from DllMain's thread, once from RunWithArgs's thread)
+	// corrupts process-level state and crashes both. Decryption still
+	// happens above; spawn is deferred to the export.
 	var defaultArgsBytes []byte
 	var spawnArgs convertedSpawnArgs
 	if opts.convertedSpawnEnabled() && opts.DefaultArgs != "" {
 		defaultArgsBytes = encode.ToUTF16LE(opts.DefaultArgs)
 		spawnArgs = convertedSpawnArgsTrailing{lenBytes: uint16(len(defaultArgsBytes))}
 	}
-	if err := emitConvertedSpawnBlock(b, plan, opts, spawnArgs); err != nil {
-		return err
+	if !opts.RunWithArgs {
+		if err := emitConvertedSpawnBlock(b, plan, opts, spawnArgs); err != nil {
+			return err
+		}
 	}
 
 	// --- return TRUE: restore args + r15, leave rax=1 ---
