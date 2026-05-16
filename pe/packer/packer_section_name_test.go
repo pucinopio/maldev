@@ -11,12 +11,11 @@ import (
 	packerpkg "github.com/oioio-space/maldev/pe/packer"
 )
 
-// TestPackBinary_DefaultStubSectionName_IsMldv pins the
-// backwards-compatible default behaviour: when the operator
-// doesn't opt in to randomization, the appended stub section
-// is named ".mldv". Existing operator scripts and YARA-style
-// audits depend on this stable name.
-func TestPackBinary_DefaultStubSectionName_IsMldv(t *testing.T) {
+// TestPackBinary_DefaultStubSectionName_IsRandomized pins the
+// default behaviour: with zero-value options the appended stub
+// section name is NOT ".mldv" — Phase 2-A randomisation is the
+// default since Item #3 of packer-actions-2026-05-12.
+func TestPackBinary_DefaultStubSectionName_IsRandomized(t *testing.T) {
 	input := winhelloFixture(t)
 	out, _, err := packerpkg.PackBinary(input, packerpkg.PackBinaryOptions{
 		Format:       packerpkg.FormatWindowsExe,
@@ -27,62 +26,75 @@ func TestPackBinary_DefaultStubSectionName_IsMldv(t *testing.T) {
 		t.Fatalf("PackBinary: %v", err)
 	}
 	got := lastSectionName(t, out)
-	if got != ".mldv" {
-		t.Errorf("default stub section name = %q, want %q (regression — Phase 2-A randomization is opt-in)", got, ".mldv")
+	if got == ".mldv" {
+		t.Errorf("default stub section name = %q — randomisation regression (was flipped ON by default 2026-05-16)", got)
+	}
+	if !strings.HasPrefix(got, ".") {
+		t.Errorf("default stub section name = %q, want '.' prefix (MSVC convention)", got)
 	}
 }
 
-// TestPackBinary_RandomizeStubSectionName_Differs verifies the
-// Phase 2-A opt-in: setting RandomizeStubSectionName=true should
-// produce a section name that (a) is NOT ".mldv", (b) starts with
-// '.', and (c) differs across seeds.
-func TestPackBinary_RandomizeStubSectionName_Differs(t *testing.T) {
+// TestPackBinary_KeepDefaultStubSectionName_OptsIntoMldv covers
+// the opt-out path: operators who need byte-reproducible
+// differential output explicitly request the historic ".mldv".
+func TestPackBinary_KeepDefaultStubSectionName_OptsIntoMldv(t *testing.T) {
+	input := winhelloFixture(t)
+	out, _, err := packerpkg.PackBinary(input, packerpkg.PackBinaryOptions{
+		Format:                     packerpkg.FormatWindowsExe,
+		Stage1Rounds:               3,
+		Seed:                       42,
+		KeepDefaultStubSectionName: true,
+	})
+	if err != nil {
+		t.Fatalf("PackBinary: %v", err)
+	}
+	if got := lastSectionName(t, out); got != ".mldv" {
+		t.Errorf("KeepDefaultStubSectionName=true should yield %q, got %q", ".mldv", got)
+	}
+}
+
+// TestPackBinary_RandomStubSectionName_Differs verifies that under
+// the default (randomisation on), two different seeds produce
+// different section names — sanity check that the RNG is wired.
+func TestPackBinary_RandomStubSectionName_Differs(t *testing.T) {
 	input := winhelloFixture(t)
 
 	out1, _, err := packerpkg.PackBinary(input, packerpkg.PackBinaryOptions{
-		Format:                   packerpkg.FormatWindowsExe,
-		Stage1Rounds:             3,
-		Seed:                     42,
-		RandomizeStubSectionName: true,
+		Format:       packerpkg.FormatWindowsExe,
+		Stage1Rounds: 3,
+		Seed:         42,
 	})
 	if err != nil {
 		t.Fatalf("PackBinary seed=42: %v", err)
 	}
 	out2, _, err := packerpkg.PackBinary(input, packerpkg.PackBinaryOptions{
-		Format:                   packerpkg.FormatWindowsExe,
-		Stage1Rounds:             3,
-		Seed:                     1337,
-		RandomizeStubSectionName: true,
+		Format:       packerpkg.FormatWindowsExe,
+		Stage1Rounds: 3,
+		Seed:         1337,
 	})
 	if err != nil {
 		t.Fatalf("PackBinary seed=1337: %v", err)
 	}
 
-	name1 := lastSectionName(t, out1)
-	name2 := lastSectionName(t, out2)
-
-	if name1 == ".mldv" {
-		t.Errorf("seed=42 randomized name should not equal default %q", name1)
-	}
-	if !strings.HasPrefix(name1, ".") {
-		t.Errorf("seed=42 randomized name = %q, want '.' prefix (MSVC convention)", name1)
+	name1, name2 := lastSectionName(t, out1), lastSectionName(t, out2)
+	if name1 == ".mldv" || name2 == ".mldv" {
+		t.Errorf("randomised names should not equal default %q (got %q, %q)", ".mldv", name1, name2)
 	}
 	if name1 == name2 {
 		t.Errorf("seeds 42 and 1337 produced identical section names %q — RNG not seeded properly?", name1)
 	}
 }
 
-// TestPackBinary_RandomizeStubSectionName_DeterministicGivenSeed
-// confirms the same seed produces the same section name —
-// reproducible-build property the operator relies on for
-// deterministic batch packs.
-func TestPackBinary_RandomizeStubSectionName_DeterministicGivenSeed(t *testing.T) {
+// TestPackBinary_RandomStubSectionName_DeterministicGivenSeed
+// confirms the same seed produces the same section name — the
+// reproducible-build property operators rely on for deterministic
+// batch packs.
+func TestPackBinary_RandomStubSectionName_DeterministicGivenSeed(t *testing.T) {
 	input := winhelloFixture(t)
 	opts := packerpkg.PackBinaryOptions{
-		Format:                   packerpkg.FormatWindowsExe,
-		Stage1Rounds:             3,
-		Seed:                     999,
-		RandomizeStubSectionName: true,
+		Format:       packerpkg.FormatWindowsExe,
+		Stage1Rounds: 3,
+		Seed:         999,
 	}
 	a, _, err := packerpkg.PackBinary(input, opts)
 	if err != nil {

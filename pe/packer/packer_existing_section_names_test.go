@@ -124,8 +124,10 @@ func TestPackBinary_RandomizeExistingSectionNames_DeterministicGivenSeed(t *test
 
 // TestPackBinary_RandomizeExistingSectionNames_DoesNotTouchStubName
 // verifies the composition with Phase 2-A: when ExistingSectionNames
-// is on but RandomizeStubSectionName is off, the stub keeps the
-// canonical ".mldv" while the host sections are randomised.
+// is on and KeepDefaultStubSectionName opts the stub back into
+// ".mldv", the stub keeps that canonical name while the host
+// sections are randomised — proving the rename pass skips the
+// appended stub regardless of the stub-naming opt.
 func TestPackBinary_RandomizeExistingSectionNames_DoesNotTouchStubName(t *testing.T) {
 	input := winhelloFixture(t)
 	out, _, err := packerpkg.PackBinary(input, packerpkg.PackBinaryOptions{
@@ -133,6 +135,7 @@ func TestPackBinary_RandomizeExistingSectionNames_DoesNotTouchStubName(t *testin
 		Stage1Rounds:                  3,
 		Seed:                          42,
 		RandomizeExistingSectionNames: true,
+		KeepDefaultStubSectionName:    true,
 	})
 	if err != nil {
 		t.Fatalf("PackBinary: %v", err)

@@ -205,16 +205,19 @@ type PackBinaryOptions struct {
 	// are independent; both, either, or neither may be set.
 	ConvertEXEtoDLLRunWithArgs bool
 
-	// RandomizeStubSectionName, when true, names the appended PE
-	// stub section with a fresh per-pack random label
-	// (`.xxxxx\x00\x00`) instead of the hardcoded ".mldv". Defeats
-	// YARA rules keyed on the literal default name. Default false
-	// (conservative — packs reproducibly across runs).
+	// KeepDefaultStubSectionName, when true, names the appended PE
+	// stub section ".mldv\x00\x00\x00" (the historic default) instead
+	// of a per-pack random label. Default false — randomisation is
+	// the safer default and defeats trivial YARA rules keyed on the
+	// literal ".mldv" byte sequence. Set this when the operator
+	// needs byte-reproducible output for differential tooling.
 	//
-	// Phase 2-A of docs/refactor-2026-doc/packer-design.md.
+	// Phase 2-A of docs/refactor-2026-doc/packer-design.md
+	// (default flipped 2026-05-16 — Item #3 in
+	// docs/refactor-2026-doc/packer-actions-2026-05-12.md).
 	// PE only; ELF section names live in `.shstrtab` and aren't
 	// load-relevant.
-	RandomizeStubSectionName bool
+	KeepDefaultStubSectionName bool
 
 	// RandomizeTimestamp, when true, overwrites the COFF File
 	// Header's TimeDateStamp with a random epoch in the
@@ -260,9 +263,10 @@ type PackBinaryOptions struct {
 	// doesn't break the loader contract. Defeats name-pattern
 	// heuristics ("section called .text is RWX — suspicious") and
 	// YARA rules keyed on the host binary's original section labels.
-	// Composes with RandomizeStubSectionName: the stub section is
+	// Composes with stub-section-name randomisation (on by default;
+	// see KeepDefaultStubSectionName for opt-out): the stub section is
 	// appended *after* this rename so its name is controlled by
-	// that flag.
+	// that opt.
 	//
 	// Phase 2-F-1 of docs/refactor-2026-doc/packer-design.md.
 	// PE only.
@@ -391,7 +395,8 @@ func PackBinary(input []byte, opts PackBinaryOptions) ([]byte, []byte, error) {
 	// OR-style so an operator who sets both RandomizeAll AND a
 	// specific flag still gets the expected behaviour.
 	if opts.RandomizeAll {
-		opts.RandomizeStubSectionName = true
+		// Stub-name randomisation is on by default; KeepDefaultStubSectionName
+		// is the opt-out, so RandomizeAll doesn't need to touch it.
 		opts.RandomizeTimestamp = true
 		opts.RandomizeLinkerVersion = true
 		opts.RandomizeImageVersion = true
@@ -409,7 +414,11 @@ func PackBinary(input []byte, opts PackBinaryOptions) ([]byte, []byte, error) {
 	// offset (see seedOffset* constants) feeding distinct
 	// math/rand streams.
 	masterSeed := opts.Seed
-	anyRandomize := opts.RandomizeStubSectionName || opts.RandomizeTimestamp ||
+	// Stub-section-name randomisation is ON by default (anyRandomize
+	// is always true unless KeepDefaultStubSectionName opts out AND
+	// no other randomiser fires) — keep the masterSeed bootstrap to
+	// the cases where ANY non-default behaviour is requested.
+	anyRandomize := !opts.KeepDefaultStubSectionName || opts.RandomizeTimestamp ||
 		opts.RandomizeLinkerVersion || opts.RandomizeImageVersion ||
 		opts.RandomizeExistingSectionNames || opts.RandomizeJunkSections ||
 		opts.RandomizePEFileOrder || opts.RandomizeImageBase ||
@@ -422,11 +431,12 @@ func PackBinary(input []byte, opts PackBinaryOptions) ([]byte, []byte, error) {
 		masterSeed = s
 	}
 
-	// Phase 2-A: per-pack random stub section name. Default zero
-	// value preserves the canonical ".mldv\x00\x00\x00" — packs
-	// stay byte-reproducible unless the operator opts in.
+	// Phase 2-A: per-pack random stub section name. Randomisation
+	// is the default; KeepDefaultStubSectionName opts back into the
+	// historic ".mldv\x00\x00\x00" for reproducible/differential
+	// runs.
 	var stubSectionName [8]byte
-	if opts.RandomizeStubSectionName {
+	if !opts.KeepDefaultStubSectionName {
 		stubSectionName = transform.RandomStubSectionName(rand.New(rand.NewSource(masterSeed + seedOffsetStubName)))
 	}
 
@@ -483,8 +493,9 @@ func PackBinary(input []byte, opts PackBinaryOptions) ([]byte, []byte, error) {
 
 	// Phase 2-F-1: per-pack rename of every existing PE section
 	// header (.text, .rdata, .data, …). Skip the LAST section
-	// (appended stub) so its name stays under
-	// RandomizeStubSectionName / the canonical ".mldv". Pure
+	// (appended stub) so its name stays under the stub-name
+	// randomisation default (or ".mldv" when KeepDefaultStubSectionName
+	// opts out). Pure
 	// header mutation — Windows finds resources / imports /
 	// exports / relocs via the Optional Header DataDirectory, so
 	// the loader contract is untouched.
