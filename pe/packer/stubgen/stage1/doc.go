@@ -58,6 +58,6 @@
 //     descriptor producer
 //   - [github.com/oioio-space/maldev/pe/packer/stubgen/amd64] —
 //     instruction encoder
-//   - docs/refactor-2026-doc/KNOWN-ISSUES-1e.md — historical Bug 1/2
+//   - .dev/refactor-2026/KNOWN-ISSUES-1e.md — historical Bug 1/2
 //     post-mortem
 package stage1

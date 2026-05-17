@@ -61,7 +61,7 @@ type Options struct {
 	// LZ4 inflate path — caught via [ErrConvertEXEtoDLLUnsupported]
 	// while that limitation stands).
 	//
-	// Slice 5.5 of docs/refactor-2026-doc/packer-exe-to-dll-plan.md.
+	// Slice 5.5 of .dev/refactor-2026/packer-exe-to-dll-plan.md.
 	ConvertEXEtoDLL bool
 
 	// DiagSkipConvertedPayload, when true alongside ConvertEXEtoDLL,
@@ -109,7 +109,7 @@ var (
 	// admission cross-checks; the conversion pipeline itself lands
 	// in 5.2-5.5.
 	//
-	// See docs/refactor-2026-doc/packer-exe-to-dll-plan.md.
+	// See .dev/refactor-2026/packer-exe-to-dll-plan.md.
 	ErrConvertEXEtoDLLUnsupported = errors.New("stubgen: ConvertEXEtoDLL not yet implemented (slice 5.2-5.5 in flight)")
 )
 

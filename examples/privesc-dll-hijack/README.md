@@ -882,7 +882,7 @@ Get-WinEvent -LogName Security -FilterXPath "*[System[EventID=4624 or EventID=46
 | `probe/main.go` | Full Go probe — the payload that runs as SYSTEM. Uses `os.WriteFile` + `exec.Command("whoami.exe")`, writes the marker file the orchestrator polls. Embedded into orchestrator via `//go:embed probe/probe.exe`. Survives the Mode-8 thread-spawn because `victim.c` keeps the host process Go-runtime-free. |
 | `victim/victim.c` | DELIBERATELY VULNERABLE — `LoadLibrary("hijackme.dll")` then sleeps 5 s. Built in C nostdlib mingw on purpose: a Go victim would collide with the Go probe's runtime init when the spawned thread fires. Deployed at `C:\Vulnerable\victim.exe`, run as SYSTEM by the scheduled task. |
 | `fakelib/fakelib.go` | Real Go-built `c-shared` DLL with three named exports. Embedded via `//go:embed fakelib/fakelib.dll` for the Mode-10 path. |
-| `../../docs/refactor-2026-doc/privesc-e2e-lessons-2026-05-12.md` | session-by-session debugging log if you want the archaeology |
+| `../../.dev/refactor-2026/privesc-e2e-lessons-2026-05-12.md` | session-by-session debugging log if you want the archaeology |
 
 The build artefacts `probe/probe.exe` and `fakelib/fakelib.dll`
 are gitignored — rebuild from source on every run per

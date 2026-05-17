@@ -45,7 +45,7 @@ const CharOff = 0x12
 // PackBinary wiring keeps this opt OFF by default for that
 // reason; RandomizeAll does NOT enable it.
 //
-// Phase 2-F-3-c (partial) of docs/refactor-2026-doc/packer-design.md.
+// Phase 2-F-3-c (partial) of .dev/refactor-2026/packer-design.md.
 //
 // Returns ErrRelocsStripped when the input PE has
 // IMAGE_FILE_RELOCS_STRIPPED set in COFF Characteristics — such
@@ -161,7 +161,7 @@ func ShiftImageVA(pe []byte, delta uint32) ([]byte, error) {
 	//     [DirectoryWalkers] registry. The loop replaces three
 	//     near-identical RVA-bump blocks (IMPORT, RESOURCE,
 	//     BASERELOC) with one delta-apply pass. R2 from
-	//     docs/refactor-2026-doc/audit-2026-04-27.md — future
+	//     .dev/refactor-2026/audit-2026-04-27.md — future
 	//     plug-in walkers (EXCEPTION / LOAD_CONFIG / EXPORT) drop
 	//     in via a single map entry.
 	//

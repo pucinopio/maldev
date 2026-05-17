@@ -52,7 +52,7 @@ var lz4DecodeBytes = [...]byte{
 	// dereference garbage. Caught while debugging C3-stage-2's SGN+LZ4
 	// chain: standalone (`go run`) calls don't trigger GC and pass; tests
 	// running under `go test` (concurrent GC) crash inside scanstack.
-	// See docs/refactor-2026-doc/KNOWN-ISSUES-1e.md C3-stage-2 attempts.
+	// See .dev/refactor-2026/KNOWN-ISSUES-1e.md C3-stage-2 attempts.
 	0x53,             // push rbx
 	0x41, 0x54,       // push r12
 	// emit_entry:

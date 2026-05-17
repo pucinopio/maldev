@@ -31,7 +31,7 @@ type ProxyDLLOptions struct {
 }
 
 // PackProxyDLL emits the **single-file fused proxy** (Path B from
-// docs/refactor-2026-doc/packer-exe-to-dll-plan.md slice 6). One
+// .dev/refactor-2026/packer-exe-to-dll-plan.md slice 6). One
 // PE that:
 //
 //  1. Has IMAGE_FILE_DLL set + an export table mirroring the

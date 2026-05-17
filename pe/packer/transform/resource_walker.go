@@ -58,7 +58,7 @@ const (
 // real-world PEs are 3 levels deep (Type → Name → Language →
 // Data leaf).
 //
-// Phase 2-F-3-c-3 of docs/refactor-2026-doc/packer-2f3c-walker-suite-plan.md.
+// Phase 2-F-3-c-3 of .dev/refactor-2026/packer-2f3c-walker-suite-plan.md.
 func WalkResourceDirectoryRVAs(pe []byte, cb func(rvaFileOff uint32) error) error {
 	l, err := parsePELayout(pe)
 	if err != nil {

@@ -13,7 +13,7 @@ import (
 // binary's complete code+data region.
 //
 // Used by the Windows symmetric path of the all-asm bundle wrap
-// (see [docs/superpowers/plans/2026-05-09-windows-tiny-exe.md]).
+// (see [.dev/superpowers/plans/2026-05-09-windows-tiny-exe.md]).
 //
 // Layout (canonical, ~336 bytes header overhead):
 //

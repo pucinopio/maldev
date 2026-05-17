@@ -175,14 +175,14 @@ const BaseReg = baseReg
 // the broken pre-v0.61 architecture (Phase 1e-A/B): golang-asm's RIP-relative LEA
 // without a linker symbol emits an absolute address, not a RIP-relative
 // displacement, producing stubs that crash on any load address other than
-// the pack-time value. See docs/refactor-2026-doc/KNOWN-ISSUES-1e.md §Bug 1.
+// the pack-time value. See .dev/refactor-2026/KNOWN-ISSUES-1e.md §Bug 1.
 //
 // The CALL is emitted as raw bytes (E8 00 00 00 00) because golang-asm
 // cannot resolve a forward-branch CALL to the immediately following
 // instruction without a linker symbol. The displacement is 0 because the
 // CALL target IS the next instruction; the kernel pushes the return
 // address (= address of the POP) onto the stack, which is exactly what
-// the POP needs to read. See docs/refactor-2026-doc/KNOWN-ISSUES-1e.md §Bug 2.
+// the POP needs to read. See .dev/refactor-2026/KNOWN-ISSUES-1e.md §Bug 2.
 func EmitStub(b *amd64.Builder, plan transform.Plan, rounds []poly.Round, opts EmitOptions) error {
 	if len(rounds) == 0 {
 		return ErrNoRounds

@@ -86,7 +86,7 @@ type Plan struct {
 	//
 	// Operators set this (typically via [RandomStubSectionName])
 	// to defeat YARA rules keyed on the literal ".mldv" string —
-	// Phase 2-A of docs/refactor-2026-doc/packer-design.md.
+	// Phase 2-A of .dev/refactor-2026/packer-design.md.
 	//
 	// PE only; ELF section names live in .shstrtab and are not
 	// load-relevant.
@@ -108,7 +108,7 @@ type Plan struct {
 	// is an EXE; InjectConvertedDLL flips IMAGE_FILE_DLL on the
 	// output. Mutually exclusive with [IsDLL].
 	//
-	// Slice 5 of docs/refactor-2026-doc/packer-exe-to-dll-plan.md.
+	// Slice 5 of .dev/refactor-2026/packer-exe-to-dll-plan.md.
 	IsConvertedDLL bool
 }
 

@@ -18,7 +18,7 @@ with junk sections of mixed entropy.
 This is the v0.61.0 ship of [`pe/packer.PackBinary`][pkg]. It
 replaces the broken `v0.59.0` / `v0.60.0` architecture (host
 wrapper + stage 2 Go EXE); see
-[`docs/refactor-2026-doc/KNOWN-ISSUES-1e.md`][kn] for the
+[`.dev/refactor-2026/KNOWN-ISSUES-1e.md`][kn] for the
 post-mortem.
 
 [pkg]: https://pkg.go.dev/github.com/oioio-space/maldev/pe/packer#PackBinary
@@ -202,9 +202,9 @@ Honest reading of where this technique **stops working**:
 - [`pe/packer` tech md](../techniques/pe/packer.md) — full
   API Reference for `PackBinary`, `AddCoverPE`/`ELF`,
   `DefaultCoverOptions`, `ApplyDefaultCover`.
-- [`docs/refactor-2026-doc/packer-design.md`](../refactor-2026-doc/packer-design.md)
+- [`.dev/refactor-2026/packer-design.md`](../refactor-2026-doc/packer-design.md)
   — three-phase design rationale + capability matrix.
-- [`docs/refactor-2026-doc/KNOWN-ISSUES-1e.md`](../refactor-2026-doc/KNOWN-ISSUES-1e.md)
+- [`.dev/refactor-2026/KNOWN-ISSUES-1e.md`](../refactor-2026-doc/KNOWN-ISSUES-1e.md)
   — v0.59.0 / v0.60.0 architectural gap post-mortem.
 - [Phase 1f reflective loader](../techniques/pe/packer.md) —
   alternate operator path that DOES use `pe/packer/runtime`

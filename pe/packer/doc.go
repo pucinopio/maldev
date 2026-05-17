@@ -56,7 +56,7 @@
 //
 // The full design (capability matrix, threat model, hard
 // constraints, phase plan) is at
-// docs/refactor-2026-doc/packer-design.md.
+// .dev/refactor-2026/packer-design.md.
 //
 // # MITRE ATT&CK
 //
@@ -122,7 +122,7 @@
 // # See also
 //
 //   - docs/techniques/pe/packer.md — operator-facing tech md
-//   - docs/refactor-2026-doc/packer-design.md — full design doc
+//   - .dev/refactor-2026/packer-design.md — full design doc
 //   - [github.com/oioio-space/maldev/pe/morph] — UPX section rename
 //     (adjacent technique; both ship, different problems)
 //   - [github.com/oioio-space/maldev/pe/srdi] — Donut shellcode

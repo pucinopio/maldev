@@ -12,7 +12,7 @@
 // The pre-v0.61 host-emitter + stage 2 Go EXE architecture is
 // removed; v0.61.x is the in-place transform shipped today. The
 // kernel handles all binary loading; the stub only decrypts and
-// JMPs. See docs/refactor-2026-doc/KNOWN-ISSUES-1e.md for the
+// JMPs. See .dev/refactor-2026/KNOWN-ISSUES-1e.md for the
 // post-mortem of the older approach.
 //
 // # MITRE ATT&CK

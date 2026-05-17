@@ -38,7 +38,7 @@ type ChainedProxyDLLOptions struct {
 }
 
 // PackChainedProxyDLL emits the **two-file DLL sideloading bundle**
-// (Path A from docs/refactor-2026-doc/packer-exe-to-dll-plan.md):
+// (Path A from .dev/refactor-2026/packer-exe-to-dll-plan.md):
 //
 //  1. The EXE input is packed via [PackBinary] with
 //     ConvertEXEtoDLL=true → a payload DLL that runs the original

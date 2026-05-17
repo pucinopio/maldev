@@ -234,7 +234,7 @@ func TestPackBinary_ConvertEXEtoDLL_LoadLibrary_Compress_E2E(t *testing.T) {
 // metal undebugged Windows machine the same pack would proceed to
 // CreateThread and the marker WOULD be written; this VM-side test
 // validates the detection path explicitly.
-// Slice 5.6 of docs/refactor-2026-doc/packer-exe-to-dll-plan.md.
+// Slice 5.6 of .dev/refactor-2026/packer-exe-to-dll-plan.md.
 func TestPackBinary_ConvertEXEtoDLL_LoadLibrary_AntiDebug_E2E(t *testing.T) {
 	_ = os.Remove(diagPath)
 	writeDiag("=== AntiDebug_E2E ===")

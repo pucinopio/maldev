@@ -14,7 +14,7 @@ import (
 // (RVA-based), so renaming `.text` → `.xkqwz` doesn't break the
 // loader contract.
 //
-// Phase 2-F-1 of docs/refactor-2026-doc/packer-design.md: defeats
+// Phase 2-F-1 of .dev/refactor-2026/packer-design.md: defeats
 // name-pattern heuristics like "section called .text is RWX —
 // suspicious" or YARA rules keyed on a packer's signature section
 // names. Composes with [RandomStubSectionName] (Phase 2-A) — the

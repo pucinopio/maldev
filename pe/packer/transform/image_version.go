@@ -24,7 +24,7 @@ const (
 // they're operator-controlled descriptive metadata (set via
 // `link /VERSION:major.minor`).
 //
-// Phase 2-D of docs/refactor-2026-doc/packer-design.md: defeats
+// Phase 2-D of .dev/refactor-2026/packer-design.md: defeats
 // threat-intel pivots that cluster samples by the per-binary
 // version stamp.
 //

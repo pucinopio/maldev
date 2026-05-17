@@ -107,7 +107,7 @@
 // # See also
 //
 //   - docs/techniques/pe/packer.md — operator-facing tech md
-//   - docs/refactor-2026-doc/packer-design.md — full design doc
+//   - .dev/refactor-2026/packer-design.md — full design doc
 //   - [github.com/oioio-space/maldev/pe/packer] — encrypt + embed pipeline
 //   - [github.com/oioio-space/maldev/evasion/sleepmask] — in-memory cover
 //

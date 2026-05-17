@@ -134,7 +134,7 @@ sequenceDiagram
 | L3 | Foliage | L2 + thread stack scrubbing on wait (memset of used shadow frames) | `FoliageStrategy` |
 | L4 | BOF-style | L3 + in-memory loader isolation | not shipped |
 
-See the design spec in `docs/superpowers/specs/2026-04-23-sleepmask-variants-design.md` for the full taxonomy and deferred work.
+See the design spec in `.dev/superpowers/specs/2026-04-23-sleepmask-variants-design.md` for the full taxonomy and deferred work.
 
 ## Usage
 

@@ -13,7 +13,7 @@
 // after `packer pack` and watch the .text section flip from low-
 // entropy code to high-entropy ciphertext. The bundle view exposes
 // the wire format byte-by-byte so the spec at
-// docs/superpowers/specs/2026-05-08-packer-multi-target-bundle.md
+// .dev/superpowers/specs/2026-05-08-packer-multi-target-bundle.md
 // stops being an abstract document and becomes a thing on screen.
 package main
 

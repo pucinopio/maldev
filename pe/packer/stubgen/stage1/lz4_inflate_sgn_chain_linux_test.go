@@ -29,7 +29,7 @@ import (
 // SGN+LZ4 chain semantics — the SGN-decoded bytes don't match what the
 // pure-Go LZ4 inflate expects.
 //
-// See docs/refactor-2026-doc/KNOWN-ISSUES-1e.md C3-stage-2 hypothesis 1.
+// See .dev/refactor-2026/KNOWN-ISSUES-1e.md C3-stage-2 hypothesis 1.
 func TestLZ4Inflate_SGNChain_RoundTrip(t *testing.T) {
 	// Step 1: get a real .text fragment from the Phase 1f fixture.
 	fixturePath := filepath.Join("..", "..", "runtime", "testdata", "hello_static_pie")

@@ -20,7 +20,7 @@ import (
 // Why pack-time only: this host doesn't have a Windows runtime
 // available, so kernel-load + execute is out of scope. The
 // matching runtime gate is documented in
-// docs/refactor-2026-doc/HANDOFF-2026-05-06.md and runs from
+// .dev/refactor-2026/HANDOFF-2026-05-06.md and runs from
 // the Windows VM via scripts/vm-run-tests.sh windows.
 //
 // Test surface validated:

@@ -56,7 +56,7 @@ const imageOrdinalFlag64 uint64 = 0x8000000000000000
 // is empty (image with no imports). Callback returning a non-nil
 // error stops the walk and propagates.
 //
-// Phase 2-F-3-c-2 of docs/refactor-2026-doc/packer-2f3c-walker-suite-plan.md.
+// Phase 2-F-3-c-2 of .dev/refactor-2026/packer-2f3c-walker-suite-plan.md.
 func WalkImportDirectoryRVAs(pe []byte, cb func(rvaFileOff uint32) error) error {
 	l, err := parsePELayout(pe)
 	if err != nil {

@@ -80,7 +80,7 @@ var ErrConvertedStubLeak = errors.New("transform: InjectConvertedDLL stubBytes c
 // the input. Operators that need ASLR on the converted DLL must
 // ensure the source EXE was linked with relocs + DYNAMIC_BASE.
 //
-// Slice 5.4 of docs/refactor-2026-doc/packer-exe-to-dll-plan.md.
+// Slice 5.4 of .dev/refactor-2026/packer-exe-to-dll-plan.md.
 func InjectConvertedDLL(input, encryptedText, stubBytes []byte, plan Plan) ([]byte, error) {
 	if !plan.IsConvertedDLL {
 		return nil, ErrPlanNotConverted

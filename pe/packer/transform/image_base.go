@@ -56,7 +56,7 @@ func RandomImageBase64(rng *rand.Rand) uint64 {
 // heuristics on canonical preferred-base values like the Go
 // linker's 0x140000000 default.
 //
-// Phase 2-F-3-c (lite) of docs/refactor-2026-doc/packer-design.md
+// Phase 2-F-3-c (lite) of .dev/refactor-2026/packer-design.md
 // — pragmatic alternative to the full whole-image VA shift
 // (which needs per-directory internal-RVA walkers we haven't
 // shipped yet).

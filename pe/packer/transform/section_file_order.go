@@ -25,7 +25,7 @@ import (
 // the input unchanged when there are fewer than 2 permutable
 // sections (no permutation possible).
 //
-// Phase 2-F-3-b of docs/refactor-2026-doc/packer-design.md.
+// Phase 2-F-3-b of .dev/refactor-2026/packer-design.md.
 //
 // Returns the input unchanged with nil error when the operation
 // is a no-op; the input slice is never mutated; a fresh buffer of

@@ -13,7 +13,7 @@ import (
 
 // TestPackBinary_FormatWindowsDLL_MSVC_E2E packs an MSVC-built test
 // DLL and exercises its exports post-LoadLibrary. Closes Item #7
-// from docs/refactor-2026-doc/packer-actions-2026-05-12.md — the
+// from .dev/refactor-2026/packer-actions-2026-05-12.md — the
 // fixture was previously absent because the Win10 VM lacked an MSVC
 // toolchain. Provisioned via scripts/vm-provision.sh extension.
 //

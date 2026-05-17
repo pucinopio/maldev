@@ -58,7 +58,7 @@ import (
 //     position-independent shellcode (Donut/SRDI conversion of
 //     stage2_main.go) instead of a Go EXE.
 //
-// See docs/refactor-2026-doc/KNOWN-ISSUES-1e.md for the full
+// See .dev/refactor-2026/KNOWN-ISSUES-1e.md for the full
 // findings + fix plan. Until that lands, this test is the
 // regression guard: when the architectural fix ships, this test
 // passes and 1e-A/B graduate from "byte-shape correct" to

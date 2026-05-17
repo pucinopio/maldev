@@ -53,7 +53,7 @@ type BaseRelocEntry struct {
 // `cb` returning a non-nil error stops the walk and propagates
 // the error.
 //
-// Phase 2-F-3-a of docs/refactor-2026-doc/packer-design.md —
+// Phase 2-F-3-a of .dev/refactor-2026/packer-design.md —
 // foundation helper for section-shift / permutation passes that
 // need to enumerate every absolute pointer in the image.
 func WalkBaseRelocs(pe []byte, cb func(BaseRelocEntry) error) error {

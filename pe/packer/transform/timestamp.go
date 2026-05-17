@@ -17,7 +17,7 @@ const COFFTimeDateStampOffset = 0x04
 // section-table or RVA recomputation needed — the kernel loader
 // doesn't read this field.
 //
-// Phase 2-B of docs/refactor-2026-doc/packer-design.md: defeats
+// Phase 2-B of .dev/refactor-2026/packer-design.md: defeats
 // temporal clustering by threat-intel pivots that group samples
 // by linker timestamp. Operators randomise per-pack via
 // [RandomTimeDateStamp].

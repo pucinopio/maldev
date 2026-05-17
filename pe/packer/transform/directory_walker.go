@@ -29,8 +29,8 @@ import (
 // Adding a future data-directory walker (e.g., EXCEPTION,
 // LOAD_CONFIG, EXPORT) is one new entry in [DirectoryWalkers] and
 // (if a new event shape is required) one new variant here. R2 from
-// docs/refactor-2026-doc/audit-2026-04-27.md /
-// docs/refactor-2026-doc/packer-improvements-2026-05-12.md.
+// .dev/refactor-2026/audit-2026-04-27.md /
+// .dev/refactor-2026/packer-improvements-2026-05-12.md.
 type DirectoryPatchEvent interface {
 	isDirectoryPatchEvent()
 }

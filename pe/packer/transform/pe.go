@@ -67,7 +67,7 @@ func PlanPE(input []byte, stubMaxSize uint32) (Plan, error) {
 // PlanDLL is the DLL counterpart of [PlanPE]: it requires the
 // input to carry the IMAGE_FILE_DLL bit and returns a [Plan]
 // with [Plan.IsDLL] set so the stub emitter selects the DllMain
-// prologue/epilogue layout (see docs/refactor-2026-doc/packer-dll-format-plan.md).
+// prologue/epilogue layout (see .dev/refactor-2026/packer-dll-format-plan.md).
 //
 // Sentinels match [PlanPE], with one inversion: PlanDLL returns
 // [ErrIsEXE] when handed an EXE (mirror of PlanPE's [ErrIsDLL]
@@ -82,7 +82,7 @@ func PlanDLL(input []byte, stubMaxSize uint32) (Plan, error) {
 // (rejects DLL inputs with [ErrIsDLL]); the actual format flip
 // happens at injection time.
 //
-// See docs/refactor-2026-doc/packer-exe-to-dll-plan.md.
+// See .dev/refactor-2026/packer-exe-to-dll-plan.md.
 func PlanConvertedDLL(input []byte, stubMaxSize uint32) (Plan, error) {
 	plan, err := planPECore(input, stubMaxSize, expectEXE)
 	if err != nil {
@@ -275,7 +275,7 @@ func InjectStubPE(input, encryptedText, stubBytes []byte, plan Plan) ([]byte, er
 	}
 	// Section name: caller-supplied via plan.StubSectionName, or
 	// the canonical ".mldv\x00\x00\x00" when left zero. Phase 2-A
-	// (docs/refactor-2026-doc/packer-design.md) lets operators
+	// (.dev/refactor-2026/packer-design.md) lets operators
 	// override per-pack to defeat YARA on the literal name.
 	if plan.StubSectionName == ([8]byte{}) {
 		copy(out[newHdrOff:newHdrOff+8], []byte(".mldv\x00\x00\x00"))

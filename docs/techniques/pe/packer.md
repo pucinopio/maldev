@@ -1405,7 +1405,7 @@ The Phase 2-F-3-c experimental opts (`RandomizeImageBase`,
 `RandomizeImageVAShift`) are excluded from `RandomizeAll`
 precisely because they don't yet pass this Win10 E2E. The
 walker-suite roadmap that will let them join is in
-`docs/refactor-2026-doc/packer-2f3c-walker-suite-plan.md`.
+`.dev/refactor-2026/packer-2f3c-walker-suite-plan.md`.
 
 ---
 
@@ -1413,7 +1413,7 @@ walker-suite roadmap that will let them join is in
 
 Per Kerckhoffs's principle: the algorithm is public; only the secret
 is the operator's. The wire format spec is in
-`docs/superpowers/specs/2026-05-08-packer-multi-target-bundle.md` —
+`.dev/superpowers/specs/2026-05-08-packer-multi-target-bundle.md` —
 reproducible by anyone. The **per-build secret** (any string the
 operator picks per deployment) derives via HKDF-SHA256 (RFC 5869,
 v0.83.0+) to:
@@ -2028,7 +2028,7 @@ at a missing walker per the
 ## Known limitations
 
 > **Diagnosing failures.** The companion doc
-> [`docs/refactor-2026-doc/packer-debug-toolkit.md`](../../refactor-2026-doc/packer-debug-toolkit.md)
+> [`.dev/refactor-2026/packer-debug-toolkit.md`](../../refactor-2026-doc/packer-debug-toolkit.md)
 > covers the empirical-bisection workflow + in-tree CLIs
 > (`packer-vis sections`, `packer-vis directories`,
 > `packer-vis entropy`, `packer-vis compare`) that solve most
@@ -2098,7 +2098,7 @@ isn't a directory walker, it's a different pack mode.
 
 A complete planned-improvements list with implementation breakdown
 lives at
-[docs/superpowers/plans/2026-05-09-windows-tiny-exe.md](../../superpowers/plans/2026-05-09-windows-tiny-exe.md)
+[.dev/superpowers/plans/2026-05-09-windows-tiny-exe.md](../../superpowers/plans/2026-05-09-windows-tiny-exe.md)
 — it tracks every gap below as an actionable engineering ticket.
 Brief summary follows.
 
@@ -2270,4 +2270,4 @@ addresses don't match the load address.
 - Worked example: [docs/examples/packer-elevation-tour.md](../../examples/packer-elevation-tour.md)
 - Worked example: [docs/examples/multi-target-bundle.md](../../examples/multi-target-bundle.md)
 - Operator playground: `make packer-demo`
-- Wire format spec: [docs/superpowers/specs/2026-05-08-packer-multi-target-bundle.md](../../superpowers/specs/2026-05-08-packer-multi-target-bundle.md)
+- Wire format spec: [.dev/superpowers/specs/2026-05-08-packer-multi-target-bundle.md](../../superpowers/specs/2026-05-08-packer-multi-target-bundle.md)

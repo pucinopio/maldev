@@ -22,7 +22,7 @@ var ErrEmptyExportName = errors.New("stage1: EmitResolveKernel32Export: empty ex
 //   - Clobbers: RAX, RBX, RCX, RDX, R8, R9, R10, R11, R12
 //   - Preserves: R13 (only assigned at the end), R14, R15
 //
-// Slice 5.2 of docs/refactor-2026-doc/packer-exe-to-dll-plan.md.
+// Slice 5.2 of .dev/refactor-2026/packer-exe-to-dll-plan.md.
 // The converted-EXE-as-DLL stub (slice 5.3) calls this after the
 // CALL+POP+ADD prologue so R15 still holds the runtime textBase.
 //

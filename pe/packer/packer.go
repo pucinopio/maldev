@@ -7,7 +7,7 @@
 // containing a polymorphic SGN-style stage-1 decoder and a reflective
 // stage-2 loader. No go build or system toolchain is required at pack time.
 //
-// Design + roadmap: docs/refactor-2026-doc/packer-design.md.
+// Design + roadmap: .dev/refactor-2026/packer-design.md.
 package packer
 
 import (
@@ -92,7 +92,7 @@ const (
 	FormatWindowsExe               // Phase 1e (v0.61.x): PE32+ Windows executable
 	FormatLinuxELF                 // Phase 1e (v0.61.x): ELF64 Linux static-PIE
 	// FormatWindowsDLL — Phase 2-F-3-c follow-up (scoped in
-	// docs/refactor-2026-doc/packer-dll-format-plan.md). The
+	// .dev/refactor-2026/packer-dll-format-plan.md). The
 	// Format constant is wired through here so PlanPE's DLL
 	// rejection can route to the correct error message, but
 	// the actual DLL stub implementation is a separate slice.
@@ -160,7 +160,7 @@ type PackBinaryOptions struct {
 	// next to a signed legit EXE that LoadLibrary's it), classic
 	// DLL injection, and LOLBAS rundll32 / regsvr32 chains.
 	//
-	// Slice 5 of docs/refactor-2026-doc/packer-exe-to-dll-plan.md.
+	// Slice 5 of .dev/refactor-2026/packer-exe-to-dll-plan.md.
 	ConvertEXEtoDLL bool
 
 	// DiagSkipConvertedPayload is a slice-5.5.y diagnostic flag.
@@ -212,9 +212,9 @@ type PackBinaryOptions struct {
 	// literal ".mldv" byte sequence. Set this when the operator
 	// needs byte-reproducible output for differential tooling.
 	//
-	// Phase 2-A of docs/refactor-2026-doc/packer-design.md
+	// Phase 2-A of .dev/refactor-2026/packer-design.md
 	// (default flipped 2026-05-16 — Item #3 in
-	// docs/refactor-2026-doc/packer-actions-2026-05-12.md).
+	// .dev/refactor-2026/packer-actions-2026-05-12.md).
 	// PE only; ELF section names live in `.shstrtab` and aren't
 	// load-relevant.
 	KeepDefaultStubSectionName bool
@@ -226,7 +226,7 @@ type PackBinaryOptions struct {
 	// Per-pack uniqueness comes from a fresh-seeded RNG (seeded
 	// from opts.Seed when non-zero, else crypto-random).
 	//
-	// Phase 2-B of docs/refactor-2026-doc/packer-design.md.
+	// Phase 2-B of .dev/refactor-2026/packer-design.md.
 	// PE only — ELF doesn't carry an analogous build-timestamp
 	// field the loader respects.
 	RandomizeTimestamp bool
@@ -238,7 +238,7 @@ type PackBinaryOptions struct {
 	// by linker version ("all samples linked with VS2017 14.16").
 	// Per-pack uniqueness comes from a fresh-seeded RNG.
 	//
-	// Phase 2-C of docs/refactor-2026-doc/packer-design.md.
+	// Phase 2-C of .dev/refactor-2026/packer-design.md.
 	// PE only — ELF carries no analogous field.
 	RandomizeLinkerVersion bool
 
@@ -249,7 +249,7 @@ type PackBinaryOptions struct {
 	// pivots that cluster samples by per-binary version stamp.
 	// Per-pack uniqueness via fresh-seeded RNG.
 	//
-	// Phase 2-D of docs/refactor-2026-doc/packer-design.md.
+	// Phase 2-D of .dev/refactor-2026/packer-design.md.
 	// PE only.
 	RandomizeImageVersion bool
 
@@ -268,7 +268,7 @@ type PackBinaryOptions struct {
 	// appended *after* this rename so its name is controlled by
 	// that opt.
 	//
-	// Phase 2-F-1 of docs/refactor-2026-doc/packer-design.md.
+	// Phase 2-F-1 of .dev/refactor-2026/packer-design.md.
 	// PE only.
 	RandomizeExistingSectionNames bool
 
@@ -285,7 +285,7 @@ type PackBinaryOptions struct {
 	// Per-pack count drawn from [1, 5] using a fresh-seeded RNG
 	// (deterministic given opts.Seed).
 	//
-	// Phase 2-F-2 of docs/refactor-2026-doc/packer-design.md.
+	// Phase 2-F-2 of .dev/refactor-2026/packer-design.md.
 	// Defeats heuristics keyed on "9 sections" or "stub is the
 	// last header" patterns. PE only.
 	RandomizeJunkSections bool
@@ -309,7 +309,7 @@ type PackBinaryOptions struct {
 	// (skipLast=1), so the stub's file offset stays predictable
 	// for any future stub-introspection work.
 	//
-	// Phase 2-F-3-b of docs/refactor-2026-doc/packer-design.md.
+	// Phase 2-F-3-b of .dev/refactor-2026/packer-design.md.
 	// PE only.
 	RandomizePEFileOrder bool
 
@@ -325,7 +325,7 @@ type PackBinaryOptions struct {
 	// linker's 0x140000000 default ("file's ImageBase = 0x140000000
 	// → likely Go binary").
 	//
-	// Phase 2-F-3-c (lite) of docs/refactor-2026-doc/packer-design.md.
+	// Phase 2-F-3-c (lite) of .dev/refactor-2026/packer-design.md.
 	// PE only.
 	RandomizeImageBase bool
 
@@ -351,7 +351,7 @@ type PackBinaryOptions struct {
 	// images carry no relocation metadata and can't be safely
 	// shifted; opt out for those binaries.
 	//
-	// Phase 2-F-3-c of docs/refactor-2026-doc/packer-design.md.
+	// Phase 2-F-3-c of .dev/refactor-2026/packer-design.md.
 	// PE only.
 	RandomizeImageVAShift bool
 
@@ -362,7 +362,7 @@ type PackBinaryOptions struct {
 	// behaviour on; this is the "everything Phase 2 ships today"
 	// shortcut.
 	//
-	// Phase 2-E of docs/refactor-2026-doc/packer-design.md.
+	// Phase 2-E of .dev/refactor-2026/packer-design.md.
 	// PE only — opt-ins under the hood are PE-specific.
 	RandomizeAll bool
 
@@ -378,7 +378,7 @@ type PackBinaryOptions struct {
 	// appearance (e.g., masquerading as a damaged legitimate signed
 	// binary, or hiding payload bytes inside the cert region).
 	// PE only — Item #8 in
-	// docs/refactor-2026-doc/packer-actions-2026-05-12.md.
+	// .dev/refactor-2026/packer-actions-2026-05-12.md.
 	PreserveAuthenticodeDirectory bool
 }
 

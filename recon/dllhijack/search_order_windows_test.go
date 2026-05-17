@@ -46,7 +46,7 @@ func TestHijackPath_WritableAppDirHijacks(t *testing.T) {
 	// Picked over `winhttp.dll` (the prior choice) because winhttp
 	// HAS started appearing on the KnownDLL list on later Win10
 	// servicing branches, causing a known-environmental SKIP triaged
-	// out per docs/superpowers/plans/2026-04-25-ship-blockers-and-followups.md.
+	// out per .dev/superpowers/plans/2026-04-25-ship-blockers-and-followups.md.
 	const sentinelDLL = "samcli.dll"
 	if isKnownDLL(sentinelDLL) {
 		t.Skipf("%s is a KnownDLL on this host — pick a different sentinel", sentinelDLL)

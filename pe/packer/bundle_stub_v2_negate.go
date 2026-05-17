@@ -9,7 +9,7 @@ import (
 
 // bundleStubVendorAwareV2Negate is the Phase 4a iteration of V2 —
 // adds §5 negate-flag support per
-// docs/superpowers/specs/2026-05-10-bundle-stub-negate-and-winbuild.md.
+// .dev/superpowers/specs/2026-05-10-bundle-stub-negate-and-winbuild.md.
 //
 // Restructures the per-entry test to compute the match outcome
 // into AL (1 = match, 0 = no match), XOR with the entry's negate

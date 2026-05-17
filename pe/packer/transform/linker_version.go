@@ -19,7 +19,7 @@ const (
 // descriptive only (operator tooling like dumpbin / pe-tree
 // surfaces them as "linked with vN.M").
 //
-// Phase 2-C of docs/refactor-2026-doc/packer-design.md: defeats
+// Phase 2-C of .dev/refactor-2026/packer-design.md: defeats
 // threat-intel pivots that cluster samples by linker version
 // ("all samples linked with VS2017 14.16"). Operators randomise
 // per-pack via [RandomLinkerVersion].

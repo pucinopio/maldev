@@ -12,7 +12,7 @@ import (
 // host's CPUID vendor string and Windows OSBuildNumber WITHOUT calling
 // any OS API or library. The values feed FingerprintPredicate evaluation.
 //
-// See docs/superpowers/specs/2026-05-08-packer-multi-target-bundle.md §10
+// See .dev/superpowers/specs/2026-05-08-packer-multi-target-bundle.md §10
 // for the spec and the byte-level reference.
 
 // cpuidVendorBytes reads the CPUID EAX=0 vendor string and stores it as

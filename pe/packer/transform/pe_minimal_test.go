@@ -13,7 +13,7 @@ import (
 // runnable Windows code (no syscall path). Just enough to give the
 // PE writer a non-empty .text region for structural tests. The
 // actual exit-via-PEB-walk implementation lands with the §2 plan
-// item (see docs/superpowers/plans/2026-05-09-windows-tiny-exe.md).
+// item (see .dev/superpowers/plans/2026-05-09-windows-tiny-exe.md).
 var peExit42StubBytes = []byte{
 	0xc3, // ret — stand-in until the PEB walk + ExitProcess stub ships
 	0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, // pad to 9 bytes

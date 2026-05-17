@@ -272,7 +272,7 @@ func EmitDLLStub(b *amd64.Builder, plan transform.Plan, rounds []poly.Round, opt
 	// LZ4 inflate + memcpy — shared with EmitStub / EmitConvertedDLLStub
 	// via emitLZ4DecompressBlock. Mode 7 (native-DLL) symmetry with
 	// Mode 8 (EXE→DLL) ConvertEXEtoDLL+Compress: Item #2 in
-	// docs/refactor-2026-doc/packer-actions-2026-05-12.md.
+	// .dev/refactor-2026/packer-actions-2026-05-12.md.
 	if opts.Compress {
 		if err := emitLZ4DecompressBlock(b, opts, "stage1/dll: EmitDLLStub"); err != nil {
 			return err

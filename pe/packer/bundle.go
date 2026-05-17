@@ -129,7 +129,7 @@ func DeriveBundleProfile(secret []byte) BundleProfile {
 // EncryptedPayloadData). All offsets in the header are RVAs relative to
 // the bundle's first byte.
 //
-// See docs/superpowers/specs/2026-05-08-packer-multi-target-bundle.md
+// See .dev/superpowers/specs/2026-05-08-packer-multi-target-bundle.md
 // for the full design and threat model.
 const (
 	// BundleMagic is the four-byte ASCII tag at offset 0 — "MLDV".
