@@ -128,14 +128,14 @@ log "building probe.exe (Go) + victim.exe (mingw nostdlib) + fakelib.dll (cgo c-
 # thread Go runtime gets a clean process with no prior TLS slot 0
 # occupant.
 GOOS=windows GOARCH=amd64 go build -ldflags='-s -w' \
-    -o cmd/privesc-e2e/probe/probe.exe \
-    ./cmd/privesc-e2e/probe || fail "build probe (Go)"
+    -o examples/privesc-dll-hijack/probe/probe.exe \
+    ./examples/privesc-dll-hijack/probe || fail "build probe (Go)"
 # Victim = C nostdlib mingw, kernel32-only. Stays Go-runtime-free so
 # the Go probe payload thread can initialise cleanly when DllMain
 # spawns it.
 x86_64-w64-mingw32-gcc -nostdlib -e mainCRTStartup \
     -o /tmp/victim.exe \
-    cmd/privesc-e2e/victim/victim.c -lkernel32 || fail "build victim (mingw)"
+    examples/privesc-dll-hijack/victim/victim.c -lkernel32 || fail "build victim (mingw)"
 # fakelib must build BEFORE the orchestrator — main.go //go:embed
 # pulls fakelib/fakelib.dll at compile time. GOTMPDIR isolates the
 # cgo tmpfiles so host AV scanning ignore/ doesn't churn.
@@ -143,8 +143,8 @@ mkdir -p ignore/gotmp
 GOTMPDIR="$(pwd)/ignore/gotmp" CGO_ENABLED=1 \
     GOOS=windows GOARCH=amd64 CC=x86_64-w64-mingw32-gcc \
     go build -buildmode=c-shared \
-    -o cmd/privesc-e2e/fakelib/fakelib.dll ./cmd/privesc-e2e/fakelib || fail "build fakelib (cgo c-shared)"
-GOOS=windows GOARCH=amd64 go build -o /tmp/privesc-e2e.exe  ./cmd/privesc-e2e            || fail "build orchestrator"
+    -o examples/privesc-dll-hijack/fakelib/fakelib.dll ./examples/privesc-dll-hijack/fakelib || fail "build fakelib (cgo c-shared)"
+GOOS=windows GOARCH=amd64 go build -o /tmp/privesc-e2e.exe  ./examples/privesc-dll-hijack            || fail "build orchestrator"
 
 # 4. Push artifacts + provisioning scripts
 log "uploading artifacts to ${SSH_USER}@${HOST_IP}"

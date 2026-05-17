@@ -12,7 +12,7 @@
 #     action    = C:\Vulnerable\victim.exe
 #     ACL       = lowuser granted RX (read + execute / RUN) via SDDL patch
 #
-# The orchestrator (cmd/privesc-e2e) runs as lowuser, plants
+# The orchestrator (examples/privesc-dll-hijack) runs as lowuser, plants
 # C:\Vulnerable\hijackme.dll, fires `schtasks /Run /TN MaldevHijackVictim`,
 # polls C:\ProgramData\maldev-marker\whoami.txt, asserts SYSTEM identity.
 #

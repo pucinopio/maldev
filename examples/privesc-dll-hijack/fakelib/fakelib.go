@@ -15,7 +15,7 @@
 //	GOTMPDIR=$(pwd)/ignore/gotmp CGO_ENABLED=1 \
 //	  GOOS=windows GOARCH=amd64 CC=x86_64-w64-mingw32-gcc \
 //	  go build -buildmode=c-shared -o ignore/privesc-e2e/fakelib.dll \
-//	  ./cmd/privesc-e2e/fakelib
+//	  ./examples/privesc-dll-hijack/fakelib
 //
 // GOTMPDIR avoids Defender flagging the c-shared build output in
 // the system TEMP dir.

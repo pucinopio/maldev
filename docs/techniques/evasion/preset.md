@@ -323,7 +323,7 @@ func main() {
 ```
 
 End-to-end consumer:
-[`cmd/privesc-e2e/amsi_windows.go::patchAMSI`](../../../cmd/privesc-e2e/amsi_windows.go)
+[`examples/privesc-dll-hijack/amsi_windows.go::patchAMSI`](../../../examples/privesc-dll-hijack/amsi_windows.go)
 collapses a 14-line `ApplyAll` + sort + `fmt.Errorf` block into
 the one-liner above.
 

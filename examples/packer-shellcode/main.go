@@ -19,7 +19,7 @@
 //
 // Usage:
 //
-//	go build -o /tmp/packer-shellcode ./cmd/examples/packer-shellcode
+//	go build -o /tmp/packer-shellcode ./examples/packer-shellcode
 //	/tmp/packer-shellcode <shellcode.bin> <output-prefix>
 //
 // Produces 4 files alongside <output-prefix>:

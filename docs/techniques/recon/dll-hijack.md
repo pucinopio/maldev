@@ -386,10 +386,10 @@ fmt.Printf("%s %s → %s (integrity-gain=%v)\n",
     best.Kind, best.DisplayName, best.HijackedPath, best.IntegrityGain)
 ```
 
-Live end-to-end example: `cmd/privesc-e2e`'s `-discover` path
+Live end-to-end example: `examples/privesc-dll-hijack`'s `-discover` path
 runs `PickBestWritable`, plants the packed DLL at `best.HijackedPath`,
 triggers the victim, validates marker — full chain in 40 LOC.
-See [`cmd/privesc-e2e/README.md`](../../../cmd/privesc-e2e/README.md).
+See [`examples/privesc-dll-hijack/README.md`](../../../examples/privesc-dll-hijack/README.md).
 
 ### ScanPATHWritable — MareBackup-class precondition
 

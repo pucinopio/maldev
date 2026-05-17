@@ -1,4 +1,4 @@
-# cmd/privesc-e2e — DLL-hijack PrivEsc, end-to-end demo
+# examples/privesc-dll-hijack — DLL-hijack PrivEsc, end-to-end demo
 
 > **What this proves.** A low-privileged Windows user can drop a
 > single DLL into a directory they own, then trigger a
@@ -106,16 +106,16 @@ cd /path/to/maldev   # the repo root — every path below is relative
 # probe — full Go (os.WriteFile + exec.Command). The payload that
 # runs as SYSTEM is real Go code, not a C nostdlib stub.
 GOOS=windows GOARCH=amd64 go build -ldflags='-s -w' \
-    -o cmd/privesc-e2e/probe/probe.exe \
-    ./cmd/privesc-e2e/probe
+    -o examples/privesc-dll-hijack/probe/probe.exe \
+    ./examples/privesc-dll-hijack/probe
 
 # fakelib — Go cgo c-shared, only needed for Mode-10.
 mkdir -p ignore/gotmp
 GOTMPDIR="$(pwd)/ignore/gotmp" CGO_ENABLED=1 \
     GOOS=windows GOARCH=amd64 CC=x86_64-w64-mingw32-gcc \
     go build -buildmode=c-shared \
-        -o cmd/privesc-e2e/fakelib/fakelib.dll \
-        ./cmd/privesc-e2e/fakelib
+        -o examples/privesc-dll-hijack/fakelib/fakelib.dll \
+        ./examples/privesc-dll-hijack/fakelib
 
 # victim — C nostdlib mingw, kernel32-only. Deliberately NOT Go: the
 # Mode-8 stub spawns the Go probe payload as a thread inside this
@@ -124,10 +124,10 @@ GOTMPDIR="$(pwd)/ignore/gotmp" CGO_ENABLED=1 \
 # the spawned-thread Go probe to initialise into.
 x86_64-w64-mingw32-gcc -nostdlib -e mainCRTStartup \
     -o victim.exe \
-    cmd/privesc-e2e/victim/victim.c -lkernel32
+    examples/privesc-dll-hijack/victim/victim.c -lkernel32
 
 # orchestrator.
-GOOS=windows GOARCH=amd64 go build -o privesc-e2e.exe ./cmd/privesc-e2e
+GOOS=windows GOARCH=amd64 go build -o privesc-e2e.exe ./examples/privesc-dll-hijack
 ```
 
 Copy `privesc-e2e.exe` + `victim.exe` to the Windows box however
@@ -892,7 +892,7 @@ are gitignored — rebuild from source on every run per
 
 ## 11. The helpers this command demonstrates
 
-`cmd/privesc-e2e` is also the canonical end-to-end consumer for
+`examples/privesc-dll-hijack` is also the canonical end-to-end consumer for
 four reusable maldev APIs. Each is documented standalone; this
 command shows them composed against a real Windows target.
 

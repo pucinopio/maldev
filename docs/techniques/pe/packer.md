@@ -1739,7 +1739,7 @@ fused, key, err := packer.PackProxyDLLFromTarget(probe, fakelib, packer.ProxyDLL
 ```
 
 Used as the canonical Mode-10 entry point by
-[`cmd/privesc-e2e`](../../../cmd/privesc-e2e/README.md) (the
+[`examples/privesc-dll-hijack`](../../../examples/privesc-dll-hijack/README.md) (the
 `-mode 10` branch reads `fakelib.dll` from the target and packs
 in one call).
 
@@ -2062,11 +2062,11 @@ stub section. Two regression tests pin the contract:
 `TestInjectStubPE_StubSectionReadOnlyWithoutScratch`.
 
 End-to-end verification: 12 MiB
-`cmd/privesc-e2e/privesc-e2e.exe` packed with
+`examples/privesc-dll-hijack/privesc-e2e.exe` packed with
 `-compress -randomize -rounds 5` reaches STRONG SUCCESS through
 the full DLL-hijack chain (Defender real-time protection ON,
 no exclusions) — see
-[`cmd/privesc-e2e/README.md` §8 bis](../../../cmd/privesc-e2e/README.md#8-bis-defender-bypass-via-dropper-packing).
+[`examples/privesc-dll-hijack/README.md` §8 bis](../../../examples/privesc-dll-hijack/README.md#8-bis-defender-bypass-via-dropper-packing).
 
 ### `0xC0000409` (STATUS_STACK_BUFFER_OVERRUN) on Windows execution
 

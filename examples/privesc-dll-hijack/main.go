@@ -3,7 +3,7 @@
 // on the target Win10 host (typically `lowuser`) and executes the
 // full attack chain end-to-end:
 //
-//  1. Read embedded probe.exe (built from cmd/privesc-e2e/probe/).
+//  1. Read embedded probe.exe (built from examples/privesc-dll-hijack/probe/).
 //  2. Pack probe.exe into a converted DLL via packer.PackBinary
 //     with ConvertEXEtoDLL=true. The DLL's DllMain spawns the probe
 //     payload on a fresh thread when LoadLibrary loads us.
@@ -29,8 +29,8 @@
 //
 // Build (from host):
 //
-//	go build -o privesc-e2e/probe/probe.exe ./cmd/privesc-e2e/probe
-//	go build -o privesc-e2e.exe ./cmd/privesc-e2e
+//	go build -o privesc-e2e/probe/probe.exe ./examples/privesc-dll-hijack/probe
+//	go build -o privesc-e2e.exe ./examples/privesc-dll-hijack
 //
 // (probe.exe must exist at build time for the embed to succeed.)
 package main

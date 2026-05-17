@@ -324,7 +324,7 @@ proxy, _ := dllproxy.GenerateExt("fakelib", exports, dllproxy.Options{})
 ```
 
 End-to-end consumer:
-[`cmd/privesc-e2e`](../../../cmd/privesc-e2e/README.md) (Mode 10
+[`examples/privesc-dll-hijack`](../../../examples/privesc-dll-hijack/README.md) (Mode 10
 re-reads `fakelib.dll` from the target post-drop so an operator
 could swap it for any DLL between runs).
 

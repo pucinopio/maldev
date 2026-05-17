@@ -7,7 +7,7 @@
 //
 // Usage:
 //
-//	go build -o /tmp/packer-suite ./cmd/examples/packer-suite
+//	go build -o /tmp/packer-suite ./examples/packer-suite
 //	/tmp/packer-suite <input> <output>
 //
 // Cross-platform — runs on linux/windows/darwin. The output binary
