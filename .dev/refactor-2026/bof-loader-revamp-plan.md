@@ -26,10 +26,24 @@ slices:
     vm_e2e: pass (Win10 INIT, 76 tests incl. 13 new, 0.297s)
   - id: 1.c
     title: goffloader-parity-and-then-some (see goffloader-comparison.md)
-    status: in-progress
+    status: closed (10/11 items; 1.c.9 runtime/pe deferred to a dedicated slice)
     commits:
-      - 'pending-1.c'  # this commit — items 1.c.1/2/3/4/5/6/8/10
-    vm_e2e: pending (real-world BOF fixture being validated)
+      - ca32d94  # batch A-D — 1.c.1/2/3/4/5/6/8/10 + realworld_calls fixture
+      - 9a4e381  # batch E — 1.c.7 ExecuteStream + token-mask fix + AddWideString
+    vm_e2e: pass (Win10 INIT, full runtime/bof suite + TestRealWorldBOF + 2 stream tests)
+    items_closed:
+      - 1.c.1 string-obfuscate Beacon import names (rune-array trick + verified hidden via `strings | grep` returning 0)
+      - 1.c.2 vararg capture bumped 6 → 10 (goffloader parity)
+      - 1.c.3 wide-string %s heuristic (UTF-16 detection in expandCFormat)
+      - 1.c.4 RW→RX section flip via VirtualProtect after relocations
+      - 1.c.5 MEM_TOP_DOWN VirtualAlloc flag
+      - 1.c.6 panic recover around BOF entry call
+      - 1.c.7 (*BOF).ExecuteStream async channel API
+      - 1.c.8 BeaconGetOutputData symbol (both packages were missing it)
+      - 1.c.10 cmd/bof-runner -arg type-prefixed CLI (i/s/z/Z/b)
+      - 1.c.11 garble -literals already wired in make release
+    items_deferred:
+      - 1.c.9 runtime/pe — RunExecutable via No-Consolation wrapper. Deserves its own slice; embedding a 63 KB MIT-licensed BOF + arg-marshalling shim + PE-output capture is non-trivial.
     sub_items:
       - 1.c.1 string-obfuscate Beacon import names
       - 1.c.2 bump vararg capture from 6 to 10
