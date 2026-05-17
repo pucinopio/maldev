@@ -36,3 +36,11 @@ jobs:
         # locally and commit the result. The pre-commit hook in
         # scripts/pre-commit catches this before push when installed via
         # `git config core.hooksPath scripts`.
+
+      - name: Strict broken-link check
+        run: |
+          python3 scripts/check-doc-links.py
+        # If this fails, the offending links are printed with their
+        # source file. Either fix the target path or remove the link.
+        # Only .md→.md links are validated (http URLs are network-flaky;
+        # pure anchor links #section are not checked).

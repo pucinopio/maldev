@@ -194,4 +194,4 @@ $ packer-vis bundle bundle-blob.bin
 - [`pe/packer/transform.BuildMinimalELF64`](https://pkg.go.dev/github.com/oioio-space/maldev/pe/packer/transform#BuildMinimalELF64)
 - [`cmd/bundle-launcher`](https://pkg.go.dev/github.com/oioio-space/maldev/cmd/bundle-launcher)
 - [`cmd/packer-vis`](https://pkg.go.dev/github.com/oioio-space/maldev/cmd/packer-vis)
-- [Plan: packer elevation roadmap](../superpowers/plans/2026-05-09-packer-elevation.md)
+- `Plan: packer elevation roadmap` (internal: `.dev/plans/2026-05-09-packer-elevation.md`)

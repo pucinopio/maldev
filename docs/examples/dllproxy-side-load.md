@@ -224,6 +224,6 @@ free.
 ## See also
 
 - [`docs/techniques/recon/dll-hijack.md`](../techniques/recon/dll-hijack.md) — discovery API, scoring, validation primitives.
-- [`docs/techniques/persistence/dll-proxy.md`](../techniques/persistence/dll-proxy.md) — pure-Go forwarder emitter (PE32 + PE32+, perfect-proxy semantics).
+- [`do../techniques/pe/dll-proxy.md`](../techniques/pe/dll-proxy.md) — pure-Go forwarder emitter (PE32 + PE32+, perfect-proxy semantics).
 - [`docs/techniques/pe/imports.md`](../techniques/pe/imports.md) — `pe/parse.ExportEntries` for the named-exports list (handles ordinal-only exports such as `msvcrt`).
 - [`docs/examples/full-chain.md`](full-chain.md) — full implant lifecycle with cross-process inject + masquerade + sleepmask.

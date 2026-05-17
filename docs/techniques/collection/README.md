@@ -88,7 +88,7 @@ packages that own them.
 
 > [!NOTE]
 > Both pages will move to their owning areas in Phase 6 of the doc
-> refactor (see [.dev/refactor-2026/progress.md](../../refactor-2026-doc/progress.md)).
+> refactor (see `.dev/refactor-2026/progress.md` (internal: `.dev/progress.md`)).
 
 ## See also
 

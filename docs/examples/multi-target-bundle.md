@@ -313,6 +313,6 @@ bundle, err := packer.PackBinaryBundle([]packer.BundlePayload{
 
 ## See also
 
-- Spec: [`.dev/superpowers/specs/2026-05-08-packer-multi-target-bundle.md`](../superpowers/specs/2026-05-08-packer-multi-target-bundle.md)
+- Spec: ``.dev/superpowers/specs/2026-05-08-packer-multi-target-bundle.md`` (internal: `.dev/specs/2026-05-08-packer-multi-target-bundle.md`)
 - Tech md: [`docs/techniques/pe/packer.md`](../techniques/pe/packer.md)
 - UPX-style single-payload variant: [`docs/examples/upx-style-packer.md`](upx-style-packer.md)

@@ -22,7 +22,7 @@ wrapper + stage 2 Go EXE); see
 post-mortem.
 
 [pkg]: https://pkg.go.dev/github.com/oioio-space/maldev/pe/packer#PackBinary
-[kn]: ../refactor-2026-doc/KNOWN-ISSUES-1e.md
+<!-- ref [kn] removed (linked .dev/ planning doc) -->
 
 ## What's in the chain
 
@@ -202,9 +202,9 @@ Honest reading of where this technique **stops working**:
 - [`pe/packer` tech md](../techniques/pe/packer.md) — full
   API Reference for `PackBinary`, `AddCoverPE`/`ELF`,
   `DefaultCoverOptions`, `ApplyDefaultCover`.
-- [`.dev/refactor-2026/packer-design.md`](../refactor-2026-doc/packer-design.md)
+- ``.dev/refactor-2026/packer-design.md`` (internal: `.dev/packer-design.md`)
   — three-phase design rationale + capability matrix.
-- [`.dev/refactor-2026/KNOWN-ISSUES-1e.md`](../refactor-2026-doc/KNOWN-ISSUES-1e.md)
+- ``.dev/refactor-2026/KNOWN-ISSUES-1e.md`` (internal: `.dev/KNOWN-ISSUES-1e.md`)
   — v0.59.0 / v0.60.0 architectural gap post-mortem.
 - [Phase 1f reflective loader](../techniques/pe/packer.md) —
   alternate operator path that DOES use `pe/packer/runtime`

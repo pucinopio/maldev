@@ -66,7 +66,7 @@ One active hardware breakpoint. `Register` is the DR index
 (0-3); `Address` is the watched virtual address; `ThreadID`
 identifies the owning thread. The package does not resolve
 addresses to module names — operators map them via
-[`process/enum`](../../process/enum.md) or
+[`process/enum`](../process/enum.md) or
 `golang.org/x/sys/windows`.
 
 **Platform:** Windows-only.

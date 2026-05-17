@@ -403,4 +403,3 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 | Doc | Audience |
 |---|---|
 | [conventions/documentation.md](conventions/documentation.md) | Anyone editing docs (this is the source of truth for templates, GFM features, voice, migration order) |
-| [refactor-2026-doc/audit-2026-04-27.md](refactor-2026-doc/audit-2026-04-27.md) | Snapshot of pre-refactor state — how we got here |

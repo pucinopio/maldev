@@ -42,5 +42,5 @@ Every example page follows the same shape:
   focused index of techniques + chains
 - [docs/index.md](../index.md) — per-technique reference pages
   (categorized by package + MITRE ATT&CK ID)
-- [.dev/refactor-2026/packer-design.md](../refactor-2026-doc/packer-design.md)
+- `.dev/refactor-2026/packer-design.md` (internal: `.dev/packer-design.md`)
   — design-doc family for packer-related work
