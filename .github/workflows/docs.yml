@@ -37,6 +37,14 @@ jobs:
         # scripts/pre-commit catches this before push when installed via
         # `git config core.hooksPath scripts`.
 
+      - name: Technique-page template discipline
+        run: |
+          go run ./internal/tools/docgen --check-template
+        # Enforces the canonical docs/techniques/ page shape:
+        # no '## API Reference' (use '## API → godoc'), no
+        # last_reviewed/reflects_commit frontmatter. See
+        # docs/templates/technique-page.md for the full spec.
+
       - name: Strict broken-link check
         run: |
           python3 scripts/check-doc-links.py

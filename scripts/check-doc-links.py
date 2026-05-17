@@ -20,6 +20,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DOCS = REPO_ROOT / "docs"
 
 LINK_RE = re.compile(r"\[[^\]]*?\]\(([^)#]+\.md)(#[^)]*)?\)")
+# Strip fenced code blocks before scanning — examples inside
+# ```markdown / ``` blocks are illustrative, not real links.
+FENCED_RE = re.compile(r"```.*?```", re.S)
 
 
 def main() -> int:
@@ -31,6 +34,10 @@ def main() -> int:
     broken: list[tuple[str, str]] = []
     for md in DOCS.rglob("*.md"):
         text = md.read_text(encoding="utf-8", errors="replace")
+        # Strip fenced code blocks (```…```), including ```markdown
+        # templates. Illustrative links inside those blocks are not
+        # real cross-references.
+        text = FENCED_RE.sub("", text)
         for m in LINK_RE.finditer(text):
             target = m.group(1)
             total += 1

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,7 +57,15 @@ type PackageDoc struct {
 
 func main() {
 	check := flag.Bool("check", false, "exit non-zero on drift instead of writing")
+	checkTemplate := flag.Bool("check-template", false, "verify every docs/techniques/ page conforms to the canonical structure (no '## API Reference', no last_reviewed/reflects_commit frontmatter)")
 	flag.Parse()
+
+	if *checkTemplate {
+		if err := checkTechniquePagesTemplate(); err != nil {
+			die("template check: %v", err)
+		}
+		return
+	}
 
 	pkgs, err := loadPackages()
 	if err != nil {
@@ -591,4 +600,56 @@ func renderMITRETable(pkgs []PackageDoc) string {
 func die(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "docgen: "+format+"\n", args...)
 	os.Exit(1)
+}
+
+// checkTechniquePagesTemplate enforces the canonical docs/techniques/
+// page shape (see docs/templates/technique-page.md):
+//
+//  1. No "## API Reference" section — duplicates godoc, dominant
+//     drift surface (G.5/G.6 of the doc-refonte plan removed them all).
+//  2. No drift-frontmatter fields (last_reviewed, reflects_commit) —
+//     git log is the authoritative "last touched" record.
+//
+// Pages with at least one violation are listed and the function
+// returns a non-nil error so CI can block the merge. README.md and
+// any cross-ref-only pages are exempt — the checker only flags the
+// two specific patterns, not the absence of other sections.
+func checkTechniquePagesTemplate() error {
+	root := "docs/techniques"
+	var violations []string
+	apiRefRe := regexp.MustCompile(`(?m)^## API Reference\s*$`)
+	driftRe := regexp.MustCompile(`(?m)^(?:last_reviewed|reflects_commit):`)
+
+	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".md") {
+			return nil
+		}
+		data, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return rerr
+		}
+		text := string(data)
+		if apiRefRe.MatchString(text) {
+			violations = append(violations, fmt.Sprintf("%s — contains '## API Reference' (use '## API → godoc' instead; see docs/templates/technique-page.md)", path))
+		}
+		if driftRe.MatchString(text) {
+			violations = append(violations, fmt.Sprintf("%s — contains last_reviewed/reflects_commit frontmatter (remove; git log is authoritative)", path))
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return walkErr
+	}
+	if len(violations) == 0 {
+		fmt.Println("template check: OK")
+		return nil
+	}
+	fmt.Fprintln(os.Stderr, "template check: violations")
+	for _, v := range violations {
+		fmt.Fprintln(os.Stderr, "  "+v)
+	}
+	return fmt.Errorf("%d violation(s)", len(violations))
 }

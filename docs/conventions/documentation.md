@@ -98,88 +98,42 @@ the `()` form. Examples:
 
 ## Per-technique pages (`docs/techniques/<area>/<file>.md`)
 
-**Template — flexible, but API Reference is mandatory.** Sections in the
-order listed. Omit a section if it has no content; never reorder.
+The canonical skeleton lives in
+[`docs/templates/technique-page.md`](../templates/technique-page.md)
+and is enforced by `internal/tools/docgen --check-template` in CI.
 
-1. `# <Title>` (H1, no subtitle).
-2. **Front-matter (YAML)** — see Versioning below.
-3. `## TL;DR` — 3 lines max. What / why / when.
-4. `## Primer` — 100–200 words, beginner-accessible. Defines the problem
-   space without code.
-5. `## How It Works` — diagrams + step list. Mermaid encouraged when it adds
-   clarity.
-6. `## API Reference` — **REQUIRED, homogenized format** (see below).
-7. `## Examples`:
-   - `### Simple` — minimum-viable runnable snippet, ≤10 LOC.
-   - `### Composed` — combined with ≥1 other package (e.g.,
-     `evasion + caller`).
-   - `### Advanced` — chain ≥4 packages.
-   - `### Complex` — full end-to-end scenario, may link out to
-     `docs/examples/*.md`.
-8. `## OPSEC & Detection` — artifacts left, defender vantage points,
-   D3FEND counter-techniques tagged `D3-XXX`.
-9. `## MITRE ATT&CK` — mini-table:
-   ```markdown
-   | T-ID | Name | Sub-coverage | D3FEND counter |
-   |---|---|---|---|
-   | T1003.001 | OS Credential Dumping: LSASS Memory | full | D3-PA |
-   ```
-10. `## Limitations` — Windows version gates, admin/SYSTEM requirements,
-    AV signatures encountered.
-11. `## See also` — sibling technique pages, doc.go anchor, external
-    references (papers, blog posts).
+**Section order (fixed)** — omit a section if empty, never reorder:
 
-**Banned:** "Compared to Other Implementations" sections. We don't
-benchmark against tooling we don't ship.
+1. `# <Title>` (H1, accessible vocabulary).
+2. **Front-matter** — `package:` (import path), `mitre:` (T-IDs).
+   No `last_reviewed` / `reflects_commit` (these rot silently and
+   were removed in G.6 — `git log` is authoritative).
+3. `## TL;DR` — one sentence, concrete.
+4. `## What it does` — vulgarised primer, 2-4 paragraphs.
+5. `## How it works` — mechanism. Mermaid only if it shows real
+   ordering / decision / sequence; max 1 per page.
+6. `## Usage` — minimal Go snippet with imports. Max 3 variants.
+7. `## Non-obvious behaviour` — bullet list of pitfalls + side
+   effects + dependencies godoc doesn't surface clearly.
+8. `## OPSEC & detection` — artefacts ↔ defender vantage points,
+   D3FEND counter-techniques.
+9. `## MITRE ATT&CK` — small table (T-ID, name, sub-coverage).
+10. `## Limitations` — known broken / not-yet-supported axes.
+11. `## API → godoc` — single pointer to `pkg.go.dev/...`. NO
+    handwritten signature tables — pkg.go.dev is the
+    authoritative reference. (This was the dominant drift surface
+    before G.5/G.6.)
+12. `## See also` — sibling pages + cookbook entries + external refs.
 
-### API Reference format (REQUIRED, homogeneous)
+**Banned patterns** (the checker blocks PRs that introduce them):
 
-Each public exported symbol gets a fixed-shape entry:
+- `## API Reference` section with handwritten `### \`Func(args)\``
+  entries — recopies godoc, drifts on rename.
+- `last_reviewed:` / `reflects_commit:` frontmatter — rotted on
+  100+ pages across 6 months before being removed.
 
-```markdown
-### `Foo(arg Type) (Result, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/<path>#Foo)
-
-<one-line summary, identical to first line of godoc>
-
-**Parameters:**
-- `arg` — what it represents, accepted ranges, who supplies it.
-
-**Returns:**
-- `Result` — meaning of the value.
-- `error` — `<sentinel>` when X, wraps `<other>` when Y, nil on success.
-
-**Side effects:** <if any, e.g. allocates RWX memory, writes to %TEMP%>.
-
-**OPSEC:** <one-line summary of what this single call leaves behind>.
-
-**Required privileges:** one of `unprivileged` / `medium-IL` /
-`admin` / `SYSTEM` / `kernel`. Append the specific Windows
-privileges this call needs (e.g. `SeDebugPrivilege`,
-`SeLoadDriverPrivilege`) when applicable.
-
-**Platform:** `windows` / `linux` / `cross-platform`. Add the
-minimum build (e.g. `windows ≥ 10 1809`) when the call is
-build-gated.
-```
-
-Privilege levels (closed set):
-
-- **`unprivileged`** — runs as any logged-on interactive user, no
-  UAC consent needed (e.g., reading own process memory, `domain.Name`).
-- **`medium-IL`** — same as unprivileged but explicitly relies on
-  the Medium integrity level (most user-mode primitives that touch
-  HKCU but not HKLM).
-- **`admin`** — High-IL token, post-UAC-consent or already
-  elevated. Hostile UAC-bypass primitives target this state.
-- **`SYSTEM`** — `NT AUTHORITY\SYSTEM` (winlogon-impersonation,
-  service install, kernel-callback writes through BYOVD).
-- **`kernel`** — needs a kernel R/W primitive (BYOVD via
-  `kernel/driver/*`, or a future loaded-driver path).
-
-Every package with public exports has a complete `## API Reference` section
-with one entry per exported symbol. No exceptions.
+**Banned content:** "Compared to Other Implementations" sections.
+We don't benchmark against tooling we don't ship.
 
 ## Examples (`example_test.go`)
 
