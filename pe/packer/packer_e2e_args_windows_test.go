@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/oioio-space/maldev/pe/packer"
 )
@@ -311,11 +310,61 @@ func TestPackBinary_ConvertEXEtoDLL_DefaultArgs_LargeButValid(t *testing.T) {
 	}
 }
 
+// TestPackBinary_ConvertEXEtoDLL_RunWithArgs_LoadOnly_E2E is a
+// diagnostic-narrow variant that exercises only LoadLibrary +
+// GetProcAddress("RunWithArgs"). When the full _E2E test fails
+// with exit code 0xC000B / ERROR_INVALID_HANDLE the question is
+// whether the export itself is reachable — this test isolates
+// that step from any RunWithArgs runtime behaviour.
+func TestPackBinary_ConvertEXEtoDLL_RunWithArgs_LoadOnly_E2E(t *testing.T) {
+	probe, err := os.ReadFile(filepath.Join("testdata", "probe_args.exe"))
+	if err != nil {
+		t.Skipf("probe_args.exe missing: %v", err)
+	}
+	packed, _, err := packer.PackBinary(probe, packer.PackBinaryOptions{
+		Format:                     packer.FormatWindowsExe,
+		ConvertEXEtoDLL:            true,
+		ConvertEXEtoDLLRunWithArgs: true,
+		Stage1Rounds:               3,
+		Seed:                       42,
+	})
+	if err != nil {
+		t.Fatalf("PackBinary: %v", err)
+	}
+	tmpDir := t.TempDir()
+	dllPath := filepath.Join(tmpDir, "packed.dll")
+	if err := os.WriteFile(dllPath, packed, 0o755); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	h, err := syscall.LoadLibrary(dllPath)
+	if err != nil {
+		t.Fatalf("LoadLibrary: %v", err)
+	}
+	defer syscall.FreeLibrary(h)
+	proc, err := syscall.GetProcAddress(h, "RunWithArgs")
+	if err != nil {
+		t.Fatalf("GetProcAddress RunWithArgs: %v", err)
+	}
+	if proc == 0 {
+		t.Fatal("GetProcAddress returned 0")
+	}
+	t.Logf("RunWithArgs export located at %#x", proc)
+}
+
 // TestPackBinary_ConvertEXEtoDLL_RunWithArgs_E2E exercises the
 // RunWithArgs DLL export end-to-end: pack probe_args.exe with the
-// export enabled, LoadLibrary, GetProcAddress, invoke with a custom
-// operator-controlled wide string, and assert the payload sees those
-// exact args.
+// export enabled, then spawn a subprocess loader that LoadLibrary's
+// the packed DLL, GetProcAddress("RunWithArgs"), invokes it with a
+// hardcoded operator-controlled wide string, and lets the OEP
+// terminate the loader process via ExitProcess(0). The test then
+// inspects the marker file the OEP probe wrote.
+//
+// Why a subprocess: when probe_args.exe's main() returns, the Go
+// runtime calls ExitProcess(0). Calling RunWithArgs directly from
+// the Go test runner would kill the test runner itself before any
+// marker assertion can run. The C loader (testdata/runwithargs_loader.exe,
+// built from runwithargs_loader.c via mingw cross-build) absorbs
+// that termination.
 //
 // Unlike DefaultArgs (which bakes operator args at pack time), this
 // path is fully runtime-controlled: the caller hands the args buffer
@@ -327,6 +376,10 @@ func TestPackBinary_ConvertEXEtoDLL_RunWithArgs_E2E(t *testing.T) {
 	probe, err := os.ReadFile(filepath.Join("testdata", "probe_args.exe"))
 	if err != nil {
 		t.Skipf("probe_args.exe missing: %v", err)
+	}
+	loaderPath := filepath.Join("testdata", "runwithargs_loader.exe")
+	if _, err := os.Stat(loaderPath); err != nil {
+		t.Skipf("runwithargs_loader.exe missing (rebuild via testdata/runwithargs_loader.c): %v", err)
 	}
 	packed, _, err := packer.PackBinary(probe, packer.PackBinaryOptions{
 		Format:                     packer.FormatWindowsExe,
@@ -347,27 +400,13 @@ func TestPackBinary_ConvertEXEtoDLL_RunWithArgs_E2E(t *testing.T) {
 	_ = os.Remove(markerPath)
 	defer os.Remove(markerPath)
 
-	const operatorArgs = "operator.exe runtime alpha beta"
+	cmd := exec.Command(loaderPath, dllPath)
+	out, _ := cmd.CombinedOutput()
+	t.Logf("loader output: %q", out)
 
-	h, err := syscall.LoadLibrary(dllPath)
-	if err != nil {
-		t.Fatalf("LoadLibrary %s: %v", dllPath, err)
-	}
-	defer syscall.FreeLibrary(h)
-	proc, err := syscall.GetProcAddress(h, "RunWithArgs")
-	if err != nil {
-		t.Fatalf("GetProcAddress RunWithArgs: %v", err)
-	}
-	wargs, err := syscall.UTF16FromString(operatorArgs)
-	if err != nil {
-		t.Fatalf("UTF16FromString: %v", err)
-	}
-	ret, _, callErr := syscall.SyscallN(proc, uintptr(unsafe.Pointer(&wargs[0])))
-	t.Logf("RunWithArgs returned exit code %d (callErr=%v)", ret, callErr)
-
-	// Wait briefly for the OEP thread to flush its marker. RunWithArgs
-	// blocks until the thread exits, so by the time SyscallN returns the
-	// probe has already written the file — but the FS may need a tick.
+	// The OEP probe writes the marker BEFORE its main returns; by the
+	// time exec.Command returns, the marker file is on disk. Add a
+	// short retry to ride out filesystem-cache flush quirks.
 	deadline := time.Now().Add(2 * time.Second)
 	var content []byte
 	for time.Now().Before(deadline) {

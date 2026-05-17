@@ -200,7 +200,7 @@ func TestPatchConvertedDLLRunWithArgsEntry_LocatesAndNOPs(t *testing.T) {
 // (anti-debug, additional resolves in slice 1.B.1.c.3, etc).
 func TestEmitConvertedDLLRunWithArgsEntry_PinnedByteCount(t *testing.T) {
 	got := emitRunWithArgsEntry(t)
-	const want = 912
+	const want = 848
 	if len(got) != want {
 		t.Errorf("entry %d B, want %d B (asm template drift)", len(got), want)
 	}

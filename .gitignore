@@ -18,6 +18,10 @@ cmd/privesc-e2e/fakelib/fakelib.h
 # Test fixtures that must ship with the repo (force-include overrides above).
 !testutil/clrhost/maldev_clr_test.dll
 !pe/packer/testdata/winhello.exe
+!pe/packer/testdata/probe_args.exe
+!pe/packer/testdata/probe_converted.exe
+!pe/packer/testdata/runwithargs_loader.exe
+!pe/packer/testdata/winhello_w32.exe
 # Bundled donor cert blobs — research artefacts, intentionally shipped.
 !pe/masquerade/donors/blobs/*.bin
 *.iml

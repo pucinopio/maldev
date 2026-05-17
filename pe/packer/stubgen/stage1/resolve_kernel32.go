@@ -48,6 +48,17 @@ func EmitResolveKernel32Export(b *amd64.Builder, exportName string) error {
 	}
 	exportHash := Ror13HashASCII(exportName)
 
+	// Per-invocation label scope. amd64.Builder's label map is keyed
+	// by name; emitting two resolvers in the same builder with
+	// identical label names would silently overwrite the first
+	// resolver's anchors and route its JCC refs into the second
+	// resolver's body — a hidden cross-resolver corruption that
+	// surfaced as ERROR_INVALID_HANDLE on Wait when RunWithArgs
+	// chained three resolvers (CreateThread / WaitForSingleObject /
+	// GetExitCodeThread) in one stub. Suffix every label with
+	// exportName so each resolver's labels are unique.
+	lbl := func(name string) string { return name + "_" + exportName }
+
 	// === Phase 1: PEB → Ldr → InMemoryOrderList.Flink in R12 ===
 	//
 	// LDR_DATA_TABLE_ENTRY layout (Win10+, x64). R12 will track
@@ -70,7 +81,7 @@ func EmitResolveKernel32Export(b *amd64.Builder, exportName string) error {
 	}
 
 	// === Phase 2: module loop — find kernel32.dll by BaseDllName hash ===
-	moduleLoopLbl := b.Label("k32_module_loop")
+	moduleLoopLbl := b.Label(lbl("k32_module_loop"))
 	// movzx ecx, word ptr [r12 + 0x48]    ; BaseDllName.Length (bytes)
 	if err := b.MOVZWL(amd64.RCX, amd64.MemOp{Base: amd64.R12, Disp: 0x48}); err != nil {
 		return fmt.Errorf("stage1: emit movzwl BaseDllName.Length: %w", err)
@@ -89,12 +100,12 @@ func EmitResolveKernel32Export(b *amd64.Builder, exportName string) error {
 	}
 
 	// Module hash loop: per-wchar fold-and-hash.
-	moduleHashLbl := b.Label("k32_module_hash")
+	moduleHashLbl := b.Label(lbl("k32_module_hash"))
 	// test ecx, ecx ; jz module_hash_done
 	if err := b.TEST(amd64.RCX, amd64.RCX); err != nil {
 		return fmt.Errorf("stage1: emit test rcx: %w", err)
 	}
-	if err := b.JE(amd64.LabelRef("k32_module_hash_done")); err != nil {
+	if err := b.JE(amd64.LabelRef(lbl("k32_module_hash_done"))); err != nil {
 		return fmt.Errorf("stage1: emit je module_hash_done: %w", err)
 	}
 	// movzx eax, word ptr [r8]
@@ -140,12 +151,12 @@ func EmitResolveKernel32Export(b *amd64.Builder, exportName string) error {
 
 	// module_hash_done: compare against Kernel32DLLHash; if match,
 	// continue to EAT walk. Otherwise advance Flink and loop.
-	_ = b.Label("k32_module_hash_done")
+	_ = b.Label(lbl("k32_module_hash_done"))
 	// cmp r10d, Kernel32DLLHash
 	if err := b.CMPL(amd64.R10, amd64.Imm(int64(Kernel32DLLHash))); err != nil {
 		return fmt.Errorf("stage1: emit cmp r10d, Kernel32DLLHash: %w", err)
 	}
-	if err := b.JE(amd64.LabelRef("k32_module_found")); err != nil {
+	if err := b.JE(amd64.LabelRef(lbl("k32_module_found"))); err != nil {
 		return fmt.Errorf("stage1: emit je module_found: %w", err)
 	}
 	// mov r12, [r12]              ; Flink → next entry's InMemoryOrderLinks
@@ -157,7 +168,7 @@ func EmitResolveKernel32Export(b *amd64.Builder, exportName string) error {
 	}
 
 	// === Phase 3: kernel32 base in R12, walk EAT ===
-	_ = b.Label("k32_module_found")
+	_ = b.Label(lbl("k32_module_found"))
 	// mov r12, [r12 + 0x20]        ; DllBase (LDR entry+0x30; r12 base = entry+0x10)
 	if err := b.MOV(amd64.R12, amd64.MemOp{Base: amd64.R12, Disp: 0x20}); err != nil {
 		return fmt.Errorf("stage1: emit mov r12, DllBase: %w", err)
@@ -192,7 +203,7 @@ func EmitResolveKernel32Export(b *amd64.Builder, exportName string) error {
 	}
 
 	// === Phase 4: export loop — match name hash ===
-	exportLoopLbl := b.Label("k32_export_loop")
+	exportLoopLbl := b.Label(lbl("k32_export_loop"))
 	// mov eax, [r8 + r11*4]         ; name RVA at index r11
 	if err := b.MOVL(amd64.RAX, amd64.MemOp{Base: amd64.R8, Index: amd64.R11, Scale: 4}); err != nil {
 		return fmt.Errorf("stage1: emit movl name RVA: %w", err)
@@ -206,7 +217,7 @@ func EmitResolveKernel32Export(b *amd64.Builder, exportName string) error {
 		return fmt.Errorf("stage1: emit xor r10d (export hash): %w", err)
 	}
 	// export hash loop
-	exportHashLbl := b.Label("k32_export_hash")
+	exportHashLbl := b.Label(lbl("k32_export_hash"))
 	// movzx edx, byte ptr [rax]
 	if err := b.MOVZX(amd64.RDX, amd64.MemOp{Base: amd64.RAX}); err != nil {
 		return fmt.Errorf("stage1: emit movzx edx, byte: %w", err)
@@ -215,7 +226,7 @@ func EmitResolveKernel32Export(b *amd64.Builder, exportName string) error {
 	if err := b.TEST(amd64.RDX, amd64.RDX); err != nil {
 		return fmt.Errorf("stage1: emit test edx: %w", err)
 	}
-	if err := b.JE(amd64.LabelRef("k32_export_hash_done")); err != nil {
+	if err := b.JE(amd64.LabelRef(lbl("k32_export_hash_done"))); err != nil {
 		return fmt.Errorf("stage1: emit je export_hash_done: %w", err)
 	}
 	// ror r10d, 13 ; xor r10d, edx ; inc rax ; jmp hash_loop
@@ -233,11 +244,11 @@ func EmitResolveKernel32Export(b *amd64.Builder, exportName string) error {
 	}
 
 	// export_hash_done: compare against the spliced exportHash.
-	_ = b.Label("k32_export_hash_done")
+	_ = b.Label(lbl("k32_export_hash_done"))
 	if err := b.CMPL(amd64.R10, amd64.Imm(int64(exportHash))); err != nil {
 		return fmt.Errorf("stage1: emit cmp r10d, exportHash: %w", err)
 	}
-	if err := b.JE(amd64.LabelRef("k32_export_found")); err != nil {
+	if err := b.JE(amd64.LabelRef(lbl("k32_export_found"))); err != nil {
 		return fmt.Errorf("stage1: emit je export_found: %w", err)
 	}
 	// inc r11d ; dec ecx ; jnz export_loop ; (else fall through — not found)
@@ -250,12 +261,12 @@ func EmitResolveKernel32Export(b *amd64.Builder, exportName string) error {
 	if err := b.JNZ(exportLoopLbl); err != nil {
 		return fmt.Errorf("stage1: emit jnz export_loop: %w", err)
 	}
-	if err := b.JMP(amd64.LabelRef("k32_resolve_done")); err != nil {
+	if err := b.JMP(amd64.LabelRef(lbl("k32_resolve_done"))); err != nil {
 		return fmt.Errorf("stage1: emit jmp resolve_done (not found): %w", err)
 	}
 
 	// === Phase 5: export found — translate ordinal → function VA ===
-	_ = b.Label("k32_export_found")
+	_ = b.Label(lbl("k32_export_found"))
 	// mov r9d, [rbx + 0x24]         ; AddressOfNameOrdinals RVA
 	if err := b.MOVL(amd64.R9, amd64.MemOp{Base: amd64.RBX, Disp: 0x24}); err != nil {
 		return fmt.Errorf("stage1: emit movl r9d, AddressOfNameOrdinals RVA: %w", err)
@@ -289,6 +300,6 @@ func EmitResolveKernel32Export(b *amd64.Builder, exportName string) error {
 		return fmt.Errorf("stage1: emit mov r13, rax: %w", err)
 	}
 
-	_ = b.Label("k32_resolve_done")
+	_ = b.Label(lbl("k32_resolve_done"))
 	return nil
 }

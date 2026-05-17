@@ -50,6 +50,34 @@ func (convertedSpawnArgsFromRCX) isConvertedSpawnArgs() {}
 // Caller MUST have R15=textBase and the converted-DLL prologue
 // (rcx/edx/r8/r15 spill + extra-callee-saved spill) already emitted.
 func emitConvertedSpawnBlock(b *amd64.Builder, plan transform.Plan, opts EmitOptions, args convertedSpawnArgs) error {
+	if !opts.convertedSpawnEnabled() {
+		return nil
+	}
+
+	// PEB patch MUST happen BEFORE the kernel32 resolver — the resolver
+	// clobbers RAX/RBX/RCX/RDX/R8-R12. The FromRCX patch reads RCX as
+	// the args-source pointer; running it AFTER the resolver would feed
+	// it garbage and the wcslen scan would walk random memory before
+	// memcpy'ing into PEB.ProcessParameters.CommandLine — corrupting
+	// loader/heap state and making the subsequent CreateThread return
+	// NULL (visible at runtime as ERROR_INVALID_HANDLE on the Wait/
+	// GetExitCodeThread that follow). The trailing variant uses
+	// R15-relative addressing for src — preserved across the resolver,
+	// so the order swap is purely a hardening for FromRCX. Both R15
+	// (textBase) and R13 (resolver output) survive the patch.
+	switch a := args.(type) {
+	case convertedSpawnArgsTrailing:
+		if a.lenBytes > 0 {
+			if err := EmitPEBCommandLinePatch(b, a.lenBytes); err != nil {
+				return fmt.Errorf("stage1/converted: PEB patch (trailing): %w", err)
+			}
+		}
+	case convertedSpawnArgsFromRCX:
+		if err := EmitPEBCommandLinePatchRCX(b); err != nil {
+			return fmt.Errorf("stage1/converted: PEB patch (rcx): %w", err)
+		}
+	}
+
 	if !opts.DiagSkipConvertedPayload && !opts.DiagSkipConvertedResolver {
 		// EmitResolveKernel32Export clobbers RAX, RBX, RCX, RDX, R8, R9,
 		// R10, R11, R12 but preserves R13, R14, R15. R15 (our textBase)
@@ -59,64 +87,49 @@ func emitConvertedSpawnBlock(b *amd64.Builder, plan transform.Plan, opts EmitOpt
 		}
 	}
 
-	if opts.convertedSpawnEnabled() {
-		switch a := args.(type) {
-		case convertedSpawnArgsTrailing:
-			if a.lenBytes > 0 {
-				if err := EmitPEBCommandLinePatch(b, a.lenBytes); err != nil {
-					return fmt.Errorf("stage1/converted: PEB patch (trailing): %w", err)
-				}
-			}
-		case convertedSpawnArgsFromRCX:
-			if err := EmitPEBCommandLinePatchRCX(b); err != nil {
-				return fmt.Errorf("stage1/converted: PEB patch (rcx): %w", err)
-			}
+	// CreateThread(NULL, 0, OEP, NULL, 0, NULL). Win64 ABI:
+	//   rcx = lpThreadAttributes      (NULL)
+	//   rdx = dwStackSize             (0)
+	//   r8  = lpStartAddress          (OEP absolute VA = R15 + OEPdisp)
+	//   r9  = lpParameter             (NULL)
+	//   [rsp+0x20] = dwCreationFlags  (0)
+	//   [rsp+0x28] = lpThreadId       (NULL)
+	if err := b.SUB(amd64.RSP, amd64.Imm(createThreadCallFrameSize)); err != nil {
+		return fmt.Errorf("stage1/converted: sub rsp,createThreadCallFrameSize: %w", err)
+	}
+	if err := b.XOR(amd64.RCX, amd64.RCX); err != nil {
+		return fmt.Errorf("stage1/converted: xor rcx,rcx: %w", err)
+	}
+	if err := b.XOR(amd64.RDX, amd64.RDX); err != nil {
+		return fmt.Errorf("stage1/converted: xor rdx,rdx: %w", err)
+	}
+	// r8 = OEP absolute VA. OEPdisp = OEPRVA - TextRVA, encoded as
+	// a signed imm32 ADD. SizeOfImage caps imply |OEPdisp| < 2^31.
+	oepDisp := int32(plan.OEPRVA) - int32(plan.TextRVA)
+	if err := b.MOV(amd64.R8, amd64.R15); err != nil {
+		return fmt.Errorf("stage1/converted: mov r8,r15: %w", err)
+	}
+	if oepDisp != 0 {
+		if err := b.ADD(amd64.R8, amd64.Imm(int64(oepDisp))); err != nil {
+			return fmt.Errorf("stage1/converted: add r8,oepDisp: %w", err)
 		}
-
-		// CreateThread(NULL, 0, OEP, NULL, 0, NULL). Win64 ABI:
-		//   rcx = lpThreadAttributes      (NULL)
-		//   rdx = dwStackSize             (0)
-		//   r8  = lpStartAddress          (OEP absolute VA = R15 + OEPdisp)
-		//   r9  = lpParameter             (NULL)
-		//   [rsp+0x20] = dwCreationFlags  (0)
-		//   [rsp+0x28] = lpThreadId       (NULL)
-		if err := b.SUB(amd64.RSP, amd64.Imm(createThreadCallFrameSize)); err != nil {
-			return fmt.Errorf("stage1/converted: sub rsp,createThreadCallFrameSize: %w", err)
-		}
-		if err := b.XOR(amd64.RCX, amd64.RCX); err != nil {
-			return fmt.Errorf("stage1/converted: xor rcx,rcx: %w", err)
-		}
-		if err := b.XOR(amd64.RDX, amd64.RDX); err != nil {
-			return fmt.Errorf("stage1/converted: xor rdx,rdx: %w", err)
-		}
-		// r8 = OEP absolute VA. OEPdisp = OEPRVA - TextRVA, encoded as
-		// a signed imm32 ADD. SizeOfImage caps imply |OEPdisp| < 2^31.
-		oepDisp := int32(plan.OEPRVA) - int32(plan.TextRVA)
-		if err := b.MOV(amd64.R8, amd64.R15); err != nil {
-			return fmt.Errorf("stage1/converted: mov r8,r15: %w", err)
-		}
-		if oepDisp != 0 {
-			if err := b.ADD(amd64.R8, amd64.Imm(int64(oepDisp))); err != nil {
-				return fmt.Errorf("stage1/converted: add r8,oepDisp: %w", err)
-			}
-		}
-		if err := b.XOR(amd64.R9, amd64.R9); err != nil {
-			return fmt.Errorf("stage1/converted: xor r9,r9: %w", err)
-		}
-		// [rsp+0x20] = 0  (dwCreationFlags). RCX == 0 already.
-		if err := b.MOV(amd64.MemOp{Base: amd64.RSP, Disp: 0x20}, amd64.RCX); err != nil {
-			return fmt.Errorf("stage1/converted: zero [rsp+0x20]: %w", err)
-		}
-		// [rsp+0x28] = 0  (lpThreadId).
-		if err := b.MOV(amd64.MemOp{Base: amd64.RSP, Disp: 0x28}, amd64.RCX); err != nil {
-			return fmt.Errorf("stage1/converted: zero [rsp+0x28]: %w", err)
-		}
-		if err := b.CALL(amd64.R13); err != nil {
-			return fmt.Errorf("stage1/converted: call r13: %w", err)
-		}
-		if err := b.ADD(amd64.RSP, amd64.Imm(createThreadCallFrameSize)); err != nil {
-			return fmt.Errorf("stage1/converted: add rsp,createThreadCallFrameSize: %w", err)
-		}
+	}
+	if err := b.XOR(amd64.R9, amd64.R9); err != nil {
+		return fmt.Errorf("stage1/converted: xor r9,r9: %w", err)
+	}
+	// [rsp+0x20] = 0  (dwCreationFlags). RCX == 0 already.
+	if err := b.MOV(amd64.MemOp{Base: amd64.RSP, Disp: 0x20}, amd64.RCX); err != nil {
+		return fmt.Errorf("stage1/converted: zero [rsp+0x20]: %w", err)
+	}
+	// [rsp+0x28] = 0  (lpThreadId).
+	if err := b.MOV(amd64.MemOp{Base: amd64.RSP, Disp: 0x28}, amd64.RCX); err != nil {
+		return fmt.Errorf("stage1/converted: zero [rsp+0x28]: %w", err)
+	}
+	if err := b.CALL(amd64.R13); err != nil {
+		return fmt.Errorf("stage1/converted: call r13: %w", err)
+	}
+	if err := b.ADD(amd64.RSP, amd64.Imm(createThreadCallFrameSize)); err != nil {
+		return fmt.Errorf("stage1/converted: add rsp,createThreadCallFrameSize: %w", err)
 	}
 	return nil
 }
