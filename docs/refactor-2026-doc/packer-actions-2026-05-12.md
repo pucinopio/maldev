@@ -20,7 +20,7 @@ reflects_commit: 1.B.1.a refactor
 | 2 | Mode 7 + Compress symmetry with Mode 8 | ~80 LOC | ⏳ scoped | — |
 | 3 | Stub section name randomized by default (`KeepDefaultStubSectionName` opts back into ".mldv") | ~85 LOC w/ tests | ✅ shipped (c86fb1e) | — |
 | 4 | PE32+ Machine check explicite: `transform.ValidateAMD64PE32Plus` + `ErrUnsupportedMachine`/`ErrUnsupportedOptMagic`, called at FormatPE detection in `stubgen.Generate`. Rejects non-amd64 or PE32 inputs with a readable error instead of silently producing broken output. | ~85 LOC w/ tests | ✅ shipped | — |
-| 5 | Walker interface unifié (R2 in audit) | ~150 LOC | ⏳ scoped | — |
+| 5 | Walker interface unifié (R2 in audit) | ~150 LOC | ❌ rejected (over-engineering) | — |
 | 6 | LZ4-decompress block dedup (R1 in audit, repurposed — SGN body was already shared via `emitSGNRounds`). New `emitLZ4DecompressBlock(b, opts, errPrefix)` helper folds the register-setup + inflate + memcpy block previously duplicated between `EmitStub` and `EmitConvertedDLLStub`. Byte-identical output (pinned tests stay green). | ~70 LOC factored out | ✅ shipped | — |
 | 7 | MSVC fixture provisioning on Win10 VM | ~setup + 1 fixture | ⏳ scoped | — |
 | 8 | Cert preservation opt-out: `PackBinaryOptions.PreserveAuthenticodeDirectory bool` — default-off keeps the v0.126.0 strip behaviour; opt-in keeps the (now-tampered) `DataDirectory[SECURITY]` pointer so operators can masquerade as a damaged-signed binary or steg-stash payload in the cert region. | ~85 LOC w/ tests | ✅ shipped | — |
@@ -80,6 +80,37 @@ end (1.A complete = v0.130.0, 1.B complete = v0.131.0).
 - Opt-in via `PackBinaryOptions.ConvertEXEtoDLLRunWithArgs bool`. Off by default — no extra IOC when the operator doesn't need the runtime entry.
 
 ### Cross-machine resume — current state
+
+## Item #5 — rejected on review (2026-05-17)
+
+The audit-2026-04-27 R2 proposal sketched a unified
+`DirectoryWalker(pe []byte, cb WalkerCallback) error` interface
+keyed by data-directory index, with `ShiftImageVA` iterating a
+`map[int]DirectoryWalker` instead of three sequential calls.
+
+Re-examining the call sites:
+
+- `WalkBaseRelocs` yields `BaseRelocEntry{BlockOff, BlockVA, EntryIdx,
+  RVA, Type}` — block-shaped, with rich per-entry context.
+- `WalkImportDirectoryRVAs` / `WalkResourceDirectoryRVAs` yield a
+  bare `uint32 rvaFileOff`.
+
+Forcing them under one signature would either (a) fatten the
+import/resource walkers with unused fields, or (b) lossily
+narrow the base-reloc walker. The audit comment itself flags it:
+
+> "// ... DirBaseReloc has different sig, would need adapter"
+
+The only consumer is `ShiftImageVA`, which calls each walker exactly
+once with different per-walker patch logic. Three direct calls
+already read as the simplest possible code; a map-dispatched
+indirection adds layers without removing duplication.
+
+Per CLAUDE.md ("don't introduce abstractions beyond what the task
+requires"), this refactor is rejected. Future plug-in walkers
+(EXCEPTION / LOAD_CONFIG / EXPORT) can be added as their own
+exported `WalkXxx` functions with the right shape for their
+fields — the dispatch isn't load-bearing.
 
 ## Item #9 — E2E PrivEsc DLL hijack chain
 
