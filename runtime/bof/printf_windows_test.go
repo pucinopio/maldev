@@ -93,6 +93,27 @@ func TestExpandCFormat_MissingArgsReadZero(t *testing.T) {
 	assert.Equal(t, "a=11 b=22 c=0", string(got))
 }
 
+// TestExpandCFormat_PercentS_WideString covers the goffloader-style
+// wide-string heuristic: when the BOF passes a wchar_t* to %s,
+// detect the UTF-16LE shape (every second byte zero for ASCII content)
+// and decode it instead of treating the first byte as a single-byte C
+// string.
+func TestExpandCFormat_PercentS_WideString(t *testing.T) {
+	// UTF-16LE encoding of "wide" with terminator: 'w'\0 'i'\0 'd'\0 'e'\0 0\0
+	wide := []byte{'w', 0, 'i', 0, 'd', 0, 'e', 0, 0, 0}
+	got := expandCFormat("hi=%s", []uintptr{cPtr(wide)})
+	assert.Equal(t, "hi=wide", string(got))
+}
+
+// TestExpandCFormat_PercentS_LongAnsiPreservesAnsi guards against
+// false-positive wide-string detection: an ANSI string longer than
+// 5 chars must NOT be re-decoded as UTF-16.
+func TestExpandCFormat_PercentS_LongAnsiPreservesAnsi(t *testing.T) {
+	ansi := cStr("hello world")
+	got := expandCFormat("msg=%s", []uintptr{cPtr(ansi)})
+	assert.Equal(t, "msg=hello world", string(got))
+}
+
 // TestExpandCFormat_UnknownVerbEmittedLiterally — `%q` is not a Beacon
 // verb. The expander emits `%q` verbatim and does NOT consume the
 // arg, so the next valid conversion stays aligned with operator intent.
@@ -107,7 +128,7 @@ func TestBeaconPrintfImpl_ExpandsVarargs(t *testing.T) {
 	withCurrentBOF(t, func(b *BOF) {
 		fmtBuf := cStr("user=%s pid=%d code=0x%x")
 		name := cStr("alice")
-		beaconPrintfImpl(0, cPtr(fmtBuf), cPtr(name), 1234, 0xDEAD, 0, 0, 0)
+		beaconPrintfImpl(0, cPtr(fmtBuf), cPtr(name), 1234, 0xDEAD, 0, 0, 0, 0, 0, 0, 0)
 		assert.Equal(t, "user=alice pid=1234 code=0xdead", string(b.output.Bytes()))
 	})
 }
@@ -124,7 +145,7 @@ func TestBeaconFormatPrintfImpl_ExpandsVarargs(t *testing.T) {
 
 		fmtBuf := cStr("svc=%s rc=%d")
 		name := cStr("svchost")
-		beaconFormatPrintfImpl(fpPtr, cPtr(fmtBuf), cPtr(name), 42, 0, 0, 0, 0)
+		beaconFormatPrintfImpl(fpPtr, cPtr(fmtBuf), cPtr(name), 42, 0, 0, 0, 0, 0, 0, 0, 0)
 
 		var sz int32
 		bufPtr := beaconFormatToStringImpl(fpPtr, uintptr(unsafe.Pointer(&sz)))

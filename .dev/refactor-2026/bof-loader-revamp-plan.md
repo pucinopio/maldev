@@ -22,11 +22,14 @@ slices:
     title: Gap closure — varargs, x86 SpawnTo, lpParameter
     status: closed
     commits:
-      - 'pending-1.b'  # this commit — printf_windows.go + SpawnToX86 + arg lpParameter
+      - 'e3e63b2'  # this commit — printf_windows.go + SpawnToX86 + arg lpParameter
     vm_e2e: pass (Win10 INIT, 76 tests incl. 13 new, 0.297s)
   - id: 1.c
     title: goffloader-parity-and-then-some (see goffloader-comparison.md)
-    status: queued
+    status: in-progress
+    commits:
+      - 'pending-1.c'  # this commit — items 1.c.1/2/3/4/5/6/8/10
+    vm_e2e: pending (real-world BOF fixture being validated)
     sub_items:
       - 1.c.1 string-obfuscate Beacon import names
       - 1.c.2 bump vararg capture from 6 to 10

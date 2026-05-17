@@ -7,6 +7,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sync"
+
+	"golang.org/x/sys/windows"
 )
 
 // beaconOutput is a thread-safe buffer for capturing BOF output.
@@ -86,6 +88,23 @@ func (a *Args) AddString(s string) {
 	a.buf.Write(lb[:])
 	a.buf.WriteString(s)
 	a.buf.WriteByte(0)
+}
+
+// AddWideString appends a UTF-16LE-encoded NUL-terminated string with a
+// 4-byte little-endian length prefix in WIDE units (matching goffloader's
+// PackString convention). BOFs that take wchar_t* args via
+// BeaconDataExtract on the unpacked buffer get a directly-castable
+// UTF-16LE blob.
+func (a *Args) AddWideString(s string) {
+	utf16 := windows.StringToUTF16(s) // includes trailing NUL
+	bytes := make([]byte, len(utf16)*2)
+	for i, u := range utf16 {
+		binary.LittleEndian.PutUint16(bytes[i*2:], u)
+	}
+	var lb [4]byte
+	binary.LittleEndian.PutUint32(lb[:], uint32(len(utf16)))
+	a.buf.Write(lb[:])
+	a.buf.Write(bytes)
 }
 
 // AddBytes appends a byte slice with a 4-byte little-endian length prefix.

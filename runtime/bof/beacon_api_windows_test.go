@@ -87,7 +87,7 @@ func TestBeaconPrintfImpl_CapturesOutput(t *testing.T) {
 		// NUL-terminated C string in a stable backing array.
 		msg := []byte("hello bof\x00")
 		ptr := uintptr(unsafe.Pointer(&msg[0]))
-		ret := beaconPrintfImpl(0, ptr, 0, 0, 0, 0, 0, 0)
+		ret := beaconPrintfImpl(0, ptr, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 		assert.Zero(t, ret)
 		assert.Equal(t, "hello bof", b.output.String())
 	})
@@ -100,7 +100,7 @@ func TestBeaconPrintfImpl_NoCurrentBOF(t *testing.T) {
 	defer bofMu.Unlock()
 	currentBOF = nil
 	msg := []byte("ignored\x00")
-	ret := beaconPrintfImpl(0, uintptr(unsafe.Pointer(&msg[0])), 0, 0, 0, 0, 0, 0)
+	ret := beaconPrintfImpl(0, uintptr(unsafe.Pointer(&msg[0])), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	assert.Zero(t, ret)
 }
 
@@ -260,7 +260,7 @@ func TestBeaconFormatPrintf_ExpandsArgs(t *testing.T) {
 		beaconFormatPrintfImpl(
 			uintptr(unsafe.Pointer(&fmt)),
 			uintptr(unsafe.Pointer(&fmtStr[0])),
-			42, 0, 0, 0, 0, 0,
+			42, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		)
 		// Varargs are now expanded — locked in slice 1.b.
 		got := unsafe.Slice((*byte)(unsafe.Pointer(fmt.original)), int(fmt.length))

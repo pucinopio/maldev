@@ -4,8 +4,19 @@
 //
 // Usage:
 //
-//	bof-runner -file path/to/file.o [-arg-int N] [-arg-string S] [-arg-short N] [-arg-bytes hex]
+//	bof-runner -file path/to/file.o [-arg <prefix><value>] ...
 //	bof-runner -url https://... [...]
+//
+// Type-prefixed -arg accepts one of:
+//
+//	i<n>       — 4-byte little-endian int      (e.g. -arg i42)
+//	s<n>       — 2-byte little-endian short    (e.g. -arg s7000)
+//	z<text>    — length-prefixed ANSI string   (e.g. -arg zhello)
+//	Z<text>    — length-prefixed UTF-16LE      (e.g. -arg Zwide)
+//	b<hex>     — length-prefixed raw bytes     (e.g. -arg bDEADBEEF)
+//
+// Legacy dedicated flags (-arg-int / -arg-short / -arg-string /
+// -arg-bytes) remain supported for backwards compat.
 //
 // Args are packed in CS-compatible BeaconDataPack format and consumed
 // by the BOF via BeaconDataParse / DataInt / DataShort / DataExtract.
@@ -34,15 +45,17 @@ func main() {
 		url       = flag.String("url", "", "HTTPS URL to fetch the BOF from (mutually exclusive with -file)")
 		entry     = flag.String("entry", "go", "entry-point symbol name (default: go)")
 		spawnTo   = flag.String("spawn-to", "", "value returned by BeaconGetSpawnTo (empty = none)")
+		argTyped  stringsFlag
 		argInts   intsFlag
 		argShorts intsFlag
 		argStrs   stringsFlag
 		argBytes  stringsFlag
 	)
-	flag.Var(&argInts, "arg-int", "append a 4-byte int to the args buffer (repeatable)")
-	flag.Var(&argShorts, "arg-short", "append a 2-byte short to the args buffer (repeatable)")
-	flag.Var(&argStrs, "arg-string", "append a length-prefixed string (repeatable)")
-	flag.Var(&argBytes, "arg-bytes", "append length-prefixed raw bytes from a hex string (repeatable)")
+	flag.Var(&argTyped, "arg", "type-prefixed arg (i<int>, s<short>, z<str>, Z<wstr>, b<hex>) — repeatable")
+	flag.Var(&argInts, "arg-int", "append a 4-byte int to the args buffer (repeatable, legacy)")
+	flag.Var(&argShorts, "arg-short", "append a 2-byte short to the args buffer (repeatable, legacy)")
+	flag.Var(&argStrs, "arg-string", "append a length-prefixed string (repeatable, legacy)")
+	flag.Var(&argBytes, "arg-bytes", "append length-prefixed raw bytes from a hex string (repeatable, legacy)")
 	flag.Parse()
 
 	if (*filePath == "") == (*url == "") {
@@ -67,6 +80,38 @@ func main() {
 			fatal("invalid -arg-bytes %q: %v", h, err)
 		}
 		args.AddBytes(raw)
+	}
+	for _, v := range argTyped {
+		if len(v) < 1 {
+			fatal("invalid -arg %q: missing type prefix", v)
+		}
+		prefix, value := v[0], v[1:]
+		switch prefix {
+		case 'i':
+			var n int
+			if _, err := fmt.Sscanf(value, "%d", &n); err != nil {
+				fatal("invalid -arg i%s: %v", value, err)
+			}
+			args.AddInt(int32(n))
+		case 's':
+			var n int
+			if _, err := fmt.Sscanf(value, "%d", &n); err != nil {
+				fatal("invalid -arg s%s: %v", value, err)
+			}
+			args.AddShort(int16(n))
+		case 'z':
+			args.AddString(value)
+		case 'Z':
+			args.AddWideString(value)
+		case 'b':
+			raw, err := hex.DecodeString(strings.TrimPrefix(value, "0x"))
+			if err != nil {
+				fatal("invalid -arg b%s: %v", value, err)
+			}
+			args.AddBytes(raw)
+		default:
+			fatal("invalid -arg %q: prefix must be one of i/s/z/Z/b", v)
+		}
 	}
 
 	b, err := bof.Load(data)

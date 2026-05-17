@@ -4,6 +4,8 @@ package bof
 
 import (
 	"strconv"
+	"unicode/utf16"
+	"unsafe"
 )
 
 // expandCFormat is the minimal printf-style expander used by
@@ -117,10 +119,22 @@ func expandCFormat(format string, args []uintptr) []byte {
 			b = strconv.AppendUint(b, uint64(v), 16)
 		case 's':
 			ptr := next()
-			if ptr != 0 {
-				b = append(b, cStringFromPtr(ptr, 65535)...)
-			} else {
+			if ptr == 0 {
 				b = append(b, "(null)"...)
+				break
+			}
+			// Wide-string heuristic (goffloader-style): many BOFs pass
+			// a wchar_t* to %s when calling Win32 wide APIs. ANSI %s
+			// of a wide string would render as the first byte followed
+			// by garbage. Detect by reading as a C-string first; if
+			// the result is shorter than 5 chars and the source bytes
+			// look like UTF-16 (every second byte is zero for ASCII
+			// content), retry as a wide string.
+			cstr := cStringFromPtr(ptr, 65535)
+			if len(cstr) < 5 && looksLikeWideString(ptr) {
+				b = append(b, wStringFromPtr(ptr, 65535)...)
+			} else {
+				b = append(b, cstr...)
 			}
 		case 'c':
 			b = append(b, byte(next()))
@@ -132,6 +146,47 @@ func expandCFormat(format string, args []uintptr) []byte {
 		}
 	}
 	return b
+}
+
+// looksLikeWideString returns true when the bytes at ptr look like a
+// UTF-16LE NUL-terminated string with ASCII content: every second
+// byte is zero, and a 16-bit zero terminator appears within the first
+// 32 wide units. Cheap heuristic — false positives are bounded
+// because most ANSI strings longer than 4 chars without a NUL hit
+// produce non-zero high bytes by the 5th char.
+func looksLikeWideString(ptr uintptr) bool {
+	if ptr == 0 {
+		return false
+	}
+	for i := 0; i < 32; i++ {
+		lo := *(*byte)(unsafe.Pointer(ptr + uintptr(i*2)))
+		hi := *(*byte)(unsafe.Pointer(ptr + uintptr(i*2+1)))
+		if lo == 0 && hi == 0 {
+			return i > 0 // saw at least one wide character before the NUL
+		}
+		if hi != 0 {
+			// Non-zero high byte → not ASCII content packed in UTF-16LE.
+			return false
+		}
+	}
+	return false
+}
+
+// wStringFromPtr decodes a UTF-16LE NUL-terminated string into a Go
+// string. `max` bounds the scan in WIDE characters (each 2 bytes).
+func wStringFromPtr(ptr uintptr, max int) string {
+	if ptr == 0 {
+		return ""
+	}
+	var units []uint16
+	for i := 0; i < max; i++ {
+		u := *(*uint16)(unsafe.Pointer(ptr + uintptr(i*2)))
+		if u == 0 {
+			break
+		}
+		units = append(units, u)
+	}
+	return string(utf16.Decode(units))
 }
 
 // upperASCII upper-cases ASCII hex digits in place (a..f → A..F).

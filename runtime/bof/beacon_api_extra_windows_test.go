@@ -110,6 +110,32 @@ func TestToWideChar_UTF8ToUTF16(t *testing.T) {
 	assert.Equal(t, uint16(0), dst[3], "trailing NUL must be written")
 }
 
+// TestBeaconGetOutputData_ReturnsSnapshotAndSize covers slice 1.c.8:
+// BeaconGetOutputData returns a pointer to a stable copy of the
+// BOF's accumulated output bytes plus the length.
+func TestBeaconGetOutputData_ReturnsSnapshotAndSize(t *testing.T) {
+	withCurrentBOF(t, func(b *BOF) {
+		b.output.write([]byte("snapshot-payload"))
+		var sz int32
+		ptr := beaconGetOutputDataImpl(uintptr(unsafe.Pointer(&sz)))
+		require.NotZero(t, ptr)
+		assert.Equal(t, int32(len("snapshot-payload")), sz)
+		got := unsafe.Slice((*byte)(unsafe.Pointer(ptr)), int(sz))
+		assert.Equal(t, []byte("snapshot-payload"), got)
+	})
+}
+
+// TestBeaconGetOutputData_EmptyOutput — empty buffer + non-nil size
+// pointer must zero the size field and return null.
+func TestBeaconGetOutputData_EmptyOutput(t *testing.T) {
+	withCurrentBOF(t, func(_ *BOF) {
+		sz := int32(99)
+		ptr := beaconGetOutputDataImpl(uintptr(unsafe.Pointer(&sz)))
+		assert.Equal(t, uintptr(0), ptr)
+		assert.Equal(t, int32(0), sz)
+	})
+}
+
 // TestExtraBeaconAPI_SymbolsRegistered locks in that every slice-1
 // callback resolves; catches a typo in registerExtraBeaconCallbacks.
 func TestExtraBeaconAPI_SymbolsRegistered(t *testing.T) {
@@ -126,6 +152,7 @@ func TestExtraBeaconAPI_SymbolsRegistered(t *testing.T) {
 		"__imp_BeaconCleanupProcess",
 		"__imp_BeaconInjectProcess",
 		"__imp_BeaconInjectTemporaryProcess",
+		"__imp_BeaconGetOutputData",
 	} {
 		addr, ok := resolveBeaconImport(name)
 		require.True(t, ok, "%s must resolve", name)

