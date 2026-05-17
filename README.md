@@ -4,44 +4,57 @@
 
 # maldev
 
-> Modular Go library for offensive-security research. 180 packages cover the
-> ATT&CK techniques an operator, a researcher, or a detection engineer needs
-> to reproduce, study, or counter — wired together by a single
+> A Go library of malware-engineering primitives — injection, evasion,
+> credentials, persistence, PE packing, C2 — wired together by one
 > `*wsyscall.Caller` so syscall stealth, evasion, and injection compose
-> uniformly.
+> uniformly. Pure Go, no CGO, cross-compilable.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/oioio-space/maldev.svg)](https://pkg.go.dev/github.com/oioio-space/maldev)
 [![Go Report Card](https://goreportcard.com/badge/github.com/oioio-space/maldev)](https://goreportcard.com/report/github.com/oioio-space/maldev)
-[![Docs](https://img.shields.io/badge/docs-oioio--space.github.io%2Fmaldev-blue)](https://oioio-space.github.io/maldev/)
-[![License: research](https://img.shields.io/badge/license-research--only-blue)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-handbook-blue)](https://oioio-space.github.io/maldev/)
+[![License](https://img.shields.io/badge/license-research--only-blue)](LICENSE)
 
-📖 **Browse the full handbook online: <https://oioio-space.github.io/maldev/>**
-
-## What is this?
-
-A single Go module collecting **the full chain** of malware-engineering
-primitives — not isolated demos, but interoperable packages that share one
-syscall caller, one evasion model, and one MITRE mapping. Pure Go, no CGO,
-cross-compilable.
-
-Three audiences, three reading paths:
-
-- **Operators (red team)** want chains that run in production: payload
-  encryption → AMSI/ETW patch → unhook → inject → sleepmask → cleanup.
-- **Researchers** want to read 200-line implementations of a technique with
-  paper references, MITRE/D3FEND tags, and Windows version notes.
-- **Detection engineers** want the artifact list per technique: syscalls,
-  ETW providers, registry keys, event-log gaps.
+📖 **Full handbook:** <https://oioio-space.github.io/maldev/>
 
 > [!IMPORTANT]
-> For authorised security research, red-team operations, and penetration
+> Authorised security research, red-team operations, and penetration
 > testing only. See [LICENSE](LICENSE).
+
+## Scope
+
+A single Go module covering the chain end-to-end:
+
+- **Syscalls** — 4 calling methods (WinAPI / Native / Direct / Indirect)
+  × 5 SSN resolvers, all selected via one `*wsyscall.Caller`.
+- **Evasion** — AMSI, ETW, ntdll unhooking, sleep mask (XOR / RC4 /
+  AES-CTR / Ekko), call-stack spoof, ACG / BlockDLLs, CET, PPID spoof,
+  stealth-open, kernel-callback removal, composable presets.
+- **Injection** — 15+ methods including CreateRemoteThread, APC family,
+  thread hijack, section map, phantom DLL, module stomping, thread pool,
+  early-bird, kernel-callback table, EtwpCreateEtwThread.
+- **PE ops** — sRDI (Donut), Authenticode cert clone/forge, masquerade
+  (13 donor identities × signed blobs), DLL proxy generator, **`pe/packer`**
+  (SGN polymorphic stub + LZ4 + AES-CTR, EXE → EXE / EXE → DLL /
+  CPU + Win-build dispatched bundles, anti-debug, section randomisation).
+- **Credentials** — LSASS dump (pure-Go MSV1_0 parser + PPL bypass),
+  SAM offline parse, Golden Ticket forging.
+- **Persistence / collection / cleanup** — registry, scheduled tasks,
+  service install, LNK, account; keylog / clipboard / screenshot;
+  self-delete, multi-pass wipe, timestomp, ADS, BSOD kill switch.
+- **C2** — reverse shell + reconnect, TLS / named-pipe transports,
+  JA3 fingerprint, Meterpreter staging, multi-session listener.
+- **BYOVD / kernel** — RTCore64 (CVE-2019-16098) R/W primitive.
+- **Privesc** — 4 UAC bypasses, CVE-2024-30088 LPE, DLL-hijack helpers.
+
+Full inventory and MITRE/D3FEND mapping: [docs handbook](https://oioio-space.github.io/maldev/).
 
 ## Install
 
 ```bash
 go get github.com/oioio-space/maldev@latest
 ```
+
+Requires **Go 1.21+**. No CGO.
 
 ## Quick start
 
@@ -54,7 +67,7 @@ import (
     wsyscall "github.com/oioio-space/maldev/win/syscall"
 )
 
-// 1. Stealthy syscall caller (indirect + Hash/Hell's gate chain).
+// 1. Pick a stealthy syscall caller.
 caller := wsyscall.New(
     wsyscall.MethodIndirect,
     wsyscall.Chain(wsyscall.NewHashGate(), wsyscall.NewHellsGate()),
@@ -66,7 +79,7 @@ evasion.ApplyAll([]evasion.Technique{
     etw.All(),
 }, caller)
 
-// 3. Inject shellcode via CreateThread.
+// 3. Inject shellcode.
 injector, _ := inject.NewWindowsInjector(&inject.WindowsConfig{
     Config:        inject.Config{Method: inject.MethodCreateThread},
     SyscallMethod: wsyscall.MethodIndirect,
@@ -74,55 +87,33 @@ injector, _ := inject.NewWindowsInjector(&inject.WindowsConfig{
 injector.Inject(shellcode)
 ```
 
-## Where to start
+Step-by-step walkthrough → [Get started ▸ Your first packed payload](https://oioio-space.github.io/maldev/get-started/first-payload.html).
 
-**Choose your role:**
+## Tooling
 
-- 🟥 **Operator (red team)** → [docs/by-role/operator.md](docs/by-role/operator.md)
-- 🔬 **Researcher (R&D)** → [docs/by-role/researcher.md](docs/by-role/researcher.md)
-- 🟦 **Detection engineer (blue team)** → [docs/by-role/detection-eng.md](docs/by-role/detection-eng.md)
+Six operator binaries under [`cmd/`](cmd/) — `packer`, `bundle-launcher`,
+`bof-runner`, `cert-snapshot`, `rshell`, `sleepmask-demo`. Build them with
+`go build ./cmd/<name>`, pass `-h` for flags. See
+[Tooling ▸ CLI tools](https://oioio-space.github.io/maldev/tools/index.html).
 
-**Or browse:**
+## Examples
 
-- 🗺️ [Documentation index](docs/index.md) — every package, by area + by MITRE ID
-- 🎯 [MITRE ATT&CK / D3FEND map](docs/mitre.md)
-- 📚 [`pkg.go.dev` API reference](https://pkg.go.dev/github.com/oioio-space/maldev)
-
-## Package map
-
-> A short, hand-curated overview. The full inventory of every package lives in
-> [docs/index.md](docs/index.md).
-
-| Area | Docs | Sub-packages |
-|---|---|---|
-| **Syscalls** | [techniques/syscalls/](docs/techniques/syscalls/README.md) | `win/syscall`, `win/api`, `win/ntapi` — 4 calling methods × 5 SSN resolvers; the `*Caller` plugged everywhere |
-| **Evasion** | [techniques/evasion/](docs/techniques/evasion/README.md) | `amsi`, `etw`, `unhook`, `sleepmask`, `callstack`, `acg`, `blockdlls`, `cet`, `hook`, `kcallback`, `preset`, `stealthopen` |
-| **Injection** | [techniques/injection/](docs/techniques/injection/README.md) | 15+ methods — CreateThread, APC family, ThreadHijack, SectionMap, KernelCallback, PhantomDLL, ModuleStomp, ThreadPool, EarlyBird, … |
-| **PE** | [techniques/pe/](docs/techniques/pe/README.md) | `srdi`, `morph`, `strip`, `masquerade` (+ `donors` 13 identities × 2 UAC variants + 10 bundled Authenticode blobs), `cert`, `parse`, `imports`, `dllproxy`, `packer` (+ `packer/runtime`, `packer/transform`, `packer/stubgen`) — PE-to-shellcode (Donut), strip Go pclntab, masquerade as cmd.exe, cert clone + Authenticode forge via `cert.SignPE`, offline cert grafting via `cmd/cert-snapshot`. **UPX-style packer** v0.61 → v0.92: single-payload `cmd/packer` (in-place SGN polymorphic decoder + LZ4 compression), **multi-target bundle** with two runtime models — `cmd/bundle-launcher` (Go runtime, full feature set, ~5 MB) or `packer.WrapBundleAsExecutableLinux` / `…Windows` (all-asm, ~550 B Linux / ~740 B Windows for vendor-aware bundle, **3-slot polymorphic NOP injection** per pack — slots A/B/C across PIC trampoline, scan-loop entry, and matched-pointer-tail). **Full FingerprintPredicate evaluator in both all-asm stubs** (V2-Negate Linux / V2NW Windows, v0.88+): `PT_MATCH_ALL` + `PT_CPUID_VENDOR` + `PT_WIN_BUILD` (PEB read) + `PT_CPUID_FEATURES` + `Negate` flag — operator CLI exposes via `-pl <file>:<vendor>:<min>-<max>[:negate]`. **Multi-cipher per-payload encryption** (v0.92): `CipherType=1` XOR-rolling (default) or `CipherType=2` AES-128-CTR (AES-NI runtime decrypt, pack-time auto-injects the AES feature bit so pre-AES-NI hosts skip the entry cleanly). **Per-build IOC randomisation** via `-secret <S>` (Kerckhoffs's principle — algorithm public; magic, footer, stub bytes operator-secret-derived). Defender pair `cmd/packerscope` detects + dumps + extracts maldev artefacts symmetrically. Visualiser `cmd/packer-vis` shows entropy heatmaps + bundle wire-format ASCII art. |
-| **In-process runtimes** | [techniques/runtime/](docs/techniques/runtime/README.md) | `bof`, `clr` — BOF / COFF loader; in-process .NET CLR hosting |
-| **C2** | [techniques/c2/](docs/techniques/c2/README.md) | `shell`, `transport`, `transport/namedpipe`, `meterpreter`, `multicat`, `cert` — reverse shell + reconnect, JA3 fingerprinting, Meterpreter staging, multi-session listener |
-| **Persistence** | [techniques/persistence/](docs/techniques/persistence/README.md) | `registry`, `startup`, `scheduler`, `service`, `lnk`, `account` — Run/RunOnce, scheduled tasks via COM, service install, local account creation |
-| **Credentials** | [techniques/credentials/](docs/techniques/credentials/README.md) | `lsassdump`, `sekurlsa`, `samdump`, `goldenticket` — LSASS dump, MSV/Kerberos parser, SAM offline parse, Golden Ticket forge |
-| **Recon** | [techniques/recon/](docs/techniques/recon/README.md) | `antidebug`, `antivm`, `sandbox`, `timing`, `hwbp`, `dllhijack`, `drive`, `folder`, `network` — environment checks, HW breakpoint inspection, DLL-search-order discovery |
-| **Process tamper** | [techniques/process/](docs/techniques/process/README.md) | `enum`, `session`, `tamper/herpaderping`, `tamper/fakecmd`, `tamper/hideprocess`, `tamper/phant0m` — herpaderping/ghosting, PEB CommandLine spoof, hide PID, kill EventLog |
-| **Privesc** | [techniques/privesc/](docs/techniques/privesc/README.md) | `uac`, `cve202430088` — 4 UAC bypasses, CVE-2024-30088 LPE |
-| **Cleanup** | [techniques/cleanup/](docs/techniques/cleanup/README.md) | `selfdelete`, `memory`, `timestomp`, `wipe`, `ads`, `bsod`, `service` — self-delete, secure wipe, timestomp, ADS streams, controlled BSOD |
-| **Collection** | [techniques/collection/](docs/techniques/collection/README.md) | `keylog`, `clipboard`, `screenshot` — keyboard hook, clipboard watch, multi-monitor screenshot |
-| **Kernel BYOVD** | [techniques/kernel/](docs/techniques/kernel/README.md) | `kernel/driver`, `kernel/driver/rtcore64` — RTCore64 (CVE-2019-16098) read/write primitives |
-| **Tokens & Privileges** | [techniques/tokens/](docs/techniques/tokens/README.md) | `win/token`, `win/privilege`, `win/impersonate` — token theft, impersonation, privilege escalation |
-| **Crypto / encode / hash** | [techniques/crypto/](docs/techniques/crypto/README.md) · [techniques/encode/](docs/techniques/encode/README.md) | `crypto`, `encode`, `hash` — AES-GCM, AES-CTR, ChaCha20 (both AEAD and raw), Speck (64/128/256), XTEA, S-Box (incl. seeded HKDF-derived), HKDF, HMAC, Argon2id · Base64, UTF-16LE · ROR13, ssdeep, TLSH |
+End-to-end chains live under [`examples/`](examples/) — runnable Go programs,
+one per scenario (privesc DLL hijack, evasive injection, packer tour, …).
+Their narrated counterparts live under
+[Cookbook](https://oioio-space.github.io/maldev/examples/) in the handbook.
 
 ## Build
 
 ```bash
-go build $(go list ./...)         # local build
-go test  $(go list ./...)         # tests (host-only)
-GOOS=linux go build $(go list ./...)
+go build ./...
+go test ./...
+GOOS=linux  go build ./...
+GOOS=windows go build ./...
 ```
 
-Requires **Go 1.21+**. No CGO. Tests with `MALDEV_INTRUSIVE=1
-MALDEV_MANUAL=1` belong in a VM — see
-[docs/by-role/researcher.md](docs/by-role/researcher.md#vm-testing).
+Intrusive / VM-only tests are gated behind `MALDEV_INTRUSIVE=1` /
+`MALDEV_MANUAL=1` — see the [Testing guide](https://oioio-space.github.io/maldev/testing.html).
 
 ## Acknowledgments
 
@@ -130,8 +121,8 @@ MALDEV_MANUAL=1` belong in a VM — see
 - [Binject/go-donut](https://github.com/Binject/go-donut) +
   [TheWover/donut](https://github.com/TheWover/donut) — PE-to-shellcode
   (`pe/srdi`).
-- [microsoft/go-winio](https://github.com/microsoft/go-winio) — ADS concepts
-  (`cleanup/ads`).
+- [microsoft/go-winio](https://github.com/microsoft/go-winio) — ADS
+  concepts (`cleanup/ads`).
 
 ## License
 

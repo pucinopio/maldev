@@ -1,12 +1,16 @@
 # `sleepmask-demo`
 
-Source: [`cmd/sleepmask-demo/`](https://github.com/oioio-space/maldev/tree/master/cmd/sleepmask-demo) ·
-godoc: [pkg.go.dev/github.com/oioio-space/maldev/cmd/sleepmask-demo](https://pkg.go.dev/github.com/oioio-space/maldev/cmd/sleepmask-demo)
+> Demo harness for evaluating sleep-mask techniques against a memory scanner.
+
+**Source:** [`cmd/sleepmask-demo/`](https://github.com/oioio-space/maldev/tree/master/cmd/sleepmask-demo) · **godoc:** [pkg.go.dev/…/cmd/sleepmask-demo](https://pkg.go.dev/github.com/oioio-space/maldev/cmd/sleepmask-demo)
+**Audience:** researcher / detection engineer · **Platforms:** Windows
 
 ## What it does
 
-Command sleepmask-demo runs encrypted-sleep scenarios against a
-concurrent memory scanner. See docs/techniques/evasion/sleep-mask.md.
+Runs the `evasion/sleepmask` masking scenarios in-process while a concurrent
+scanner reads the heap, so you can compare detection rates per mask
+(XOR / RC4 / AES-CTR / Ekko). Not an operational tool — purpose is to
+empirically validate a mask before wiring it into a payload.
 
 ## Build
 
@@ -14,17 +18,12 @@ concurrent memory scanner. See docs/techniques/evasion/sleep-mask.md.
 GOOS=windows GOARCH=amd64 go build -o sleepmask-demo.exe ./cmd/sleepmask-demo
 ```
 
-For platform-native builds, drop the `GOOS` / `GOARCH` prefix.
+## Example
 
-## Help / flags
-
-Run with `-h` to see the current flag set:
-
-```bash
-./sleepmask-demo -h
+```cmd
+sleepmask-demo.exe -h
 ```
 
-## Related
+## See also
 
-- Reference for the underlying packages: see the [Techniques tree](../techniques/).
-- Runnable examples: see [Runnable examples](../examples/runnable.md).
+- Technique: [`evasion/sleepmask`](../techniques/evasion/sleep-mask.md).

@@ -239,6 +239,6 @@ methods. See [ADR-0001](concepts/decisions/0001-wsyscall-caller-pattern.md).
 ## X
 
 **x64dbg.** Open-source ring-3 debugger. Used to develop the
-memscan stack (see [memscan-server](tools/memscan-server.md) for
-the current pure-Go incarnation that replaced the legacy
+memscan stack (see [research helpers](tools/research-helpers.md#memory-inspection-memscan-stack)
+for the current pure-Go incarnation that replaced the legacy
 x64dbg-MCP plumbing).
