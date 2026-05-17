@@ -1,3 +1,5 @@
+//go:build windows
+
 package preset_test
 
 import (

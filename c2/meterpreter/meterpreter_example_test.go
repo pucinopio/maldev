@@ -1,3 +1,5 @@
+//go:build windows
+
 package meterpreter_test
 
 import (
