@@ -251,27 +251,27 @@ func pushLinux(ctx context.Context, vm *VMConfig, hostRoot, dst, key string, por
 	return cmd.Run()
 }
 
-// pushWindows uses scp because rsync over Windows OpenSSH is not universally
-// available. We wipe the destination before copying to keep snapshot
-// isolation (each run starts from a clean tree).
+// pushWindows streams the host tree to the guest via `tar | ssh tar`.
+// scp -r has no exclude flag and would ship multi-hundred-MB sub-trees
+// like ignore/ on every run; tar streaming honours --exclude the same
+// way rsync does on Linux. Modern Windows (10 1803+, all Windows 11)
+// ships bsdtar in System32, so no extra dependency on the guest.
+// We wipe the destination first to keep snapshot isolation.
 func pushWindows(ctx context.Context, vm *VMConfig, hostRoot, dst, key string, port int) error {
-	// Clean destination via ssh + cmd.exe. rmdir /s /q is a no-op if absent.
-	cleanCmd := fmt.Sprintf(`cmd.exe /c "if exist %s rmdir /s /q %s && mkdir %s"`, dst, dst, dst)
-	if err := sshRun(ctx, vm, key, port, cleanCmd); err != nil {
-		fmt.Printf("warn: pre-push clean failed: %v\n", err)
+	// Windows OpenSSH wraps every remote command in `cmd.exe /c`, which
+	// parses `&` as a command separator BEFORE the nested cmd.exe sees
+	// it — so a single chained "rmdir & mkdir" statement gets split and
+	// neither half runs correctly. Two unambiguous SSH calls are the
+	// safe form: rmdir-if-exists, then unconditional mkdir.
+	rmdirCmd := fmt.Sprintf(`cmd.exe /c if exist %s rmdir /s /q %s`, dst, dst)
+	if err := sshRun(ctx, vm, key, port, rmdirCmd); err != nil {
+		fmt.Printf("warn: pre-push rmdir failed: %v\n", err)
 	}
-	winDst := strings.ReplaceAll(dst, "\\", "/")
-	target := fmt.Sprintf("%s@%s:%s", vm.User, vm.SSHHost, winDst)
-	args := []string{
-		"-i", key, "-P", strconv.Itoa(port),
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
-		"-r", filepath.Clean(hostRoot) + string(filepath.Separator) + ".", target,
+	mkdirCmd := fmt.Sprintf(`mkdir %s`, dst)
+	if err := sshRun(ctx, vm, key, port, mkdirCmd); err != nil {
+		return fmt.Errorf("pre-push mkdir: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, "scp", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := tarStreamToWindows(ctx, vm, hostRoot, dst, key, port); err != nil {
 		return err
 	}
 	// Snapshot-revert leaves the Windows guest with stale TLS roots, so
@@ -281,6 +281,77 @@ func pushWindows(ctx context.Context, vm *VMConfig, hostRoot, dst, key string, p
 	// the shipped cache, no network access required.
 	if err := pushModuleCache(ctx, vm, key, port); err != nil {
 		fmt.Printf("warn: module-cache push failed: %v (TLS-using test paths will fail)\n", err)
+	}
+	return nil
+}
+
+// tarExcludes is the canonical list of host-side directories never to
+// ship to a guest. Mirrors the rsync excludes in pushLinux + the
+// repo-wide .gitignore intent.
+var tarExcludes = []string{
+	".git",
+	"ignore",
+	".claude",
+	".idea",
+	".vscode",
+	"bin",
+	"dist",
+	".dev",
+	"node_modules",
+}
+
+// tarStreamToWindows pipes `tar -cf -` from the host into `tar -xf -`
+// on the guest. Exclude flags shrink a 333-MB repo down to a few MB of
+// actual source. The guest's tar is bsdtar (Windows 10 1803+ /
+// Windows 11) launched through cmd.exe so its --strip-components and
+// --exclude semantics match the host bsdtar/GNU tar mix.
+func tarStreamToWindows(ctx context.Context, vm *VMConfig, hostRoot, dst, key string, port int) error {
+	// bsdtar's -C wants forward slashes on Windows (MSYS-style path);
+	// backslashes give "could not chdir". cmd.exe wrapping isn't needed
+	// — the default ssh-on-Windows shell already invokes commands
+	// directly, so we hand the bare `tar -xf - -C C:/maldev` form to
+	// ssh without a cmd.exe /c wrapper.
+	winDst := strings.ReplaceAll(dst, `\`, "/")
+
+	tarArgs := []string{"-cf", "-"}
+	for _, ex := range tarExcludes {
+		tarArgs = append(tarArgs, "--exclude="+ex)
+	}
+	tarArgs = append(tarArgs, "-C", filepath.Clean(hostRoot), ".")
+	tarCmd := exec.CommandContext(ctx, "tar", tarArgs...)
+
+	// Guest side: tar -xf - with explicit -C target. No cd, no cmd.exe
+	// wrapper — the default ssh-on-Windows shell is cmd.exe already.
+	remoteCmd := fmt.Sprintf(`tar -xf - -C %s`, winDst)
+	sshCmd := exec.CommandContext(ctx, "ssh",
+		"-i", key,
+		"-p", strconv.Itoa(port),
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "BatchMode=yes",
+		fmt.Sprintf("%s@%s", vm.User, vm.SSHHost),
+		remoteCmd,
+	)
+
+	pipe, err := tarCmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("tar stdout pipe: %w", err)
+	}
+	sshCmd.Stdin = pipe
+	sshCmd.Stdout = os.Stdout
+	sshCmd.Stderr = os.Stderr
+	tarCmd.Stderr = os.Stderr
+
+	if err := sshCmd.Start(); err != nil {
+		return fmt.Errorf("ssh start: %w", err)
+	}
+	if err := tarCmd.Run(); err != nil {
+		_ = sshCmd.Process.Kill()
+		_ = sshCmd.Wait()
+		return fmt.Errorf("tar run: %w", err)
+	}
+	if err := sshCmd.Wait(); err != nil {
+		return fmt.Errorf("ssh wait: %w", err)
 	}
 	return nil
 }
