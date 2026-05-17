@@ -365,6 +365,21 @@ type PackBinaryOptions struct {
 	// Phase 2-E of docs/refactor-2026-doc/packer-design.md.
 	// PE only — opt-ins under the hood are PE-specific.
 	RandomizeAll bool
+
+	// PreserveAuthenticodeDirectory, when true, keeps
+	// DataDirectory[SECURITY] pointing at the input's WIN_CERTIFICATE
+	// table even though the .text mutation invalidates the
+	// signature. Default false — the standard path zeroes the
+	// directory so the packed file looks "unsigned" rather than
+	// "signed-but-tampered" (the latter is a louder OPSEC signal
+	// flagged by sigcheck.exe / AppLocker / WDAC).
+	//
+	// Set when the operator deliberately wants the corrupted-cert
+	// appearance (e.g., masquerading as a damaged legitimate signed
+	// binary, or hiding payload bytes inside the cert region).
+	// PE only — Item #8 in
+	// docs/refactor-2026-doc/packer-actions-2026-05-12.md.
+	PreserveAuthenticodeDirectory bool
 }
 
 // ErrUnsupportedFormat fires when [PackBinary]'s opts.Format does not
@@ -595,12 +610,16 @@ func PackBinary(input []byte, opts PackBinaryOptions) ([]byte, []byte, error) {
 		out = newOut
 	}
 
-	// Always strip DataDirectory[SECURITY] on PE outputs. The
+	// Strip DataDirectory[SECURITY] on PE outputs by default. The
 	// .text mutation invalidates any Authenticode signature
 	// regardless; carrying a stale cert pointer makes the file
 	// look "signed-but-tampered" (loud OPSEC signal). Zeroing
 	// the pointer renders it cleanly "unsigned".
-	if isPE {
+	//
+	// PreserveAuthenticodeDirectory opts out — operators who
+	// deliberately want the corrupted-cert appearance keep the
+	// directory entry intact.
+	if isPE && !opts.PreserveAuthenticodeDirectory {
 		if perr := transform.StripPESecurityDirectory(out); perr != nil {
 			return nil, nil, fmt.Errorf("packer: strip security directory: %w", perr)
 		}

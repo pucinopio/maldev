@@ -23,7 +23,7 @@ reflects_commit: 1.B.1.a refactor
 | 5 | Walker interface unifié (R2 in audit) | ~150 LOC | ⏳ scoped | — |
 | 6 | SGN body dedup (R1 in audit) | ~100 LOC | ⏳ scoped | — |
 | 7 | MSVC fixture provisioning on Win10 VM | ~setup + 1 fixture | ⏳ scoped | — |
-| 8 | Cert preservation opt-out (Z4 in audit) | ~30 LOC | ⏳ scoped | — |
+| 8 | Cert preservation opt-out: `PackBinaryOptions.PreserveAuthenticodeDirectory bool` — default-off keeps the v0.126.0 strip behaviour; opt-in keeps the (now-tampered) `DataDirectory[SECURITY]` pointer so operators can masquerade as a damaged-signed binary or steg-stash payload in the cert region. | ~85 LOC w/ tests | ✅ shipped | — |
 
 ## Item #1 — design notes
 
