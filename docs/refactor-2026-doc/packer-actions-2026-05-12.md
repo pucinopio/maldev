@@ -16,7 +16,7 @@ reflects_commit: 1.B.1.a refactor
 | # | Item | Effort | Status | Tag |
 |---|---|---|---|---|
 | **1** | **Mode 8 args injection — `DefaultArgs` opt + `RunWithArgs` export** | ~200 LOC | 🟢 in progress (1.A done, 1.B scoped) | v0.130/0.131 |
-| **9** | **E2E PrivEsc DLL hijack proof** — VM provisioning + probe + orchestrator + driver + doc, demonstrating full chain from `lowuser` shell to SYSTEM whoami marker | ~600 LOC | 🟢 in progress | — |
+| **9** | **E2E PrivEsc DLL hijack proof** — `lowuser` shell → SYSTEM whoami marker. All sub-slices (9.1-9.4 scaffolding, 9.5 README, 9.6.a-g gap-closures, 9.7.a/b helpers, 9.8.a-c STRONG verdict) shipped. Re-verified 2026-05-17 (STRONG SUCCESS — marker `autorité nt\système` from `lowuser`). | ~2300 LOC across orchestrator/probe/victim/driver/PowerShell/docs | ✅ shipped | v0.132.0/v0.133.0 |
 | 2 | Mode 7 + Compress symmetry with Mode 8: `EmitDLLStub` now takes `EmitOptions` and emits the shared `emitLZ4DecompressBlock` after SGN rounds. `InjectStubDLL` widens the appended stub section's VirtualSize by `plan.StubScratchSize` (mirrors `pe.go`) and shifts `relocRVA` past the scratch slack. `ErrCompressDLLUnsupported` removed; `TestPackBinary_FormatWindowsDLL_RejectsCompress` flipped to `_AcceptsCompress`; new VM E2E `TestPackBinary_FormatWindowsDLL_LoadLibrary_Compress_E2E`. | ~70 LOC + 1 E2E | ✅ shipped |
 | 3 | Stub section name randomized by default (`KeepDefaultStubSectionName` opts back into ".mldv") | ~85 LOC w/ tests | ✅ shipped (c86fb1e) | — |
 | 4 | PE32+ Machine check explicite: `transform.ValidateAMD64PE32Plus` + `ErrUnsupportedMachine`/`ErrUnsupportedOptMagic`, called at FormatPE detection in `stubgen.Generate`. Rejects non-amd64 or PE32 inputs with a readable error instead of silently producing broken output. | ~85 LOC w/ tests | ✅ shipped | — |
@@ -127,11 +127,11 @@ attacker compiled.
 
 | # | Scope | LOC | Status |
 |---|---|---|---|
-| 9.1 | **VM provisioning.** Add `lowuser` (non-admin), `C:\Vulnerable\` (lowuser-writable), `victim.exe` (LoadLibrary("hijackme.dll")), scheduled task SYSTEM-context running victim.exe with ACL granting lowuser /Run rights, Defender exclusions for `C:\Vulnerable\` + `C:\ProgramData\maldev-marker\`. Snapshot as `INIT-PRIVESC`. | ~150 (PowerShell) | ⏳ next |
-| 9.2 | **Probe.** Tiny Go EXE `whoami_marker` → execs `whoami`, writes output + timestamp + PID to `C:\ProgramData\maldev-marker\whoami.txt`. | ~30 | ⏳ |
-| 9.3 | **Orchestrator.** Single Go EXE `cmd/privesc-e2e` runnable from lowuser shell — bundles probe bytes (//go:embed), packs to DLL via `packer.PackBinary{ConvertEXEtoDLL:true}`, plants at `C:\Vulnerable\hijackme.dll`, triggers task via `schtasks /Run`, polls marker, prints SUCCESS/FAIL. | ~250 | ⏳ |
-| 9.4 | **Driver.** Bash script `scripts/vm-privesc-e2e.sh` — VBoxManage snapshot restore INIT-PRIVESC, SCP orchestrator as lowuser, SSH lowuser to run, fetch marker, assert SYSTEM. | ~80 | ⏳ |
-| 9.5 | **User doc.** New section in `docs/techniques/pe/packer.md` (or sibling `dll-hijack-e2e.md`) walking the operator chain step by step, citing the orchestrator + screenshots of marker. Only if 9.1-9.4 PASS. | ~150 (md) | ⏳ |
+| 9.1 | **VM provisioning** — `scripts/vm-test/provision-lowuser.ps1` + `provision-privesc.ps1` create `lowuser`, `C:\Vulnerable\`, `victim.exe`, SYSTEM scheduled task `MaldevHijackVictim` with lowuser /Run ACL, Defender exclusions for `C:\Vulnerable\` + `C:\ProgramData\maldev-marker\`. | ~230 (PowerShell) | ✅ shipped |
+| 9.2 | **Probe** — `cmd/privesc-e2e/probe/main.go` (Go-based) + checked-in `probe.exe`. Calls `GetUserName` + writes `<identity>\|pid=<pid>` to `C:\ProgramData\maldev-marker\whoami.txt`, then sleeps so the host victim has time to flush. Slice 9.6.d.x dynamically resolves `GetUserNameA` to keep the Go runtime minimal. | ~80 | ✅ shipped |
+| 9.3 | **Orchestrator** — `cmd/privesc-e2e/main.go` (299 LOC). Modes 8 (ConvertEXEtoDLL) + 10 (PackProxyDLL via `packer.PackProxyDLLFromTarget`), live `recon/dllhijack` discovery, marker poll, SUCCESS/FAIL verdict. Boots with `evasion/preset.Aggressive` (ACG + BlockDLLs + AMSI/ETW unhook) via `amsi_windows.go`. | ~300 | ✅ shipped |
+| 9.4 | **Driver** — `scripts/vm-privesc-e2e.sh` (294 LOC). Auto-detects vbox/libvirt, restores INIT snapshot, builds binaries on host, SCPs as admin, provisions, runs orchestrator AS lowuser via `run-as-lowuser.ps1`, fetches marker + victim.log, prints STRONG/ADEQUATE/FAIL verdict. | ~290 | ✅ shipped |
+| 9.5 | **User doc** — `cmd/privesc-e2e/README.md` pedagogical end-to-end walkthrough with mermaid attack chain diagram, cast of binaries, per-step state changes, detection & forensics, Defender bypass section, troubleshooting. Replaces sibling doc plan; lives next to the orchestrator. | ~600 (md) | ✅ shipped |
 
 ### Open answers (confirmed defaults)
 
@@ -154,13 +154,13 @@ checkbox.
 
 | # | Gap | Approach | Status |
 |---|---|---|---|
-| 9.6.a | Add Defender exclusions for `C:\Vulnerable\` and `C:\ProgramData\maldev-marker\` via direct registry write (HKLM\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths). Provisioning step. | Go program, run as test admin during provisioning. Falls back to AMSI-bypass PowerShell if registry write blocked by Tamper Protection. | ⏳ next |
-| 9.6.b | AMSI bypass via `evasion/amsi.PatchAll` integrated in orchestrator. Demonstrates eating-our-own-dog-food even though scope (per-process) doesn't help spawned PowerShell. | Wrap orchestrator startup with PatchAll + log success/failure. | ⏳ |
-| 9.6.c | Marker 0-byte mystery: probe `FlushFileBuffers` before CloseHandle + sleep 200 ms before SleepInfinite. Plus orchestrator polls more aggressively (50 ms). | Modify `cmd/privesc-e2e/probe/probe.c`. | ⏳ |
-| 9.6.d | Big binary AS lowuser RC=1: install Defender exclusion FIRST (9.6.a), then re-test. If still bites, sign the orchestrator binary or bisect via stripping symbols/sections. | Validate after 9.6.a. | ⏳ |
-| 9.6.e | Go probe in injected thread: write a tiny Go probe with `runtime.LockOSThread` + minimal init, OR document Go-incompatibility loudly in `pe/packer/packer.md` Mode 8 limitations. | Try Go probe with `os.Exit(0)` as first line — if even that doesn't trigger marker, document hard incompat. | ⏳ |
-| 9.6.f | Final E2E run with all of the above. Both Mode 8 and Mode 10. STRONG verdict (marker shows SYSTEM). Tag v0.132.0. | Run both modes. | ⏳ |
-| 9.6.g | User-facing doc: walkthrough in `docs/techniques/pe/packer-privesc-e2e.md` (or sibling) with screenshots + decision tree. | After 9.6.f green. | ⏳ |
+| 9.6.a | Defender exclusions for `C:\Vulnerable\` + `C:\ProgramData\maldev-marker\`. v2 settled on AMSI-bypass-then-registry-write inside `provision-privesc.ps1`. | `fa9605c` switched to registry-direct after the AMSI dance proved flaky. | ✅ shipped |
+| 9.6.b | AMSI bypass via `evasion/amsi.PatchAll` integrated in orchestrator. | `65654ec` initial integration, `2061cab` swapped Defender-exclusions-at-orchestrator-time for `preset.Stealth`, later upgraded to `preset.Aggressive` (9.8.b). | ✅ shipped |
+| 9.6.c | Marker 0-byte: probe `FlushFileBuffers` + `FILE_SHARE_READ` + 200 ms sleep before SleepInfinite. | `37daea5`. | ✅ shipped |
+| 9.6.d | Big binary AS lowuser RC=1 — root-caused to provisioning password mismatch + poll-timeout race. Fixed via `b6d26c8` (force-set password via `net user`) + `a20941b` (140 s poll + 70 s post-orch sleep) + `b6e1298` (probe dyn-resolves `GetUserNameA`). | Series of 9.6.d.1/d.2/d.x commits. | ✅ shipped |
+| 9.6.e | Go probe in injected thread — initial probe was C; final probe is Go (commit `bf4e8a1` "probe in Go, victim in C — STRONG E2E") proving the Go-in-injected-thread story works end-to-end with the Aggressive preset. | The "document Go-incompat" alternative is moot — Go-probe works. | ✅ shipped |
+| 9.6.f | Final E2E run, both modes, STRONG verdict. | `3a67ae9` "full chain green on Fedora/libvirt — STRONG verdict". Tagged `v0.132.0`. | ✅ shipped |
+| 9.6.g | User-facing doc — pedagogical README at `cmd/privesc-e2e/README.md` (pure-Windows recipe + Detection & Forensics + Defender bypass section), `9397acc` dropped all VM/driver/hypervisor references for pure-operator audience. | Lives next to the orchestrator, not under `docs/techniques/`. | ✅ shipped |
 
 ### Sub-slice 9.7 — extract reusable helpers from privesc-e2e patterns
 
@@ -170,16 +170,27 @@ tool doesn't reinvent them.
 
 | # | Helper | Lives in | Replaces |
 |---|---|---|---|
-| 9.7.a | `packer.PackProxyDLLFromTarget(payload, targetDLLBytes, packOpts)` — parses targetDLLBytes for named exports, builds `ProxyDLLOptions{TargetName, Exports}` from the parsed export list, calls `PackProxyDLL`. Returns the same `(proxy, key, err)` triple. | `pe/packer/proxy_fused.go` | The 30-LOC chunk in `cmd/privesc-e2e/main.go` Mode-10 branch (parse.FromBytes -> ExportEntries -> filter -> PackProxyDLL). |
-| 9.7.b | `dllhijack.PickBestWritable(opts ScanOpts) (*Opportunity, error)` — ScanAll + Rank + return first Writable && (IntegrityGain \|\| AutoElevate) opportunity, with fallback to any Writable. | `recon/dllhijack/dllhijack.go` | The discovery loop in `cmd/privesc-e2e/main.go` `-discover` branch. |
+| 9.7.a | `packer.PackProxyDLLFromTarget` — ✅ shipped `12cc47c`. Plus `evasion.ApplyAllAggregated` shipped same commit. Orchestrator adopts both via `73146aa`. |
+| 9.7.b | `dllhijack.PickBestWritable` + sentinel — ✅ shipped `bb5549a`. Plus `recon/dllhijack/ScanPATHWritable` for MareBackup-class EXE search hijack (`e94858b`) and ApiSet contract exclusion (`41cb0fc`). |
 
 ### Sub-slice 9.8 — close gaps 2 (probe race) + 3 (Defender) + 4 (verdict)
 
 | # | Gap | Approach | Status |
 |---|---|---|---|
-| 9.8.a | **Probe race**: spawned thread killed mid-flight when victim.exe returns. Solution: victim sleeps 5 s after LoadLibrary so the spawned thread has time to write its marker + flush. Real-world legitimate-victim sideload chains often have similarly long-running hosts (services, scheduled tasks). | Add `time.Sleep(5*time.Second)` to `cmd/privesc-e2e/victim/main.go` after the LoadLibrary log. | ⏳ |
-| 9.8.b | **Defender flagging the orchestrator binary**: signature on the unpacked Go binary. Solution: stronger runtime evasion (preset.Aggressive instead of Stealth) — adds ACG + BlockDLLs on top of AMSI+ETW+unhook. | Replace `preset.Stealth()` with `preset.Aggressive()` in `cmd/privesc-e2e/amsi_windows.go`. | ⏳ |
-| 9.8.c | **Verdict ADEQUATE -> STRONG**: auto-resolves once 9.8.a fixes the probe race. The probe successfully writes whoami.txt, the driver fetches it, the verdict promotes from ADEQUATE to STRONG. | No code change; validate after 9.8.a. | ⏳ |
+| 9.8.a | Probe race — victim sleeps 5 s after LoadLibrary. ✅ shipped `d75e9c4`. |
+| 9.8.b | Defender flagging — `preset.Aggressive` (ACG + BlockDLLs on top of AMSI/ETW/unhook). ✅ shipped `1b7da1e`. |
+| 9.8.c | Verdict ADEQUATE → STRONG. ✅ confirmed `3a67ae9` "full chain green — STRONG verdict". Re-verified 2026-05-17 (this session): SUCCESS, marker shows `autorité nt\système` from the `lowuser` shell. |
+
+### Bonus shipped during the 9.x stream
+
+| commit | what |
+|---|---|
+| `b4aa4b9` | packer-cli flags `-compress`/`-antidebug`/`-randomize` + Defender bypass docs section |
+| `12cc47c` | `evasion.ApplyAllAggregated` + `packer.PackProxyDLLFromTarget` factored out of orchestrator |
+| `bb5549a` | `recon/dllhijack.PickBestWritable` |
+| `e94858b` | `recon/dllhijack.ScanPATHWritable` (MareBackup-class EXE search hijack) |
+| `edac9c1` | `pe/packer/transform.InjectStubPE` marks stub section MEM_WRITE when `StubScratchSize > 0` (root-caused by privesc-e2e Mode 8 + Compress crashes) |
+| `bf4e8a1` | Final state: probe in Go, victim in C, STRONG E2E end-to-end |
 
 ### Sub-slice 9.7 — design notes per helper
 
