@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/evasion/cet
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # Intel CET shadow-stack opt-out
@@ -59,61 +57,11 @@ process has `IMAGE_DLLCHARACTERISTICS_EX_CET_COMPAT` set.
 Wrap is a pure byte-level operation: prepend `F3 0F 1E FA` to the
 shellcode buffer if the first 4 bytes don't already match.
 
-## API Reference
+## API → godoc
 
-### `Marker`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/evasion/cet#Marker)
-
-The 4-byte ENDBR64 instruction (`F3 0F 1E FA`) exposed as a `[]byte`
-constant for inspection or manual prefixing.
-
-### `Enforced() bool`
-
-Returns `true` when the calling process has user-mode shadow-stack
-enforcement active.
-
-**Side effects:** none.
-
-**OPSEC:** invisible — reads MITIGATION_POLICY via `GetProcessMitigation
-Policy`.
-
-**Required privileges:** unprivileged (own-process query).
-
-### `Disable() error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/evasion/cet#Disable)
-
-Best-effort relax of `ProcessUserShadowStackPolicy` for the current
-process.
-
-**Returns:** `error` — `ERROR_NOT_SUPPORTED` when the image is
-`/CETCOMPAT`-compiled and the kernel refuses; wraps
-`SetProcessMitigationPolicy` failures otherwise.
-
-**Side effects:** process-global state — call once at start-up, not
-inside loops.
-
-**OPSEC:** **noisy.** `SetProcessMitigationPolicy` is itself logged by
-EDR; Defender ASR may emit an event. Prefer `Wrap` when you can.
-
-**Required privileges:** unprivileged (own-process mitigation policy).
-
-### `Wrap(sc []byte) []byte`
-
-Return a copy of `sc` prefixed with `Marker` if not already present.
-Idempotent; safe to call unconditionally.
-
-**Parameters:** `sc` — shellcode bytes.
-
-**Returns:** `[]byte` — `sc` if it already begins with `Marker`,
-otherwise a new buffer of length `len(sc) + 4`.
-
-**Side effects:** none. Pure function.
-
-**OPSEC:** invisible — only modifies caller-owned memory.
-
-**Required privileges:** unprivileged (pure function).
+[`pkg.go.dev/github.com/oioio-space/maldev/evasion/cet`](https://pkg.go.dev/github.com/oioio-space/maldev/evasion/cet) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

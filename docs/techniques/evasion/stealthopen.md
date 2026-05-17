@@ -1,6 +1,4 @@
 ---
-last_reviewed: 2026-05-04
-reflects_commit: 0dc2bb2
 ---
 
 # StealthOpen — NTFS Object ID File Access

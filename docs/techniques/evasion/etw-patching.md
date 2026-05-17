@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/evasion/etw
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # ETW patching
@@ -69,46 +67,11 @@ For each of the five functions:
 
 `PatchNtTraceEvent` does the same for `NtTraceEvent` with a single RET.
 
-## API Reference
+## API → godoc
 
-### `PatchAll(caller *wsyscall.Caller) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/evasion/etw#PatchAll)
-
-Patch all five `EtwEvent*` write functions in `ntdll.dll`. Idempotent.
-
-**Parameters:** `caller` — optional `*wsyscall.Caller`.
-
-**Returns:** `error` — first failure shorts the chain. `nil` on success.
-
-**Side effects:** 5 × 4 bytes of `ntdll.dll` `.text` section overwritten.
-
-**OPSEC:** five `NtProtectVirtualMemory` calls on `ntdll.dll` —
-distinguishable in TI ETW. Run after `unhook.FullUnhook` so the
-subsequent ETW activity stays hidden from EDR hooks.
-
-**Required privileges:** unprivileged (own-process memory only).
-
-### `Patch(caller *wsyscall.Caller) error`
-
-Patch only `EtwEventWrite` (the most-used variant). Cheaper alternative
-when you don't need the full set.
-
-**Required privileges:** unprivileged (own-process memory only).
-
-### `PatchNtTraceEvent(caller *wsyscall.Caller) error`
-
-Patch the lower-level `NtTraceEvent` with a single RET. Use this when
-EDR is observed direct-calling the syscall layer.
-
-**Required privileges:** unprivileged (own-process memory only).
-
-### `All() evasion.Technique`, `PatchTechnique() evasion.Technique`, `NtTraceTechnique() evasion.Technique`
-
-`evasion.Technique` adapters for composition with `evasion.ApplyAll`.
-
-**Required privileges:** unprivileged (own-process memory only when
-applied via `evasion.ApplyAll`).
+[`pkg.go.dev/github.com/oioio-space/maldev/evasion/etw`](https://pkg.go.dev/github.com/oioio-space/maldev/evasion/etw) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 
