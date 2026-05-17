@@ -21,12 +21,19 @@ scp "${SSH[@]}" \
     "$TESTDATA/build_testlib_msvc.cmd" \
     "test@$WIN_IP:C:/Users/Public/" >/dev/null
 
-# vcvars64.bat sets up cl.exe / link.exe / Windows SDK paths.
-VCVARS='C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat'
+# Wrap the vcvars64 invocation in a small remote .bat so all
+# quoting/escaping happens on the Windows side. Avoids the
+# shell-passes-through-ssh quoting hell.
+cat > /tmp/run_msvc_build.bat << 'BAT'
+@echo off
+call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" >nul
+if errorlevel 1 (echo vcvars64 failed & exit /b 1)
+call C:\Users\Public\build_testlib_msvc.cmd
+BAT
+scp "${SSH[@]}" /tmp/run_msvc_build.bat "test@$WIN_IP:C:/Users/Public/run_msvc_build.bat" >/dev/null
 
 echo "[+] Compiling on VM"
-ssh "${SSH[@]}" "test@$WIN_IP" \
-    "cmd /c \"call \\\"$VCVARS\\\" && C:\\Users\\Public\\build_testlib_msvc.cmd\"" 2>&1 | tail -10
+ssh "${SSH[@]}" "test@$WIN_IP" 'cmd /c C:\Users\Public\run_msvc_build.bat' 2>&1 | tail -15
 
 echo "[+] Pulling testlib_msvc.dll back"
 scp "${SSH[@]}" "test@$WIN_IP:C:/Users/Public/testlib_msvc.dll" "$TESTDATA/testlib_msvc.dll"
