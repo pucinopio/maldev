@@ -2,25 +2,11 @@
 
 [Introduction](index.md)
 
-# Getting Started
+# Get started
 
 - [Quick start](getting-started.md)
 - [Architecture](architecture.md)
 - [OPSEC build](opsec-build.md)
-
-# By Role
-
-- [Operator](by-role/operator.md)
-- [Researcher](by-role/researcher.md)
-- [Detection engineering](by-role/detection-eng.md)
-
-# Reference
-
-- [MITRE ATT&CK + D3FEND](mitre.md)
-- [Testing](testing.md)
-- [Coverage workflow](coverage-workflow.md)
-- [VM test setup](vm-test-setup.md)
-- [Documentation conventions](conventions/documentation.md)
 
 # Techniques
 
@@ -154,18 +140,23 @@
   - [Domain membership](techniques/win/domain.md)
   - [Version + UBR probe](techniques/win/version.md)
 
-# Worked Examples
+# Cookbook
+
+> Task-oriented recipes. Each page chains a few `maldev` packages
+> end-to-end to accomplish a concrete operator goal.
 
 - [Basic implant](examples/basic-implant.md)
 - [Evasive injection](examples/evasive-injection.md)
 - [Full chain](examples/full-chain.md)
 - [DLL proxy side-load](examples/dllproxy-side-load.md)
 - [UPX-style packer + cover](examples/upx-style-packer.md)
+- [Multi-target bundle](examples/multi-target-bundle.md)
+- [Packer elevation tour](examples/packer-elevation-tour.md)
 - [Runnable examples (`examples/` tree)](examples/runnable.md)
 
-# CLI Tools
+# Tooling
 
-- [Overview](tools/index.md)
+- [CLI tools overview](tools/index.md)
 - [packer](tools/packer.md)
 - [packer-vis](tools/packer-vis.md)
 - [packerscope](tools/packerscope.md)
@@ -180,4 +171,21 @@
 - [hashgen](tools/hashgen.md)
 - [vmtest](tools/vmtest.md)
 - [test-report](tools/test-report.md)
+
+# Concepts
+
+> Explanation-oriented. Why the library is shaped the way it is,
+> and reading paths for each kind of reader.
+
+- [MITRE ATT&CK + D3FEND mapping](mitre.md)
+- [Reading path — operator](by-role/operator.md)
+- [Reading path — researcher](by-role/researcher.md)
+- [Reading path — detection engineer](by-role/detection-eng.md)
+
+# Contributing
+
+- [Documentation conventions](conventions/documentation.md)
+- [Testing](testing.md)
+- [Coverage workflow](coverage-workflow.md)
+- [VM test setup](vm-test-setup.md)
 
