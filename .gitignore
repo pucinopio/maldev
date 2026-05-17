@@ -22,6 +22,7 @@ cmd/privesc-e2e/fakelib/fakelib.h
 !pe/packer/testdata/probe_converted.exe
 !pe/packer/testdata/runwithargs_loader.exe
 !pe/packer/testdata/winhello_w32.exe
+!pe/packer/testdata/testlib_msvc.dll
 # Bundled donor cert blobs — research artefacts, intentionally shipped.
 !pe/masquerade/donors/blobs/*.bin
 *.iml

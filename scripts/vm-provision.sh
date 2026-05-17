@@ -228,6 +228,56 @@ REG
     done
     done_msg "WER LocalDumps → C:\\Dumps, DumpType=2 (full)"
 
+    # MSVC Build Tools — Item #7. Idempotent via the marker file the
+    # install batch writes on completion. Skips when cl.exe already
+    # resolves through any installed VS layout. ~15-30 min cold install.
+    log "Windows: checking MSVC Build Tools"
+    if ssh "${ssh_base[@]}" "test@$ip" 'where cl.exe 2>nul || dir /b /s "C:\Program Files (x86)\Microsoft Visual Studio\*cl.exe" 2>nul | findstr cl.exe' >/dev/null 2>&1; then
+        done_msg "MSVC cl.exe already present"
+    else
+        log "Downloading vs_buildtools.exe via curl on the VM"
+        ssh "${ssh_base[@]}" "test@$ip" \
+            'curl -sL -o C:\Users\Public\vs_buildtools.exe https://aka.ms/vs/17/release/vs_buildtools.exe' \
+            2>&1 | tail -3
+        cat > /tmp/maldev-vsinstall.bat << 'BAT'
+@echo off
+set INSTALLER=C:\Users\Public\vs_buildtools.exe
+set LOG=C:\Users\Public\vs_install.log
+set MARKER=C:\Users\Public\vs_install_done.txt
+echo Started at %DATE% %TIME% > %LOG%
+%INSTALLER% --quiet --wait --norestart --nocache ^
+  --add Microsoft.VisualStudio.Workload.VCTools ^
+  --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 ^
+  --add Microsoft.VisualStudio.Component.Windows10SDK.19041 >> %LOG% 2>&1
+echo exit=%ERRORLEVEL% > %MARKER%
+echo Finished at %DATE% %TIME% with exit=%ERRORLEVEL% >> %LOG%
+BAT
+        scp -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            /tmp/maldev-vsinstall.bat "test@$ip:C:/Users/Public/maldev-vsinstall.bat" >/dev/null
+        ssh "${ssh_base[@]}" "test@$ip" \
+            'schtasks /delete /tn MaldevMSVCInstall /f 2>nul & schtasks /create /tn MaldevMSVCInstall /tr "C:\Users\Public\maldev-vsinstall.bat" /sc once /st 00:00 /ru SYSTEM /f && schtasks /run /tn MaldevMSVCInstall' \
+            2>&1 | tail -3
+        log "Waiting for MSVC install (typically 15-40 min)"
+        local deadline=$((SECONDS + 3000))
+        while [ $SECONDS -lt $deadline ]; do
+            if ssh "${ssh_base[@]}" "test@$ip" \
+                'findstr /C:"exit=" C:\Users\Public\vs_install_done.txt' 2>/dev/null | grep -aq "exit="; then
+                break
+            fi
+            sleep 60
+        done
+        local exit_line
+        exit_line=$(ssh "${ssh_base[@]}" "test@$ip" \
+            'findstr /C:"exit=" C:\Users\Public\vs_install_done.txt' 2>/dev/null | tr -d '\r')
+        echo "MSVC install result: $exit_line"
+        if echo "$exit_line" | grep -qE 'exit=(0|3010)'; then
+            done_msg "MSVC Build Tools installed"
+        else
+            warn "MSVC install did not finish cleanly — see C:\\Users\\Public\\vs_install.log"
+        fi
+        ssh "${ssh_base[@]}" "test@$ip" 'schtasks /delete /tn MaldevMSVCInstall /f' 2>&1 | tail -1
+    fi
+
     log "Windows: checking UPX"
     if ssh "${ssh_base[@]}" "test@$ip" 'where upx' >/dev/null 2>&1; then
         local upxv

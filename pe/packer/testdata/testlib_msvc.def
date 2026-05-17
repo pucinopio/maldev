@@ -1,0 +1,4 @@
+LIBRARY testlib_msvc
+EXPORTS
+    maldev_ping
+    maldev_add
