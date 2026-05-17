@@ -202,7 +202,15 @@ var (
 // VA (ImageBase + OEPRVA) at pack time. Both sentinels need to be
 // covered by the .reloc table so the loader rebases them under ASLR —
 // see [transform.InjectStubDLL] (slice 3).
-func EmitDLLStub(b *amd64.Builder, plan transform.Plan, rounds []poly.Round) error {
+//
+// When `opts.Compress` is true the stub also embeds the LZ4 inflate
+// + memcpy block (shared with EmitStub / EmitConvertedDLLStub via
+// emitLZ4DecompressBlock) after the SGN rounds — Mode 7 symmetry
+// with the EXE→DLL Compress path (Item #2). Caller must set
+// `opts.CompressedSize` / `opts.OriginalSize` / `opts.ScratchDispFromText`
+// and Plan.StubScratchSize so the appended stub section carries the
+// scratch BSS slack.
+func EmitDLLStub(b *amd64.Builder, plan transform.Plan, rounds []poly.Round, opts EmitOptions) error {
 	if !plan.IsDLL {
 		return ErrDLLStubPlanMissing
 	}
@@ -259,6 +267,16 @@ func EmitDLLStub(b *amd64.Builder, plan transform.Plan, rounds []poly.Round) err
 	// SGN rounds — shared with EmitStub / EmitConvertedDLLStub.
 	if err := emitSGNRounds(b, plan, rounds, "dll_loop", "stage1/dll"); err != nil {
 		return err
+	}
+
+	// LZ4 inflate + memcpy — shared with EmitStub / EmitConvertedDLLStub
+	// via emitLZ4DecompressBlock. Mode 7 (native-DLL) symmetry with
+	// Mode 8 (EXE→DLL) ConvertEXEtoDLL+Compress: Item #2 in
+	// docs/refactor-2026-doc/packer-actions-2026-05-12.md.
+	if opts.Compress {
+		if err := emitLZ4DecompressBlock(b, opts, "stage1/dll: EmitDLLStub"); err != nil {
+			return err
+		}
 	}
 
 	// --- forward: tail-call to original DllMain ---

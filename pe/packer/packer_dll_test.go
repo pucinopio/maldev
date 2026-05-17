@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	packerpkg "github.com/oioio-space/maldev/pe/packer"
-	"github.com/oioio-space/maldev/pe/packer/stubgen"
 	"github.com/oioio-space/maldev/pe/packer/transform"
 	"github.com/oioio-space/maldev/testutil"
 )
@@ -99,19 +98,29 @@ func TestPackBinary_FormatWindowsExe_RejectsDLLInput(t *testing.T) {
 	}
 }
 
-// TestPackBinary_FormatWindowsDLL_RejectsCompress — slice-4
-// limitation: the DllMain stub doesn't support LZ4 inflate yet.
-// Must surface stubgen.ErrCompressDLLUnsupported, not a string error.
-func TestPackBinary_FormatWindowsDLL_RejectsCompress(t *testing.T) {
+// TestPackBinary_FormatWindowsDLL_AcceptsCompress — Item #2
+// (Mode 7 + Compress symmetry with Mode 8): the native-DLL stub
+// now embeds the shared LZ4 inflate + memcpy block, so packing
+// a DLL with Compress=true must succeed and produce a parseable
+// PE32+ with IMAGE_FILE_DLL preserved.
+func TestPackBinary_FormatWindowsDLL_AcceptsCompress(t *testing.T) {
 	dll := testutil.BuildDLLWithReloc(t, 0x100)
-	_, _, err := packerpkg.PackBinary(dll, packerpkg.PackBinaryOptions{
+	out, _, err := packerpkg.PackBinary(dll, packerpkg.PackBinaryOptions{
 		Format:       packerpkg.FormatWindowsDLL,
 		Stage1Rounds: 3,
 		Seed:         1,
 		Compress:     true,
 	})
-	if !errors.Is(err, stubgen.ErrCompressDLLUnsupported) {
-		t.Errorf("got %v, want ErrCompressDLLUnsupported", err)
+	if err != nil {
+		t.Fatalf("PackBinary(DLL+Compress): %v", err)
+	}
+	pf, perr := pe.NewFile(bytes.NewReader(out))
+	if perr != nil {
+		t.Fatalf("debug/pe rejected output: %v", perr)
+	}
+	defer pf.Close()
+	if pf.FileHeader.Characteristics&transform.ImageFileDLL == 0 {
+		t.Error("output missing IMAGE_FILE_DLL after DLL+Compress pack")
 	}
 }
 

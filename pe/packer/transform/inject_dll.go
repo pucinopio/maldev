@@ -252,7 +252,11 @@ func InjectStubDLL(input, encryptedText, stubBytes []byte, plan Plan) ([]byte, e
 	}
 
 	relocFileOff := AlignUpU32(plan.StubFileOff+stubFileSize, fileAlign)
-	relocRVA := AlignUpU32(plan.StubRVA+plan.StubMaxSize, sectionAlign)
+	// Stub VirtualSize covers the LZ4 scratch slack the Compress path
+	// requests via plan.StubScratchSize. Reloc section sits past that
+	// extended span. Mirrors pe.go's EXE layout (Item #2).
+	stubVSize := plan.StubMaxSize + plan.StubScratchSize
+	relocRVA := AlignUpU32(plan.StubRVA+stubVSize, sectionAlign)
 	relocFileSize := AlignUpU32(uint32(len(mergedReloc)), fileAlign)
 	totalSize := relocFileOff + relocFileSize
 
@@ -283,7 +287,7 @@ func InjectStubDLL(input, encryptedText, stubBytes []byte, plan Plan) ([]byte, e
 	// crashes with ACCESS_VIOLATION (slice 4.5 root-cause, fixed
 	// 2026-05-12 — same fix slice 5.5.x already applied to
 	// InjectConvertedDLL).
-	writeSectionHeader(out[newStubHdr:], stubName, plan.StubMaxSize, plan.StubRVA, stubFileSize, plan.StubFileOff, scnCntCode|scnMemExec|ScnMemRead|scnMemWrite)
+	writeSectionHeader(out[newStubHdr:], stubName, stubVSize, plan.StubRVA, stubFileSize, plan.StubFileOff, scnCntCode|scnMemExec|ScnMemRead|scnMemWrite)
 
 	// === Phase 4: append the reloc section header ===
 	newRelocHdr := newStubHdr + PESectionHdrSize

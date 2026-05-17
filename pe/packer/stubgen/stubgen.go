@@ -103,12 +103,6 @@ var (
 	ErrInvalidRounds = errors.New("stubgen: rounds out of range")
 	// ErrNoInput fires when Options.Input is nil or empty.
 	ErrNoInput = errors.New("stubgen: no input bytes")
-	// ErrCompressDLLUnsupported fires when Options.Compress is true
-	// AND the input is a DLL. The DllMain stub layout doesn't yet
-	// embed the LZ4 inflate / scratch buffer path the EXE stub uses
-	// — slice-4 limitation, tracked in
-	// docs/refactor-2026-doc/packer-dll-format-plan.md.
-	ErrCompressDLLUnsupported = errors.New("stubgen: Compress=true is not supported on DLL inputs")
 	// ErrConvertEXEtoDLLUnsupported fires while the EXE→DLL chantier
 	// sub-slices 5.2 (stub emitter), 5.3 (injector), 5.4 (stubgen
 	// dispatch) are in flight. Slice 5.1 wired the API surface +
@@ -184,9 +178,6 @@ func Generate(opts Options) ([]byte, []byte, error) {
 			plan, err = transform.PlanDLL(opts.Input, stubMaxSize)
 			if err != nil {
 				return nil, nil, fmt.Errorf("stubgen: PlanDLL: %w", err)
-			}
-			if opts.Compress {
-				return nil, nil, ErrCompressDLLUnsupported
 			}
 		case opts.ConvertEXEtoDLL:
 			plan, err = transform.PlanConvertedDLL(opts.Input, stubMaxSize)
@@ -347,7 +338,7 @@ func Generate(opts Options) ([]byte, []byte, error) {
 	}
 	switch {
 	case plan.IsDLL:
-		if err := stage1.EmitDLLStub(b, plan, polyRounds); err != nil {
+		if err := stage1.EmitDLLStub(b, plan, polyRounds, emitOpts); err != nil {
 			return nil, nil, fmt.Errorf("stubgen: EmitDLLStub: %w", err)
 		}
 	case plan.IsConvertedDLL:

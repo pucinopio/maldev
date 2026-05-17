@@ -32,7 +32,7 @@ func TestEmitDLLStub_RejectsExePlan(t *testing.T) {
 	}
 	plan := stdDLLPlan
 	plan.IsDLL = false
-	err = stage1.EmitDLLStub(b, plan, makeRounds(1))
+	err = stage1.EmitDLLStub(b, plan, makeRounds(1), stage1.EmitOptions{})
 	if !errors.Is(err, stage1.ErrDLLStubPlanMissing) {
 		t.Errorf("got %v, want ErrDLLStubPlanMissing", err)
 	}
@@ -41,7 +41,7 @@ func TestEmitDLLStub_RejectsExePlan(t *testing.T) {
 // TestEmitDLLStub_RejectsZeroRounds — same contract as EmitStub.
 func TestEmitDLLStub_RejectsZeroRounds(t *testing.T) {
 	b, _ := amd64.New()
-	err := stage1.EmitDLLStub(b, stdDLLPlan, nil)
+	err := stage1.EmitDLLStub(b, stdDLLPlan, nil, stage1.EmitOptions{})
 	if !errors.Is(err, stage1.ErrNoRounds) {
 		t.Errorf("got %v, want ErrNoRounds", err)
 	}
@@ -54,7 +54,7 @@ func TestEmitDLLStub_RejectsZeroRounds(t *testing.T) {
 // exactly once.
 func TestEmitDLLStub_HasBothSentinels(t *testing.T) {
 	b, _ := amd64.New()
-	if err := stage1.EmitDLLStub(b, stdDLLPlan, makeRounds(2)); err != nil {
+	if err := stage1.EmitDLLStub(b, stdDLLPlan, makeRounds(2), stage1.EmitOptions{}); err != nil {
 		t.Fatalf("EmitDLLStub: %v", err)
 	}
 	out, err := b.Encode()
@@ -82,7 +82,7 @@ func TestEmitDLLStub_HasBothSentinels(t *testing.T) {
 // prologue/epilogue accounting.
 func TestEmitDLLStub_FitsInStubMaxSize(t *testing.T) {
 	b, _ := amd64.New()
-	if err := stage1.EmitDLLStub(b, stdDLLPlan, makeRounds(3)); err != nil {
+	if err := stage1.EmitDLLStub(b, stdDLLPlan, makeRounds(3), stage1.EmitOptions{}); err != nil {
 		t.Fatalf("EmitDLLStub: %v", err)
 	}
 	out, _ := b.Encode()
@@ -105,7 +105,7 @@ func TestEmitDLLStub_FitsInStubMaxSize(t *testing.T) {
 // layout is finalised.
 func TestPatchDLLStubDisplacements_RewritesBothDisps(t *testing.T) {
 	b, _ := amd64.New()
-	if err := stage1.EmitDLLStub(b, stdDLLPlan, makeRounds(1)); err != nil {
+	if err := stage1.EmitDLLStub(b, stdDLLPlan, makeRounds(1), stage1.EmitOptions{}); err != nil {
 		t.Fatalf("EmitDLLStub: %v", err)
 	}
 	out, _ := b.Encode()
@@ -134,7 +134,7 @@ func TestPatchDLLStubDisplacements_RewritesBothDisps(t *testing.T) {
 // little-endian bytes match.
 func TestPatchDllMainSlot_RewritesAbsoluteVA(t *testing.T) {
 	b, _ := amd64.New()
-	if err := stage1.EmitDLLStub(b, stdDLLPlan, makeRounds(1)); err != nil {
+	if err := stage1.EmitDLLStub(b, stdDLLPlan, makeRounds(1), stage1.EmitOptions{}); err != nil {
 		t.Fatalf("EmitDLLStub: %v", err)
 	}
 	out, _ := b.Encode()

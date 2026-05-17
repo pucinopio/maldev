@@ -88,3 +88,37 @@ func TestPackBinary_FormatWindowsDLL_LoadLibrary_E2E(t *testing.T) {
 	}
 	t.Logf("loaded packed DLL at handle 0x%x — DllMain stub validated end-to-end", uintptr(h))
 }
+
+// TestPackBinary_FormatWindowsDLL_LoadLibrary_Compress_E2E mirrors
+// the above but with Compress=true — Item #2 (Mode 7 + Compress
+// symmetry with Mode 8). Validates that the native-DLL stub's
+// LZ4 inflate + memcpy block (shared with EmitConvertedDLLStub via
+// emitLZ4DecompressBlock) decrypts and unpacks the synthetic DllMain
+// body correctly under LoadLibrary.
+func TestPackBinary_FormatWindowsDLL_LoadLibrary_Compress_E2E(t *testing.T) {
+	in := testutil.BuildDLLWithReloc(t, 0x100)
+	patchDllMainBody(t, in, []byte{0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3})
+	packed, _, err := packer.PackBinary(in, packer.PackBinaryOptions{
+		Format:       packer.FormatWindowsDLL,
+		Stage1Rounds: 3,
+		Seed:         42,
+		Compress:     true,
+	})
+	if err != nil {
+		t.Fatalf("PackBinary FormatWindowsDLL+Compress: %v", err)
+	}
+	tmpDir := t.TempDir()
+	dllPath := filepath.Join(tmpDir, "packed_compressed.dll")
+	if err := os.WriteFile(dllPath, packed, 0o755); err != nil {
+		t.Fatalf("write packed: %v", err)
+	}
+	h, err := syscall.LoadLibrary(dllPath)
+	if err != nil {
+		t.Fatalf("LoadLibrary on compressed packed DLL: %v", err)
+	}
+	defer syscall.FreeLibrary(h)
+	if h == 0 {
+		t.Fatal("LoadLibrary returned NULL handle without error")
+	}
+	t.Logf("loaded compressed packed DLL at handle 0x%x — Mode 7 LZ4 inflate validated", uintptr(h))
+}
