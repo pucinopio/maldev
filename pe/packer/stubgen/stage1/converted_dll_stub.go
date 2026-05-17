@@ -179,39 +179,8 @@ func EmitConvertedDLLStub(b *amd64.Builder, plan transform.Plan, rounds []poly.R
 		// converted-DLL prologue. Slice 5.7 of
 		// docs/refactor-2026-doc/packer-exe-to-dll-plan.md.
 		if opts.Compress {
-			if opts.CompressedSize == 0 || opts.OriginalSize == 0 || opts.ScratchDispFromText == 0 {
-				return fmt.Errorf("stage1/converted: Compress=true but CompressedSize=%d OriginalSize=%d ScratchDispFromText=%d",
-					opts.CompressedSize, opts.OriginalSize, opts.ScratchDispFromText)
-			}
-			// LZ4 register setup: RAX=src (R15), RBX=dst (scratch), RCX=srcSize.
-			if err := b.MOV(amd64.RAX, baseReg); err != nil {
-				return fmt.Errorf("stage1/converted: lz4 setup MOV RAX,R15: %w", err)
-			}
-			if err := b.LEA(amd64.RBX, amd64.MemOp{Base: baseReg, Disp: opts.ScratchDispFromText}); err != nil {
-				return fmt.Errorf("stage1/converted: lz4 setup LEA RBX,scratch: %w", err)
-			}
-			if err := b.MOV(amd64.RCX, amd64.Imm(int64(opts.CompressedSize))); err != nil {
-				return fmt.Errorf("stage1/converted: lz4 setup MOV RCX,size: %w", err)
-			}
-			if err := EmitLZ4InflateInline(b); err != nil {
-				return fmt.Errorf("stage1/converted: lz4 inflate: %w", err)
-			}
-			// memcpy plaintext back to R15: cld; rsi=scratch; rdi=R15;
-			// rcx=OriginalSize; rep movsb.
-			if err := b.RawBytes([]byte{0xfc}); err != nil { // cld
-				return fmt.Errorf("stage1/converted: memcpy CLD: %w", err)
-			}
-			if err := b.MOV(amd64.RSI, amd64.RBX); err != nil {
-				return fmt.Errorf("stage1/converted: memcpy MOV RSI,RBX: %w", err)
-			}
-			if err := b.MOV(amd64.RDI, baseReg); err != nil {
-				return fmt.Errorf("stage1/converted: memcpy MOV RDI,R15: %w", err)
-			}
-			if err := b.MOV(amd64.RCX, amd64.Imm(int64(opts.OriginalSize))); err != nil {
-				return fmt.Errorf("stage1/converted: memcpy MOV RCX,OriginalSize: %w", err)
-			}
-			if err := b.RawBytes([]byte{0xf3, 0xa4}); err != nil { // rep movsb
-				return fmt.Errorf("stage1/converted: memcpy REP MOVSB: %w", err)
+			if err := emitLZ4DecompressBlock(b, opts, "stage1/converted: EmitConvertedDLLStub"); err != nil {
+				return err
 			}
 		}
 	}

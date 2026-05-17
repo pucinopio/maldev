@@ -21,7 +21,7 @@ reflects_commit: 1.B.1.a refactor
 | 3 | Stub section name randomized by default (`KeepDefaultStubSectionName` opts back into ".mldv") | ~85 LOC w/ tests | ✅ shipped (c86fb1e) | — |
 | 4 | PE32+ Machine check explicite: `transform.ValidateAMD64PE32Plus` + `ErrUnsupportedMachine`/`ErrUnsupportedOptMagic`, called at FormatPE detection in `stubgen.Generate`. Rejects non-amd64 or PE32 inputs with a readable error instead of silently producing broken output. | ~85 LOC w/ tests | ✅ shipped | — |
 | 5 | Walker interface unifié (R2 in audit) | ~150 LOC | ⏳ scoped | — |
-| 6 | SGN body dedup (R1 in audit) | ~100 LOC | ⏳ scoped | — |
+| 6 | LZ4-decompress block dedup (R1 in audit, repurposed — SGN body was already shared via `emitSGNRounds`). New `emitLZ4DecompressBlock(b, opts, errPrefix)` helper folds the register-setup + inflate + memcpy block previously duplicated between `EmitStub` and `EmitConvertedDLLStub`. Byte-identical output (pinned tests stay green). | ~70 LOC factored out | ✅ shipped | — |
 | 7 | MSVC fixture provisioning on Win10 VM | ~setup + 1 fixture | ⏳ scoped | — |
 | 8 | Cert preservation opt-out: `PackBinaryOptions.PreserveAuthenticodeDirectory bool` — default-off keeps the v0.126.0 strip behaviour; opt-in keeps the (now-tampered) `DataDirectory[SECURITY]` pointer so operators can masquerade as a damaged-signed binary or steg-stash payload in the cert region. | ~85 LOC w/ tests | ✅ shipped | — |
 

@@ -225,48 +225,8 @@ func EmitStub(b *amd64.Builder, plan transform.Plan, rounds []poly.Round, opts E
 	//
 	// After inflate: [R15, R15+OriginalTextSize) = plaintext .text.
 	if opts.Compress {
-		if opts.CompressedSize == 0 || opts.OriginalSize == 0 || opts.ScratchDispFromText == 0 {
-			return fmt.Errorf("stage1: EmitStub Compress=true but CompressedSize=%d OriginalSize=%d ScratchDispFromText=%d",
-				opts.CompressedSize, opts.OriginalSize, opts.ScratchDispFromText)
-		}
-
-		// LZ4 register setup: src=.text, dst=scratch, srcSize=N. Disjoint
-		// regions, so no in-place gymnastics needed.
-		// RAX = R15
-		if err := b.MOV(amd64.RAX, baseReg); err != nil {
-			return fmt.Errorf("stage1: lz4 setup MOV RAX,R15: %w", err)
-		}
-		// RBX = R15 + ScratchDispFromText  -- scratch base in stub segment
-		if err := b.LEA(amd64.RBX, amd64.MemOp{Base: baseReg, Disp: opts.ScratchDispFromText}); err != nil {
-			return fmt.Errorf("stage1: lz4 setup LEA RBX,scratch: %w", err)
-		}
-		// RCX = CompressedSize
-		if err := b.MOV(amd64.RCX, amd64.Imm(int64(opts.CompressedSize))); err != nil {
-			return fmt.Errorf("stage1: lz4 setup MOV RCX,CompressedSize: %w", err)
-		}
-		if err := EmitLZ4InflateInline(b); err != nil {
-			return fmt.Errorf("stage1: lz4 inflate inline: %w", err)
-		}
-
-		// memcpy plaintext back to R15: cld; mov rsi, rbx (scratch saved
-		// across the asm via callee-saved push/pop); mov rdi, r15;
-		// mov rcx, OriginalSize; rep movsb. RBX holds scratch on entry
-		// to this block — verify by inspecting EmitLZ4Inflate's prologue
-		// (push rbx; push r12) and epilogue (pop r12; pop rbx).
-		if err := b.RawBytes([]byte{0xfc}); err != nil { // cld (DF=0)
-			return fmt.Errorf("stage1: memcpy CLD: %w", err)
-		}
-		if err := b.MOV(amd64.RSI, amd64.RBX); err != nil {
-			return fmt.Errorf("stage1: memcpy MOV RSI,RBX: %w", err)
-		}
-		if err := b.MOV(amd64.RDI, baseReg); err != nil {
-			return fmt.Errorf("stage1: memcpy MOV RDI,R15: %w", err)
-		}
-		if err := b.MOV(amd64.RCX, amd64.Imm(int64(opts.OriginalSize))); err != nil {
-			return fmt.Errorf("stage1: memcpy MOV RCX,OriginalSize: %w", err)
-		}
-		if err := b.RawBytes([]byte{0xf3, 0xa4}); err != nil { // rep movsb
-			return fmt.Errorf("stage1: memcpy REP MOVSB: %w", err)
+		if err := emitLZ4DecompressBlock(b, opts, "stage1: EmitStub"); err != nil {
+			return err
 		}
 	}
 
