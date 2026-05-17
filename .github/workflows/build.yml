@@ -18,7 +18,10 @@ jobs:
         with:
           go-version: "1.21"
       - name: Build all packages
-        run: go build $(go list ./...)
+        # go build ./... skips test-only packages cleanly; the
+        # go-list-piped form errors on pe/masquerade/preset which
+        # ships only _test.go files.
+        run: go build ./...
       - name: Run tests (non-platform-gated)
         run: go test ./...
 
@@ -34,7 +37,7 @@ jobs:
         with:
           go-version: "1.21"
       - name: Cross-build all packages
-        run: go build $(go list ./...)
+        run: go build ./...
       - name: Cross-build runnable examples
         run: |
           for d in examples/*/; do
@@ -64,4 +67,4 @@ jobs:
         with:
           go-version: "1.21"
       - name: Cross-build with E2E build tag
-        run: go build -tags=maldev_packer_run_e2e $(go list ./pe/packer/...)
+        run: go build -tags=maldev_packer_run_e2e ./pe/packer/...

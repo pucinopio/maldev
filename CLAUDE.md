@@ -26,7 +26,7 @@ control).
 
 ## Critical Rules
 - The `ignore/` folder MUST NEVER be committed or pushed. Always verify with `git check-ignore -v ignore/` before pushing.
-- Always run `go build $(go list ./...)` before committing (excludes `ignore/`).
+- Always run `go build ./...` before committing (excludes `ignore/`).
 - Single `go.mod` at root — no workspace, no `go.work`.
 - **Every code-modification block ends with `/simplify` and skill-compliance.** After any change to a `.go` file (or block of `.go` files), invoke the `simplify` skill BEFORE the commit that ships the change. The 3-agent review (reuse / quality / efficiency) catches reinventions, leaks, typos, and duplication of existing utilities (`golang.org/x/sys/windows`, `cleanup/memory`, repo-internal helpers) — gaps that pass `go build` and `go test` silently. This rule applies even when the diff feels small.
 - **Every code change updates the matching tech md `Examples` and `Limitations` blocks in the same commit.** New API surface ⇒ at least one Example using it; addressed Limitation ⇒ rewrite the bullet to reflect the new state. The same commit, not a follow-up.
@@ -57,13 +57,13 @@ Key rules:
 ## Build
 ```bash
 # Build all (excludes ignore/)
-go build $(go list ./...)
+go build ./...
 
 # Run tests
-go test $(go list ./...)
+go test ./...
 
 # Linux cross-compile
-GOOS=linux GOARCH=amd64 go build $(go list ./...)
+GOOS=linux GOARCH=amd64 go build ./...
 
 # VM tests — thin wrapper around cmd/vmtest (see docs/testing.md).
 ./scripts/vm-run-tests.sh windows "./..." "-v -count=1"
