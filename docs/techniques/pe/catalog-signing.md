@@ -1,7 +1,5 @@
 ---
 package: research-note
-last_reviewed: 2026-05-06
-reflects_commit: HEAD
 ---
 
 # Windows Security Catalog signing

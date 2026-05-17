@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/pe/strip
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # PE Sanitization (Go-toolchain scrub)
@@ -52,93 +50,11 @@ flowchart LR
 timestamp, full pclntab wipe, the canonical `.go*` →
 `.{rdata,rsrc,data}2` rename map.
 
-## API Reference
+## API → godoc
 
-### `Sanitize(peData []byte) []byte`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/pe/strip#Sanitize)
-
-One-shot scrub. Apply `SetTimestamp` (random recent epoch),
-`WipePclntab`, and `RenameSections` with the canonical
-`.gopclntab` / `.go.buildinfo` / `.noptrdata` rename map.
-
-**Parameters:** `peData` — full PE image.
-
-**Returns:** fresh byte slice; the input is not mutated.
-
-**Side effects:** none — pure byte manipulation.
-
-**OPSEC:** silent at emission; the file write that lands the
-sanitised bytes is the detectable phase.
-
-**Required privileges:** unprivileged (pure byte manipulation).
-
-**Platform:** cross-platform.
-
-### `SetTimestamp(peData []byte, t time.Time) []byte`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/pe/strip#SetTimestamp)
-
-Overwrite `IMAGE_FILE_HEADER.TimeDateStamp` (4 bytes at PE+8)
-with `t`'s Unix seconds.
-
-**Parameters:** `peData` — PE image; `t` — replacement
-timestamp.
-
-**Returns:** fresh byte slice with the field rewritten.
-
-**Side effects:** none.
-
-**OPSEC:** pin to a date inside the cloned identity's natural
-release window — a 1980 timestamp on a "Microsoft" binary is its
-own signal.
-
-**Required privileges:** unprivileged (pure byte manipulation).
-
-**Platform:** cross-platform.
-
-### `WipePclntab(peData []byte) []byte`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/pe/strip#WipePclntab)
-
-Zero 32 bytes at every Go pclntab magic-byte match. Targets the
-`0xFFFFFFF1` (Go 1.20+) and `0xFFFFFFF0` (Go 1.16+) markers.
-Defeats redress, GoReSym, and IDA `go_parser` symbol recovery.
-
-**Parameters:** `peData` — Go-built PE image.
-
-**Returns:** fresh byte slice with each magic + adjacent header
-zeroed.
-
-**Side effects:** none.
-
-**Required privileges:** unprivileged (pure byte manipulation).
-
-**Platform:** cross-platform.
-
-### `RenameSections(peData []byte, renames map[string]string) []byte`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/pe/strip#RenameSections)
-
-Walk the section table; for each 8-byte `Name` field whose
-current value is a key in `renames`, overwrite with the mapped
-value (truncated to 8 bytes).
-
-**Parameters:** `peData` — PE image; `renames` — map keyed on
-existing section name.
-
-**Returns:** fresh byte slice with matching section names
-rewritten.
-
-**Side effects:** none.
-
-**OPSEC:** rename targets should match canonical Microsoft
-section names (`.rdata`, `.rsrc`, `.data`) so the output blends
-with non-Go binaries.
-
-**Required privileges:** unprivileged (pure byte manipulation).
-
-**Platform:** cross-platform.
+[`pkg.go.dev/github.com/oioio-space/maldev/pe/strip`](https://pkg.go.dev/github.com/oioio-space/maldev/pe/strip) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

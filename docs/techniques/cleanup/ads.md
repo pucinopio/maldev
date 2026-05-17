@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/cleanup/ads
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # NTFS Alternate Data Streams
@@ -83,101 +81,11 @@ handles stream allocation transparently. List uses
 `NtQueryInformationFile(FileStreamInformation)` to walk the MFT entry's
 stream attribute list.
 
-## API Reference
+## API → godoc
 
-### `Write(path, stream string, data []byte) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/ads#Write)
-
-Append-or-replace `data` into the named stream of `path`.
-
-**Parameters:** `path` — NTFS file (must exist). `stream` — stream name (any
-non-empty string, no colons). `data` — bytes to write.
-
-**Returns:** `error` — wraps `CreateFileW` / `WriteFile` failures, or "not
-NTFS" when the volume doesn't support ADS.
-
-**Side effects:** stream is created if absent, replaced if present.
-
-**OPSEC:** `CreateFileW` with a colon-suffix path is a high-signal artefact for any EDR that aggregates file-IO events.
-
-**Required privileges:** unprivileged (caller's write rights on `path`).
-
-**Platform:** Windows-only (NTFS).
-
-### `WriteVia(creator stealthopen.Creator, path, stream string, data []byte) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/ads#WriteVia)
-
-Same semantics as `Write`, but routes through the operator-supplied
-[`stealthopen.Creator`](../evasion/stealthopen.md). nil falls back to
-`os.Create` (identical to plain `Write`); non-nil layers transactional
-NTFS, encryption, or any other write primitive on top of the ADS
-landing. Internally calls `stealthopen.WriteAll` with the
-`<path>:<stream>` composite path.
-
-**OPSEC:** Creator route can mask the colon-suffix open from path-hooking EDR, depending on the supplied primitive.
-
-**Required privileges:** unprivileged (caller's write rights on `path`).
-
-**Platform:** Windows-only (NTFS).
-
-### `Read(path, stream string) ([]byte, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/ads#Read)
-
-Read the entire named stream into memory.
-
-**OPSEC:** path-based open with colon-suffix is visible to file-IO hooking; pair with [`ReadVia`](#readviaopener-stealthopenopener-path-stream-string-byte-error) for stealthier reads.
-
-**Required privileges:** unprivileged (caller's read rights on `path`).
-
-**Platform:** Windows-only (NTFS).
-
-### `ReadVia(opener stealthopen.Opener, path, stream string) ([]byte, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/ads#ReadVia)
-
-Same semantics as `Read`, but routes through the operator-supplied
-[`stealthopen.Opener`](../evasion/stealthopen.md). nil falls back to
-plain `os.Open` on the composite `<path>:<stream>` (identical to
-`Read`); non-nil layers an operator-controlled read primitive on top.
-
-> [!CAUTION]
-> [`*stealthopen.Stealth`](../evasion/stealthopen.md) opens by NTFS
-> Object ID and addresses the **MFT entry** (the main stream). Named
-> ADS streams share the entry but are addressed by stream name; the
-> Object-ID path cannot reach them. An Opener that needs to defeat
-> path-based EDR hooks AND read a specific named stream must route
-> through `NtCreateFile` with the composite path (FILE_OBJECT
-> resolution) rather than Object-ID resolution.
-
-**Required privileges:** unprivileged (caller's read rights on `path`).
-
-**Platform:** Windows-only (NTFS).
-
-### `List(path string) ([]string, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/ads#List)
-
-Enumerate all stream names attached to `path` (excluding the default
-unnamed stream).
-
-**OPSEC:** `NtQueryInformationFile(FileStreamInformation)` is a known ADS-discovery primitive — uncommon outside forensic tooling.
-
-**Required privileges:** unprivileged (caller's read rights on `path`).
-
-**Platform:** Windows-only (NTFS).
-
-### `Delete(path, stream string) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/ads#Delete)
-
-Remove the named stream. The base file remains.
-
-**Required privileges:** unprivileged (caller's write rights on `path`).
-
-**Platform:** Windows-only (NTFS).
+[`pkg.go.dev/github.com/oioio-space/maldev/cleanup/ads`](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/ads) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

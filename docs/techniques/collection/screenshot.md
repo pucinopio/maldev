@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/collection/screenshot
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # Screen capture
@@ -63,87 +61,11 @@ For `CaptureDisplay(i)`:
 3. `CaptureRect(r.Min.X, r.Min.Y, r.Dx(), r.Dy())` is called with the
    monitor's virtual-desktop rectangle.
 
-## API Reference
+## API → godoc
 
-### `var ErrCapture`, `var ErrInvalidRect`, `var ErrDisplayIndex`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/collection/screenshot#ErrCapture)
-
-Sentinel errors:
-- `ErrCapture` — a GDI call failed during pixel extraction.
-- `ErrInvalidRect` — `width` or `height` is ≤ 0 in `CaptureRect`.
-- `ErrDisplayIndex` — `index` ≥ `DisplayCount()` in `CaptureDisplay`.
-
-### `Capture() ([]byte, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/collection/screenshot#Capture)
-
-Capture the entire virtual desktop (all monitors combined) as a PNG.
-
-**Returns:**
-- `[]byte` — PNG-encoded screenshot.
-- `error` — `ErrCapture` wrapping the GDI failure; nil on success.
-
-**OPSEC:** `GetDC(0)` + `BitBlt` are high-volume legitimate APIs used by
-screen-sharing, video-capture, and accessibility software.
-
-**Required privileges:** unprivileged; requires an interactive desktop
-session (Session 0 / SYSTEM service has no desktop and `GetDC(0)` returns
-NULL).
-
-### `CaptureRect(x, y, width, height int) ([]byte, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/collection/screenshot#CaptureRect)
-
-Capture a specific rectangle of the virtual desktop as a PNG.
-
-**Parameters:**
-- `x`, `y` — top-left corner in virtual-desktop pixel coordinates.
-- `width`, `height` — dimensions in pixels; both must be > 0.
-
-**Returns:**
-- `[]byte` — PNG of the requested region.
-- `error` — `ErrInvalidRect` if dimensions are ≤ 0; `ErrCapture` on GDI
-  failure.
-
-**Required privileges:** unprivileged; requires an interactive desktop
-session.
-
-### `DisplayCount() int`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/collection/screenshot#DisplayCount)
-
-Return the number of currently attached monitors via `EnumDisplayMonitors`.
-Returns 0 if enumeration fails.
-
-**Required privileges:** unprivileged.
-
-### `DisplayBounds(index int) image.Rectangle`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/collection/screenshot#DisplayBounds)
-
-Return the bounding rectangle of monitor `index` (zero-based) in
-virtual-desktop coordinates. Returns `image.Rectangle{}` if `index` is out
-of range.
-
-**Required privileges:** unprivileged.
-
-### `CaptureDisplay(index int) ([]byte, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/collection/screenshot#CaptureDisplay)
-
-Capture a single monitor by index as a PNG.
-
-**Parameters:**
-- `index` — zero-based monitor index; use `DisplayCount` to enumerate.
-
-**Returns:**
-- `[]byte` — PNG of the monitor.
-- `error` — `ErrDisplayIndex` if `index ≥ DisplayCount()`; `ErrCapture` on
-  GDI failure.
-
-**Required privileges:** unprivileged; requires an interactive desktop
-session.
+[`pkg.go.dev/github.com/oioio-space/maldev/collection/screenshot`](https://pkg.go.dev/github.com/oioio-space/maldev/collection/screenshot) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

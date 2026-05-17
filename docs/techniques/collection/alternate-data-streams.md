@@ -1,6 +1,4 @@
 ---
-last_reviewed: 2026-05-04
-reflects_commit: f3dc411
 ---
 
 # NTFS Alternate Data Streams
@@ -168,76 +166,11 @@ deletion can remove them.
 | Limitations | Host file must already exist on an NTFS volume. ADS size counts against the volume quota. Streams are lost when the file is copied to a non-NTFS destination (e.g., FAT32 USB drive, email attachment). |
 | Detection bypass | Zone.Identifier (the browser download ADS) is well-known; custom stream names are less scrutinised but uncommon stream names can stand out in EDR telemetry. |
 
-## API Reference
+## API → godoc
 
-Package: `github.com/oioio-space/maldev/cleanup/ads`. This page is
-the **collection-area surface** for the package — the full canonical
-fielded coverage lives at [`cleanup/ads.md`](../cleanup/ads.md). The
-entries below are stubs covering signature + the OPSEC bullet most
-relevant to a collection-time consumer (read/write payloads, hide
-output files); cross-link to the canonical page for the rest of the
-fielded fields.
-
-### Types
-
-#### `type StreamInfo struct { Name string; Size int64 }`
-
-- godoc: descriptor returned by `List`. `Name` is the stream name without the `:`/`$DATA` suffix; `Size` in bytes.
-- Description: pure data shape — no methods. See [`cleanup/ads.md` § StreamInfo](../cleanup/ads.md) for the fielded entry.
-- Platform: Windows (NTFS).
-
-### CRUD
-
-#### `List(path string) ([]StreamInfo, error)`
-
-- godoc: enumerate all named ADSs on `path` (default `::$DATA` excluded). Uses `FindFirstStreamW`/`FindNextStreamW`. Full coverage: [`cleanup/ads.md` § List](../cleanup/ads.md).
-- OPSEC: `FindFirstStreamW` is rare in benign code paths — Sysmon Event 1/15 detection-engineering rules look for the call against user-writable directories.
-- Required privileges: read on `path`.
-- Platform: Windows + NTFS.
-
-#### `Read(path, streamName string) ([]byte, error)`
-
-- godoc: equivalent to `os.ReadFile(path + ":" + streamName)`. Full coverage: [`cleanup/ads.md` § Read](../cleanup/ads.md).
-- OPSEC: indistinguishable from a normal file read in API telemetry except for the `:streamname` colon in the path argument.
-- Required privileges: read on the host file.
-- Platform: Windows + NTFS.
-
-#### `Write(path, streamName string, data []byte) error`
-
-- godoc: create or overwrite the named ADS with `data`. Equivalent to `os.WriteFile(path + ":" + streamName, data, 0644)`. Full coverage: [`cleanup/ads.md` § Write](../cleanup/ads.md).
-- OPSEC: the same `:streamname` colon tell. ADS writes against `Downloads` / `AppData\Local\Temp` are heavily flagged (classic browser-mark-of-the-web bypass).
-- Required privileges: write on the host file.
-- Platform: Windows + NTFS.
-
-#### `Delete(path, streamName string) error`
-
-- godoc: remove a named ADS without touching the host file. Wrapped error so callers can `errors.Is`. Full coverage: [`cleanup/ads.md` § Delete](../cleanup/ads.md).
-- OPSEC: clean delete leaves no `$Stream` artifact. Defender's "scan ADS" feature catches the write but not the delete.
-- Required privileges: write on the host file.
-- Platform: Windows + NTFS.
-
-### Undeletable file primitives
-
-#### `CreateUndeletable(dir string, data []byte) (string, error)`
-
-- godoc: create a file named `"..."` inside `dir` using the `\\?\` extended-path prefix. Explorer / cmd.exe cannot enumerate or delete it. Returns the plain (non-`\\?\`) path. Full coverage: [`cleanup/ads.md` § CreateUndeletable](../cleanup/ads.md).
-- OPSEC: file appears as `...` in directory listings if the tool uses Win32 path normalisation (Explorer hides it entirely). Operator tools using NT path APIs see it normally.
-- Required privileges: write in `dir`.
-- Platform: Windows + NTFS.
-
-#### `ReadUndeletable(path string) ([]byte, error)`
-
-- godoc: read a file created by `CreateUndeletable`. Prepends `\\?\` internally. Full coverage: [`cleanup/ads.md` § ReadUndeletable](../cleanup/ads.md).
-- OPSEC: silent.
-- Required privileges: read on the host file.
-- Platform: Windows + NTFS.
-
-#### `DeleteUndeletable(path string) error`
-
-- godoc: remove a `CreateUndeletable` file via `\\?\` prefix. Full coverage: [`cleanup/ads.md` § DeleteUndeletable](../cleanup/ads.md).
-- OPSEC: silent.
-- Required privileges: write on the host file.
-- Platform: Windows + NTFS.
+[`pkg.go.dev/github.com/oioio-space/maldev/cleanup/ads`](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/ads) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## See also
 

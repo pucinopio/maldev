@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/cleanup/wipe
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # Secure file wipe
@@ -81,35 +79,11 @@ forces the filesystem to actually rewrite blocks rather than dedup
 identical writes). `f.Sync()` after each pass forces the page cache to
 flush to disk.
 
-## API Reference
+## API → godoc
 
-### `File(path string, passes int) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/wipe#File)
-
-Overwrite `path` with random data `passes` times, then delete it.
-
-**Parameters:**
-
-- `path` — file to wipe. Must exist and be writable.
-- `passes` — number of overwrite passes. 1 is sufficient for casual
-  defeat of undelete; 3 is the DoD 5220.22-M minimum (largely
-  superstition for modern SSDs but standard contract). 7+ is gold-plated.
-
-**Returns:**
-
-- `error` — wraps `os.OpenFile` / `WriteAt` / `Sync` / `os.Remove`
-  failures. `nil` on success (file no longer exists).
-
-**Side effects:** writes `passes × file_size` random bytes to disk.
-
-**OPSEC:** generates write events of the same size as the file. Pair with
-[`timestomp`](timestomp.md) on the parent directory if directory mtime
-matters.
-
-**Required privileges:** unprivileged (caller's write rights on `path`).
-
-**Platform:** cross-platform.
+[`pkg.go.dev/github.com/oioio-space/maldev/cleanup/wipe`](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/wipe) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

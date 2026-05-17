@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/collection/clipboard
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # Clipboard capture
@@ -72,60 +70,11 @@ Key implementation details:
 - The first value is emitted unconditionally on `Watch` start, regardless of
   whether the sequence number has changed since the last call.
 
-## API Reference
+## API → godoc
 
-### `var ErrOpen`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/collection/clipboard#ErrOpen)
-
-Returned by `ReadText` when `OpenClipboard` returns 0 — typically because
-another process holds the clipboard at that instant.
-
-### `ReadText() (string, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/collection/clipboard#ReadText)
-
-Return the current clipboard text as UTF-8.
-
-**Returns:**
-- `string` — clipboard text; empty string if the clipboard holds no
-  `CF_UNICODETEXT` data.
-- `error` — `ErrOpen` if `OpenClipboard` fails; OS error on
-  `GetClipboardData` failure.
-
-**OPSEC:** single `OpenClipboard` + `GetClipboardData` + `CloseClipboard`
-sequence — identical to any legitimate paste operation.
-
-**Required privileges:** unprivileged (caller's interactive session).
-
-**Platform:** Windows-only.
-
-### `Watch(ctx context.Context, pollInterval time.Duration) <-chan string`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/collection/clipboard#Watch)
-
-Poll the clipboard and stream each newly-copied text value.
-
-**Parameters:**
-- `ctx` — cancellation; the returned channel is closed when `ctx` is done.
-- `pollInterval` — sleep between polls; 100 ms–500 ms for aggressive capture,
-  1–5 s for stealthy background monitoring.
-
-**Returns:**
-- `<-chan string` — receives the clipboard text each time the sequence number
-  changes; closed on context cancellation. The first read is emitted
-  unconditionally.
-
-**Side effects:** spawns one background goroutine that runs until `ctx` is
-done.
-
-**OPSEC:** sustained poll cadence is the only fingerprint — unusually high
-`GetClipboardSequenceNumber` rates (>10/s) stand out in API-frequency
-telemetry.
-
-**Required privileges:** unprivileged (caller's interactive session).
-
-**Platform:** Windows-only.
+[`pkg.go.dev/github.com/oioio-space/maldev/collection/clipboard`](https://pkg.go.dev/github.com/oioio-space/maldev/collection/clipboard) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

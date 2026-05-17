@@ -1,6 +1,4 @@
 ---
-last_reviewed: 2026-04-27
-reflects_commit: 07ced18
 ---
 
 # Cleanup techniques

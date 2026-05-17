@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/cleanup/bsod
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # Controlled Blue Screen of Death
@@ -95,42 +93,11 @@ sequenceDiagram
 error as fatal. The supplied status code propagates into the bug-check
 parameter shown on the BSOD screen.
 
-## API Reference
+## API → godoc
 
-### `Trigger(caller *wsyscall.Caller) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/bsod#Trigger)
-
-Raise the privilege and trigger the BSOD. Returns only on failure (the
-host doesn't come back).
-
-**Parameters:**
-
-- `caller` — optional `*wsyscall.Caller`. `nil` falls back to WinAPI;
-  pass a real caller to route through indirect syscalls (recommended,
-  the privilege adjustment + raise are otherwise visible to user-mode
-  hooks).
-
-**Returns:**
-
-- `error` — `ErrPrivilege` if `RtlAdjustPrivilege` failed, or a wrap of
-  the `NtRaiseHardError` NTSTATUS. **No success return** — on success
-  the host crashes.
-
-**Side effects:** crashes the host.
-
-**OPSEC:** the bug-check itself is the artifact. Crash dump (if
-configured) names the originating process; the
-`SeShutdownPrivilege`-adjustment ETW event may precede the crash.
-
-**Required privileges:** medium-IL with `SeShutdownPrivilege` available in the token (most local accounts).
-
-**Platform:** Windows-only.
-
-### `var ErrPrivilege error`
-
-Sentinel returned when the privilege adjustment fails (e.g. running as
-Low IL or the privilege is removed from the token).
+[`pkg.go.dev/github.com/oioio-space/maldev/cleanup/bsod`](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/bsod) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

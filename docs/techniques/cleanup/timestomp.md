@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/cleanup/timestomp
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # Timestomp
@@ -82,50 +80,11 @@ when you want a specific date.
 The OS kernel's `$FN` records remain untouched — that's the gap forensic
 tools exploit.
 
-## API Reference
+## API → godoc
 
-### `Set(path string, atime, mtime time.Time) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/timestomp#Set)
-
-Set access and modification times on `path`. Cross-platform (uses
-`os.Chtimes` under the hood, which on Windows wraps `SetFileTime`).
-
-**Parameters:** `path` — file to stomp. `atime` — desired access time.
-`mtime` — desired modification time.
-
-**Returns:** `error` — wraps `os.Chtimes` failures.
-
-**Side effects:** `$STANDARD_INFORMATION` access + modification entries
-overwritten. Creation time unchanged on this entry point.
-
-**OPSEC:** no event-log entry. Visible only to forensic-grade MFT
-comparison.
-
-**Required privileges:** unprivileged (caller's write rights on `path`).
-
-**Platform:** cross-platform (`os.Chtimes`).
-
-### `CopyFrom(src, dst string) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/timestomp#CopyFrom)
-
-Read `src`'s `ModTime` and apply it as both atime and mtime on `dst`.
-
-**Parameters:** `src` — reference file (its mtime is read). Typically
-`C:\Windows\System32\notepad.exe` or another stable system binary.
-`dst` — file to stomp.
-
-**Returns:** `error` — wraps `os.Stat` / `os.Chtimes` failures.
-
-**Side effects:** all three `$SI` timestamps on `target` match
-`reference`. `$FN` unchanged.
-
-**OPSEC:** identical signature to `Set`; reference-blending makes statistical hunts harder than fixed dates.
-
-**Required privileges:** unprivileged (caller's read rights on `src`, write rights on `dst`).
-
-**Platform:** cross-platform (`os.Chtimes`).
+[`pkg.go.dev/github.com/oioio-space/maldev/cleanup/timestomp`](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/timestomp) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

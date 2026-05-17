@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/cleanup/selfdelete
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # Self-deletion (running EXE)
@@ -99,90 +97,11 @@ Step-by-step:
 5. `CloseHandle()` — file vanishes.
 6. The process continues; its image stays mapped.
 
-## API Reference
+## API → godoc
 
-### `Run() error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/selfdelete#Run)
-
-Canonical ADS-rename + delete-on-close path. Quietest variant.
-
-**Parameters:** none — operates on the running EXE.
-
-**Returns:** `error` — wraps `CreateFileW` / `SetFileInformationByHandle`
-failures. `nil` on success.
-
-**Side effects:** EXE file disappears from disk; running process
-unaffected.
-
-**OPSEC:** rename + DELETE on a running EXE is unusual; EDR with MFT
-awareness can flag the FileRenameInfo event.
-
-**Required privileges:** unprivileged (caller's own image file).
-
-**Platform:** Windows-only (NTFS).
-
-### `RunForce(retry int, duration time.Duration) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/selfdelete#RunForce)
-
-`Run` with a retry loop for transient `ERROR_SHARING_VIOLATION`.
-
-**OPSEC:** retry surface is the same as `Run`; loop adds no extra signal.
-
-**Required privileges:** unprivileged.
-
-**Platform:** Windows-only (NTFS).
-
-### `RunWithScript(wait time.Duration) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/selfdelete#RunWithScript)
-
-Drop a batch script alongside the EXE; the script polls until the
-process exits, then deletes. Works on FAT/exFAT and on systems where
-ADS is locked down. Less stealthy.
-
-**OPSEC:** dropped batch script + `cmd.exe` child are loud — Sysmon Event 11 + 1.
-
-**Required privileges:** unprivileged.
-
-**Platform:** Windows-only.
-
-### `MarkForDeletion() error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/selfdelete#MarkForDeletion)
-
-Schedule deletion at next reboot via `MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT)`.
-The `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\
-PendingFileRenameOperations` registry value carries the entry until reboot.
-
-**OPSEC:** `PendingFileRenameOperations` is a high-value registry value monitored by reboot-time forensics.
-
-**Required privileges:** admin (the registry value lives under HKLM).
-
-**Platform:** Windows-only.
-
-### `DeleteFile(path string) error`
-
-Same primitive applied to an arbitrary path (not the running EXE).
-
-**OPSEC:** same MFT signal as `Run` but on an arbitrary path — defenders watching for ADS rename of any PE see this.
-
-**Required privileges:** unprivileged (caller's write rights on `path`).
-
-**Platform:** Windows-only (NTFS).
-
-### `DeleteFileForce(path string, retry int, duration time.Duration) error`
-
-`DeleteFile` + retry loop.
-
-**Required privileges:** unprivileged (caller's write rights on `path`).
-
-**Platform:** Windows-only (NTFS).
-
-### `var ErrInvalidHandle error`
-
-Sentinel returned when `CreateFileW` returns `INVALID_HANDLE_VALUE`.
+[`pkg.go.dev/github.com/oioio-space/maldev/cleanup/selfdelete`](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/selfdelete) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

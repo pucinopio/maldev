@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/cleanup/memory
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # Secure memory cleanup
@@ -90,70 +88,11 @@ flowchart LR
 RWX page. `DoSecret` is the new hotness — wrap any sensitive computation
 unconditionally; without `runtimesecret` it's a no-op call.
 
-## API Reference
+## API → godoc
 
-### `SecureZero(b []byte)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/memory#SecureZero)
-
-Overwrite `b` with zeros via `clear`.
-
-**Parameters:** `b` — slice to zero. Length unchanged. Cap unchanged.
-
-**Returns:** none. Slice is mutated in place.
-
-**Side effects:** none beyond the write.
-
-**OPSEC:** invisible to user-mode hooks. Kernel ETW sees nothing.
-
-**Required privileges:** unprivileged.
-
-**Platform:** cross-platform.
-
-### `WipeAndFree(addr uintptr, size uint32) error` (Windows-only)
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/memory#WipeAndFree)
-
-Re-protect `addr..addr+size` to RW, write zeros, then `VirtualFree(MEM_RELEASE)`.
-
-**Parameters:** `addr` — base of a `VirtualAlloc`'d region. `size` — bytes
-to wipe (typically the original allocation size).
-
-**Returns:** `error` — wraps `VirtualProtect` / `VirtualFree` failures.
-
-**Side effects:** the region becomes inaccessible after `VirtualFree`.
-Reading `addr` afterwards faults.
-
-**OPSEC:** standard `VirtualProtect` + `VirtualFree` — high-volume
-legitimate calls.
-
-**Required privileges:** unprivileged (caller's own address space).
-
-**Platform:** Windows-only.
-
-### `DoSecret(f func())`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/memory#DoSecret)
-
-Run `f` inside a runtime-secret scope. With Go 1.26+ and
-`GOEXPERIMENT=runtimesecret`, registers/stack/heap-temporaries used
-during `f` are zeroed on return. Without that toolchain, `DoSecret` is a
-plain function call.
-
-**Parameters:** `f` — function performing the secret computation.
-Side-effects (writes to outer scope) are preserved.
-
-**Returns:** none.
-
-**Side effects:** with the experiment, scratch memory used during `f`
-is destroyed.
-
-**OPSEC:** invisible to user-mode hooks; the runtime erasure happens
-inside the Go runtime.
-
-**Required privileges:** unprivileged.
-
-**Platform:** cross-platform.
+[`pkg.go.dev/github.com/oioio-space/maldev/cleanup/memory`](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/memory) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

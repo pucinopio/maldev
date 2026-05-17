@@ -1,6 +1,4 @@
 ---
-last_reviewed: 2026-04-27
-reflects_commit: f31fca1
 ---
 
 # Recon techniques

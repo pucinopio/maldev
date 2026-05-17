@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/process/tamper/hideprocess
-last_reviewed: 2026-05-04
-reflects_commit: ecf5d89
 ---
 
 # Hide processes from Task Manager (NtQSI patch)
@@ -82,65 +80,11 @@ the user-mode ntdll surface in the patched process; anything
 that crosses into another process or into the kernel is out
 of reach by design.
 
-## API Reference
+## API → godoc
 
-Every entry point opens the target with
-`PROCESS_VM_WRITE | PROCESS_VM_OPERATION` and writes a tiny
-prologue stub. `caller=nil` uses direct WinAPI; a non-nil
-`*wsyscall.Caller` routes the cross-process write through
-direct/indirect syscalls. Required privileges:
-`SeDebugPrivilege`, or ownership of the target process.
-
-### `PatchProcessMonitor(pid int, caller *wsyscall.Caller) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/tamper/hideprocess#PatchProcessMonitor)
-
-Patch the target's `ntdll!NtQuerySystemInformation` prologue with
-a 6-byte stub (`mov eax, 0xC0000002 ; ret` —
-`STATUS_NOT_IMPLEMENTED`). Blinds every Win32 enumeration that
-bottoms out in the Nt-level call (Task Manager, `tasklist`,
-ProcessHacker default view, …).
-
-**Side effects:** writes 6 bytes to the target's ntdll `.text`.
-
-**OPSEC:** EDRs that hash ntdll periodically detect the divergence.
-
-**Platform:** Windows; Linux stub returns
-`"hideprocess: not supported on this platform"`.
-
-### `PatchEnumProcesses(pid int, caller *wsyscall.Caller) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/tamper/hideprocess#PatchEnumProcesses)
-
-Patch `kernel32!K32EnumProcesses` to `xor eax, eax ; ret`.
-Clients calling `psapi!EnumProcesses` (which forwards to the
-kernel32 implementation) see a failed call.
-
-**Side effects:** writes 3 bytes to the target's kernel32 `.text`.
-
-**Platform:** Windows; Linux stub errors out.
-
-### `PatchToolhelp(pid int, caller *wsyscall.Caller) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/tamper/hideprocess#PatchToolhelp)
-
-Patch `kernel32!Process32FirstW` and `Process32NextW` to
-`xor eax, eax ; ret`. `CreateToolhelp32Snapshot` walks return
-FALSE on first iteration; the snapshot appears empty.
-
-**Side effects:** writes 3 bytes to each of two kernel32 exports.
-
-**Platform:** Windows; Linux stub errors out.
-
-### `PatchAll(pid int, caller *wsyscall.Caller) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/tamper/hideprocess#PatchAll)
-
-Apply all three patches in order: `NtQuerySystemInformation` →
-`K32EnumProcesses` → `Process32{First,Next}W`. Stops at the first
-error and returns it wrapped with the failing step's name.
-
-**Platform:** Windows; Linux stub errors out.
+[`pkg.go.dev/github.com/oioio-space/maldev/process/tamper/hideprocess`](https://pkg.go.dev/github.com/oioio-space/maldev/process/tamper/hideprocess) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

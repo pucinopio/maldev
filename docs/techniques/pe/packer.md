@@ -1,6 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/pe/packer
-last_reviewed: 2026-05-09
 ---
 
 # PE Packer

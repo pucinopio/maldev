@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/cleanup/service
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # Hide Windows services via DACL
@@ -95,57 +93,11 @@ D:(D;;CCSWLOLCRC;;;IU)
 
 Result: the service runs as SYSTEM, but only SYSTEM can enumerate it.
 
-## API Reference
+## API → godoc
 
-### `Mode` constants
-
-```go
-const (
-    Native  Mode = iota // SetNamedSecurityInfo (in-process)
-    SC_SDSET            // sc.exe sdset (works remotely with hostname)
-)
-```
-
-### `HideService(mode Mode, host, name string) (string, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/service#HideService)
-
-Apply the restrictive DACL to `name`.
-
-**Parameters:**
-
-- `mode` — `Native` (preferred for in-process) or `SC_SDSET` (preferred
-  for remote — accepts a `\\hostname` UNC).
-- `host` — empty for local, `\\REMOTE` for cross-machine via
-  `SC_SDSET`.
-- `name` — service short name (the value passed to `sc create NAME`).
-
-**Returns:**
-
-- `string` — captured stdout of `sc.exe sdset` when `SC_SDSET`,
-  otherwise empty.
-- `error` — wraps API failures.
-
-**Side effects:** rewrites the service security descriptor. Reversible
-via `UnHideService`.
-
-**OPSEC:** Security event 4670 (DACL change) when object-access auditing is on; `SC_SDSET` adds an `sc.exe` child process.
-
-**Required privileges:** admin (`WRITE_DAC` on the service object).
-
-**Platform:** Windows-only.
-
-### `UnHideService(mode Mode, host, name string) (string, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/service#UnHideService)
-
-Restore the default DACL on `name`.
-
-**OPSEC:** another DACL change — symmetrical to `HideService`.
-
-**Required privileges:** admin.
-
-**Platform:** Windows-only.
+[`pkg.go.dev/github.com/oioio-space/maldev/cleanup/service`](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/service) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

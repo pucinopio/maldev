@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/inject
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # Phantom DLL hollowing
@@ -97,41 +95,11 @@ Steps:
    `KernelCallbackExec`, `SectionMapInject`-paired thread, callback
    APC.
 
-## API Reference
+## API → godoc
 
-### `inject.PhantomDLLInject(pid int, dllName string, shellcode []byte, opener stealthopen.Opener) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/inject#PhantomDLLInject)
-
-Inject `shellcode` into `pid`'s address space, masquerading as the
-loaded image of `dllName`.
-
-**Parameters:**
-- `pid` — target. Needs `PROCESS_VM_OPERATION`, `PROCESS_VM_WRITE`,
-  `PROCESS_QUERY_INFORMATION`.
-- `dllName` — System32 leaf (e.g. `"amsi.dll"`). The package resolves
-  to the absolute path under `%SystemRoot%\System32\` if no path is
-  given.
-- `shellcode` — bytes to write over `.text`. Must be ≤ the cover
-  DLL's `.text` size.
-- `opener` — optional [`stealthopen.Opener`](../evasion/stealthopen.md).
-  Routes both the PE-parse read and the `NtCreateSection` handle
-  through file-ID-based opens, bypassing path-based file-IO hooks.
-  Pass `nil` for the path-based default.
-
-**Returns:** `error` — wraps file-open / `NtCreateSection` /
-`NtMapViewOfSection` / `WriteProcessMemory` / `VirtualProtectEx`
-failures. Reports if the shellcode exceeds the cover DLL's `.text`.
-
-**Side effects:** maps a `SEC_IMAGE` section into the target. The
-mapping persists until the target exits.
-
-**OPSEC:** **does not trigger** — caller must run the shellcode (e.g.
-[`KernelCallbackExec`](kernel-callback-table.md), an APC, a thread).
-
-**Required privileges:** medium-IL for same-user cross-process targets;
-admin to cross security boundaries (`PROCESS_VM_OPERATION |
-PROCESS_VM_WRITE | PROCESS_QUERY_INFORMATION`).
+[`pkg.go.dev/github.com/oioio-space/maldev/inject`](https://pkg.go.dev/github.com/oioio-space/maldev/inject) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

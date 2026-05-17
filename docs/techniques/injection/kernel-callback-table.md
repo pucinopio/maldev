@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/inject
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # KernelCallbackTable hijacking
@@ -98,44 +96,11 @@ Steps:
 8. The kernel dispatches via the modified slot — shellcode runs.
 9. Restore the original `[3]` value.
 
-## API Reference
+## API → godoc
 
-### `inject.KernelCallbackExec(pid int, shellcode []byte, caller *wsyscall.Caller) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/inject#KernelCallbackExec)
-
-Inject `shellcode` into `pid` via the KernelCallbackTable
-`__fnCOPYDATA` slot.
-
-**Parameters:**
-- `pid` — target with at least one top-level window. Must allow
-  `PROCESS_QUERY_INFORMATION`, `PROCESS_VM_OPERATION`,
-  `PROCESS_VM_READ`, `PROCESS_VM_WRITE`.
-- `shellcode` — bytes to execute as the dispatch callback. Must be a
-  function-shaped routine (return cleanly).
-- `caller` — optional `*wsyscall.Caller`. Routes Nt calls when non-nil.
-
-**Returns:** `error` — wraps NT failures, "no window for PID" when
-the target has no top-level windows, or restoration errors after the
-shellcode returns.
-
-**Side effects:** allocates RX memory in the target. Mutates and
-restores one entry of the target's `KernelCallbackTable`. Sends a
-synthetic `WM_COPYDATA` to a target window.
-
-**OPSEC:** the cross-process PEB read + write pair is the strongest
-signal; the `WM_COPYDATA` itself is normal IPC.
-
-**Required privileges:** medium-IL for same-user cross-process targets;
-admin to cross security boundaries (`PROCESS_VM_OPERATION |
-PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_QUERY_INFORMATION`).
-
-> [!CAUTION]
-> The slot restoration runs after the shellcode returns. Long-running
-> or non-returning shellcode leaves the table corrupted — the next
-> legitimate `WM_COPYDATA` arrival jumps to whatever the shellcode
-> left in place. Use a small bootstrap stub that returns immediately
-> after detaching the real payload.
+[`pkg.go.dev/github.com/oioio-space/maldev/inject`](https://pkg.go.dev/github.com/oioio-space/maldev/inject) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

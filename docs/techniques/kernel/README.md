@@ -1,6 +1,4 @@
 ---
-last_reviewed: 2026-04-27
-reflects_commit: 57c853b
 ---
 
 # Kernel-mode primitives (`kernel/*`)

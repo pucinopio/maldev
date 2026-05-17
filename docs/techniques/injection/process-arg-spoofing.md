@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/inject
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # Process argument spoofing
@@ -99,47 +97,11 @@ Steps:
 6. Caller resumes the thread when ready (or hands the suspended child
    off to a paired injection technique).
 
-## API Reference
+## API → godoc
 
-### `inject.SpawnWithSpoofedArgs(exePath, fakeArgs, realArgs string) (*windows.ProcessInformation, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/inject#SpawnWithSpoofedArgs)
-
-Spawn `exePath` in `CREATE_SUSPENDED` with `fakeArgs` as the visible
-command line, then rewrite the PEB to `realArgs` before returning.
-
-**Parameters:**
-- `exePath` — full path of the binary to spawn.
-- `fakeArgs` — command line shown to EDR / Sysmon at process-creation
-  time. Should be benign (`cmd.exe /c dir`,
-  `C:\Windows\System32\notepad.exe AAA.txt`).
-- `realArgs` — actual command line the process will see. Must fit in
-  `fakeArgs`'s allocated buffer (`MaximumLength`); otherwise the
-  function returns an error.
-
-**Returns:**
-- `*windows.ProcessInformation` — the standard Win32 struct with
-  `hProcess`, `hThread`, `dwProcessId`, `dwThreadId`. The thread is
-  **still suspended**; caller resumes (or pairs with another
-  injection technique).
-- `error` — wraps `CreateProcessW` / `NtQueryInformationProcess` /
-  `ReadProcessMemory` / `WriteProcessMemory` failures, or reports if
-  `realArgs` exceeds the spawn buffer.
-
-**Side effects:** spawns a child process. The child is suspended on
-return — caller owns its lifecycle.
-
-**OPSEC:** the fake args land in EDR / Sysmon / kernel-callback
-telemetry; the real args live only in the child's PEB at runtime.
-
-**Required privileges:** unprivileged — `CreateProcessW` plus
-`Read`/`WriteProcessMemory` against the implant's own freshly-spawned
-child (full handle rights granted at spawn time).
-
-> [!IMPORTANT]
-> The spoofed buffer cannot grow beyond what `CreateProcessW`
-> allocated. Keep `fakeArgs` long enough to hold `realArgs` —
-> typically pad with spaces.
+[`pkg.go.dev/github.com/oioio-space/maldev/inject`](https://pkg.go.dev/github.com/oioio-space/maldev/inject) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

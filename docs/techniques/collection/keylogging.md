@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/collection/keylog
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # Keylogging
@@ -76,53 +74,11 @@ Key implementation details:
 - A single global `atomic.Pointer[hookState]` serialises concurrent `Start`
   calls; a second call while a hook is active returns `ErrAlreadyRunning`.
 
-## API Reference
+## API → godoc
 
-### `type Event struct`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/collection/keylog#Event)
-
-One captured keystroke with foreground-window attribution.
-
-| Field | Type | Description |
-|---|---|---|
-| `KeyCode` | `int` | Virtual key code (`VK_*` constant) |
-| `Character` | `string` | Translated Unicode character, or `[Enter]` / `[Backspace]` / `[F1]`–`[F12]` / `[Left]` etc. |
-| `Ctrl` | `bool` | Ctrl modifier was held |
-| `Shift` | `bool` | Shift modifier was held |
-| `Alt` | `bool` | Alt modifier was held |
-| `Clipboard` | `string` | Clipboard text — populated only on Ctrl+V; empty otherwise |
-| `Window` | `string` | Foreground window title at keystroke time |
-| `Process` | `string` | Foreground process executable path |
-| `Time` | `time.Time` | Capture timestamp |
-
-### `var ErrAlreadyRunning`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/collection/keylog#ErrAlreadyRunning)
-
-Returned by `Start` when a `WH_KEYBOARD_LL` hook is already active in the
-current process. Only one hook per process is supported.
-
-### `Start(ctx context.Context) (<-chan Event, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/collection/keylog#Start)
-
-Install the hook and start the message pump on a locked OS thread.
-
-**Returns:**
-- `<-chan Event` — receives one entry per `WM_KEYDOWN`; closed when the hook
-  tears down.
-- `error` — `ErrAlreadyRunning` if a hook is already active; OS error if
-  `SetWindowsHookEx` fails.
-
-**Side effects:** registers a `WH_KEYBOARD_LL` system-wide hook; spawns a
-goroutine that calls `runtime.LockOSThread`.
-
-**OPSEC:** `SetWindowsHookEx(WH_KEYBOARD_LL)` is one of the highest-fidelity
-EDR signals — few legitimate processes install global keyboard hooks.
-
-**Required privileges:** unprivileged; must run in an interactive desktop
-session (LL hook is rejected from Session 0 / SYSTEM services).
+[`pkg.go.dev/github.com/oioio-space/maldev/collection/keylog`](https://pkg.go.dev/github.com/oioio-space/maldev/collection/keylog) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

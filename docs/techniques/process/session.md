@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/process/session
-last_reviewed: 2026-05-04
-reflects_commit: ecf5d89
 ---
 
 # Session enumeration & cross-session execution
@@ -64,138 +62,11 @@ sequenceDiagram
     CP->>Imp: process spawned in user's desktop
 ```
 
-## API Reference
+## API → godoc
 
-### `type SessionState uint32`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/session#SessionState)
-
-WTS connection-state enum. Constants: `StateActive`,
-`StateConnected`, `StateConnectQuery`, `StateShadow`,
-`StateDisconnected`, `StateIdle`, `StateListen`, `StateReset`,
-`StateDown`, `StateInit`. `String()` returns the MSDN-style name.
-
-**Platform:** Windows-only (Linux stub returns `"Unsupported"`).
-
-### `type Info struct { ID uint32; Name string; State SessionState; User, Domain string }`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/session#Info)
-
-A Terminal Services / RDP session on the current host. `ID` is
-the WTS session ID (0 = services, 1 = console, 2+ = RDP /
-fast-user-switch); `Name` is the WinStation name (`Console`,
-`RDP-Tcp#0`, …); `User` + `Domain` are empty for listener and
-services sessions.
-
-**Platform:** Windows; Linux stub mirrors the type with the same
-field set.
-
-### `type Options struct { Desktop string }`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/session#Options)
-
-Options for `CreateProcessOnActiveSessionsWith`. `Desktop` is the
-destination `winstation\desktop` passed via
-`STARTUPINFOW.lpDesktop`. Empty (default) inherits the caller's
-station+desktop — `Winsta0\Default` for an interactive logon,
-`Service-0x0-3e7$\Default` for SYSTEM service contexts. Set to
-redirect spawned UI onto a hidden desktop or a specific service
-station.
-
-**Platform:** Windows-only.
-
-### `List() ([]Info, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/session#List)
-
-Every session known to WTS, enriched with user + domain via
-`WTSQuerySessionInformationW`.
-
-**Returns:** the full session list; error from
-`WTSEnumerateSessions`.
-
-**Required privileges:** none — runs in the caller's token.
-
-**Platform:** Windows; Linux stub returns `"session: Windows only"`.
-
-### `Active() ([]Info, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/session#Active)
-
-Filter `List` to `StateActive` sessions — i.e. currently logged-on
-interactive users.
-
-**Returns:** subset of `List`'s output.
-
-**Platform:** Windows; Linux stub errors out.
-
-### `CreateProcessOnActiveSessions(userToken *token.Token, executable string, args []string) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/session#CreateProcessOnActiveSessions)
-
-Spawn a process under `userToken` with the caller's inherited
-station+desktop. Thin wrapper over
-`CreateProcessOnActiveSessionsWith` with zero `Options`.
-
-**Parameters:** `userToken` — the target user's primary token
-(typically from `token.WTSQueryUserToken`); `executable` — full
-path; `args` — argv tail (Win32 quoting applied).
-
-**Side effects:** loads the user's profile
-(`LoadUserProfileW`), builds an environment block
-(`CreateEnvironmentBlock`), then `CreateProcessAsUserW`.
-
-**Required privileges:** typically SYSTEM (for
-`WTSQueryUserToken` upstream); `SeAssignPrimaryTokenPrivilege` +
-`SeIncreaseQuotaPrivilege` to call `CreateProcessAsUserW`.
-
-**Platform:** Windows-only.
-
-### `CreateProcessOnActiveSessionsWith(userToken *token.Token, executable string, args []string, opts Options) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/session#CreateProcessOnActiveSessionsWith)
-
-`Options`-aware variant. Set `opts.Desktop` to override the
-destination winstation\desktop.
-
-**Parameters:** as `CreateProcessOnActiveSessions`, plus `opts` —
-`Options.Desktop` overrides `STARTUPINFOW.lpDesktop`.
-
-**Side effects:** as `CreateProcessOnActiveSessions`.
-
-**OPSEC:** redirecting onto a hidden desktop suppresses visible
-windows but Sysmon Event 1 (ProcessCreate) still fires — kernel
-ETW captures the spawn regardless of desktop.
-
-**Required privileges:** as `CreateProcessOnActiveSessions`.
-
-**Platform:** Windows-only.
-
-### `ImpersonateThreadOnActiveSession(userToken *token.Token, callbackFunc func() error) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/session#ImpersonateThreadOnActiveSession)
-
-Run `callbackFunc` on a locked OS thread (`runtime.LockOSThread`)
-under `userToken`'s credentials. Reverts via `RevertToSelf` on
-return.
-
-**Parameters:** `userToken` — primary token to impersonate;
-`callbackFunc` — closure executed under the impersonated identity.
-
-**Returns:** the callback's error, or an impersonation-setup
-error.
-
-**Side effects:** locks the calling goroutine's OS thread for the
-callback's lifetime; `ImpersonateLoggedOnUser` then `RevertToSelf`.
-
-**OPSEC:** no new process — quieter than
-`CreateProcessOnActiveSessions`. Security Event 4624 (logon type
-9 — NewCredentials) still fires.
-
-**Required privileges:** `SeImpersonatePrivilege` (or token
-ownership).
-
-**Platform:** Windows-only.
+[`pkg.go.dev/github.com/oioio-space/maldev/process/session`](https://pkg.go.dev/github.com/oioio-space/maldev/process/session) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

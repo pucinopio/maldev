@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/pe/srdi
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # PE-to-Shellcode (Donut)
@@ -107,130 +105,11 @@ Generated shellcode layout:
 | JScript | `ModuleJS` | — | — |
 | XSL | `ModuleXSL` | — | — |
 
-## API Reference
+## API → godoc
 
-### `type Arch int` — `ArchX32`, `ArchX64`, `ArchX84`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/pe/srdi#Arch)
-
-Target architecture for the emitted shellcode. `ArchX64` is the
-zero-value used by `DefaultConfig`; `ArchX84` produces a
-dual-mode blob that runs on both x86 and x64 hosts.
-
-**OPSEC:** `ArchX84` doubles signature surface — pick a single
-arch when the target environment is known.
-
-**Required privileges:** unprivileged (pure data constant).
-
-**Platform:** cross-platform (emitter); shellcode targets Windows.
-
-### `type ModuleType int`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/pe/srdi#ModuleType)
-
-Input format selector. Values: `ModuleNetDLL`, `ModuleNetEXE`,
-`ModuleDLL`, `ModuleEXE`, `ModuleVBS`, `ModuleJS`, `ModuleXSL`.
-See the format matrix above for which fields are required.
-
-**Required privileges:** unprivileged (pure data constant).
-
-**Platform:** cross-platform.
-
-### `type Config struct`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/pe/srdi#Config)
-
-Knob set passed to every `Convert*`. Fields: `Arch` (default
-`ArchX64`); `Type` (0 → auto-detected by `ConvertFile` only);
-`Class` — .NET class name (required for `ModuleNetDLL`);
-`Method` — .NET method or native DLL export to call;
-`Parameters` — command-line passed to the payload; `Bypass` —
-AMSI/WLDP behaviour (1 skip, 2 abort on fail, 3 continue on
-fail); `Thread` — run the entry point in a new thread.
-
-**Required privileges:** unprivileged (pure data type).
-
-**Platform:** cross-platform.
-
-### `DefaultConfig() *Config`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/pe/srdi#DefaultConfig)
-
-Returns `&Config{Arch: ArchX64, Type: ModuleEXE, Bypass: 3}` —
-the most common stage-as-EXE path with continue-on-AMSI-fail.
-
-**Side effects:** none.
-
-**Required privileges:** unprivileged (pure data constructor).
-
-**Platform:** cross-platform.
-
-### `ConvertFile(path string, cfg *Config) ([]byte, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/pe/srdi#ConvertFile)
-
-Read a file from disk and produce position-independent shellcode.
-Auto-detects `cfg.Type` from the file extension when zero.
-
-**Parameters:** `path` — input PE / .NET assembly / script;
-`cfg` — nil → `DefaultConfig`.
-
-**Returns:** flat byte slice ready for any injection primitive;
-error from file read or Donut conversion.
-
-**Side effects:** reads `path`.
-
-**OPSEC:** silent at conversion; the resulting buffer carries
-Donut's signature byte pattern.
-
-**Required privileges:** unprivileged (read access on `path`).
-
-**Platform:** cross-platform (emitter).
-
-### `ConvertBytes(data []byte, cfg *Config) ([]byte, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/pe/srdi#ConvertBytes)
-
-Convert an in-memory PE buffer. Useful when the payload is
-decrypted in-process and never lands on disk. `cfg.Type` must be
-set explicitly — there's no extension to auto-detect.
-
-**Parameters:** `data` — raw PE bytes (validates the `MZ`
-header); `cfg` — must set `Type`.
-
-**Returns:** shellcode bytes; error on short input, missing
-`MZ`, or Donut failure.
-
-**Side effects:** none.
-
-**Required privileges:** unprivileged (in-memory conversion).
-
-**Platform:** cross-platform.
-
-### `ConvertDLL(dllPath string, cfg *Config) ([]byte, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/pe/srdi#ConvertDLL)
-
-Shorthand for `ConvertFile` with `cfg.Type` pinned to
-`ModuleDLL`. `cfg.Method` should name the export to call.
-
-**Side effects:** reads `dllPath`.
-
-**Required privileges:** unprivileged (read access on `dllPath`).
-
-**Platform:** cross-platform.
-
-### `ConvertDLLBytes(dllBytes []byte, cfg *Config) ([]byte, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/pe/srdi#ConvertDLLBytes)
-
-In-memory variant of `ConvertDLL`.
-
-**Side effects:** none.
-
-**Required privileges:** unprivileged (in-memory conversion).
-
-**Platform:** cross-platform.
+[`pkg.go.dev/github.com/oioio-space/maldev/pe/srdi`](https://pkg.go.dev/github.com/oioio-space/maldev/pe/srdi) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

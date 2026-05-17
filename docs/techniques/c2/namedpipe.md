@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/c2/transport/namedpipe
-last_reviewed: 2026-05-04
-reflects_commit: 31f8854
 ---
 
 # Named-pipe transport
@@ -97,111 +95,11 @@ Each `Accept` returns a connected pipe instance; the listener
 immediately spawns the next instance so subsequent clients do not
 block.
 
-## API Reference
+## API → godoc
 
-Package: `github.com/oioio-space/maldev/c2/transport/namedpipe`.
-Both `*Listener` (server) and `*NamedPipe` (client) implement
-the standard `c2/transport.Transport` contract — drop-in
-replacement for `tcp` / `tls` / `utls`.
-
-### `namedpipe.NewListener(name string) (*Listener, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport/namedpipe#NewListener)
-
-Server-side constructor.
-
-**Parameters:** `name` — full pipe path (e.g. `\\.\pipe\c2agent`).
-The `\\.\pipe\` prefix is mandatory; the constructor does not
-auto-prefix.
-
-**Returns:** `*Listener` (implements `transport.Listener`); error
-from `CreateNamedPipeW` (typically `ERROR_INVALID_NAME` on a
-malformed path or `ERROR_PIPE_BUSY` if the name is already taken).
-
-**Side effects:** opens the kernel pipe object. The pipe persists
-until `Listener.Close()`.
-
-**OPSEC:** named-pipe creation is unremarkable on its own — every
-service uses pipes for IPC. Detection focuses on the pipe **name**
-(IOC strings like `\pipe\msagent_*` from public C2 framework
-defaults).
-
-**Required privileges:** unprivileged for local pipes; admin
-required for pipes in restricted namespaces.
-
-**Platform:** Windows.
-
-### `(*Listener).Accept(ctx context.Context) (net.Conn, error)`
-
-Block until an agent connects.
-
-**Parameters:** `ctx` for cancellation.
-
-**Returns:** a `net.Conn` whose `Read`/`Write` traverse the pipe;
-`ctx.Err()` on cancellation; OS error from `ConnectNamedPipe` on
-failure.
-
-**Side effects:** spawns a server-side pipe instance per connection.
-
-**OPSEC:** silent.
-
-**Required privileges:** as `NewListener`.
-
-**Platform:** Windows.
-
-### `namedpipe.New(addr string, timeout time.Duration) *NamedPipe`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport/namedpipe#New)
-
-Client-side constructor.
-
-**Parameters:** `addr` — `\\.\pipe\<name>` (local) or
-`\\<host>\pipe\<name>` (SMB lateral); `timeout` applies to
-`Connect` only (not subsequent `Read`/`Write`).
-
-**Returns:** `*NamedPipe` (never nil; implements `transport.Transport`).
-
-**Side effects:** none at construction.
-
-**OPSEC:** as the local/SMB pipe path.
-
-**Required privileges:** unprivileged for local; valid SMB
-credentials + ACL access for cross-host pipes.
-
-**Platform:** Windows.
-
-### `(*NamedPipe).Connect(ctx context.Context) error`
-
-Open the pipe.
-
-**Parameters:** `ctx` for cancellation. Honoured before the actual
-`CreateFile` call — `WaitNamedPipe` is used internally with the
-constructor's `timeout`.
-
-**Returns:** `nil` on success; `ctx.Err()` on cancellation;
-`ERROR_PIPE_BUSY` if the server side is full;
-`ERROR_FILE_NOT_FOUND` if the pipe does not exist.
-
-**Side effects:** opens a client handle on the pipe.
-
-**OPSEC:** SMB pipe connections trigger 4624 logon events on the
-remote host — visible in any AD-joined environment with SMB
-auditing.
-
-**Required privileges:** as the constructor.
-
-**Platform:** Windows.
-
-### Standard `transport.Transport` methods
-
-`(*NamedPipe).Read(b []byte) (int, error)`, `Write(b []byte) (int, error)`,
-`Close() error`, `RemoteAddr() string` follow the
-`c2/transport.Transport` contract — see
-[`c2/transport.md`](transport.md) for the canonical fielded
-coverage. Behaviour is byte-stream over the kernel pipe; no message
-framing.
-
-**Platform:** Windows.
+[`pkg.go.dev/github.com/oioio-space/maldev/c2/transport/namedpipe`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport/namedpipe) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

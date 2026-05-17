@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/inject
-last_reviewed: 2026-05-04
-reflects_commit: f7d57a4
 ---
 
 # EtwpCreateEtwThread injection
@@ -77,74 +75,11 @@ kernel's thread-creation telemetry still fires (`PsSetCreateThreadNotifyRoutine`
 What the technique evades is the **userland-hook** layer that EDR
 products typically install on the documented `CreateThread` family.
 
-## API Reference
+## API → godoc
 
-This injection mode plugs into the unified `inject.WindowsConfig` /
-`inject.Builder` framework — the technique itself has no top-level
-helper. Drive it via the standard `Injector` / `Builder` paths.
-
-### `const inject.MethodEtwpCreateEtwThread Method = "etwthr"`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/inject#MethodEtwpCreateEtwThread)
-
-Selects the EtwpCreateEtwThread technique — self-injection via the
-ntdll-private ETW thread spawner.
-
-**Required `WindowsConfig` fields:** none beyond `Method`. Self-
-injection only — `Config.PID` must be `0` (current process) or
-unset.
-
-**OPSEC:** `EtwpCreateEtwThread` is undocumented and almost never
-called by user code, so the call itself is anomalous in API-frequency
-telemetry. The benefit: the thread origin attributes to ntdll
-internals (ETW infrastructure), making it appear as part of the
-runtime's normal ETW initialization rather than user-spawned.
-
-**Required privileges:** unprivileged.
-
-**Platform:** Windows. Stub returns "not implemented".
-
-### `inject.NewWindowsInjector(cfg *WindowsConfig) (Injector, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/inject#NewWindowsInjector)
-
-Standard Injector constructor. Returns an `Injector` whose
-`.Inject(shellcode)` allocates RWX in the calling process (RW →
-write → flip to RX), then calls `EtwpCreateEtwThread` to spawn the
-shellcode region.
-
-**Returns:** `Injector` (also satisfies `SelfInjector` — the
-freshly-allocated region is recoverable via `InjectedRegion()` for
-sleep masking or wiping).
-
-**Side effects:** one RWX allocation in the calling process; one
-ntdll-private syscall.
-
-**OPSEC:** as the Method constant.
-
-**Required privileges:** unprivileged.
-
-**Platform:** Windows.
-
-### `inject.Builder` pattern
-
-```go
-inj, err := inject.Build().
-    Method(inject.MethodEtwpCreateEtwThread).
-    IndirectSyscalls().
-    Create()
-```
-
-The `SelfInjector` interface is satisfied so the region is
-recoverable post-`Inject`:
-
-```go
-si := inj.(inject.SelfInjector)
-region := si.InjectedRegion() // base + length of the allocated RX page
-```
-
-Pair with `evasion/sleep` to mask the region between callbacks, or
-with `cleanup/memory.SecureZero(region)` to wipe after use.
+[`pkg.go.dev/github.com/oioio-space/maldev/inject`](https://pkg.go.dev/github.com/oioio-space/maldev/inject) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

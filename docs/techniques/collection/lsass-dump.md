@@ -1,6 +1,4 @@
 ---
-last_reviewed: 2026-05-04
-reflects_commit: f3dc411
 ---
 
 # LSASS Credential Dump
@@ -197,76 +195,11 @@ the stream layout matches `MiniDumpWriteDump(MiniDumpWithFullMemory)`.
 
 ---
 
-## API Reference
+## API → godoc
 
-Package: `github.com/oioio-space/maldev/credentials/lsassdump`. This
-page is the **collection-area surface** — the canonical fielded
-coverage (PPL bypass via byovd-rtcore64, the MINIDUMP layout, the
-five `Config` flags, the `lsalive` future direction) lives at
-[`credentials/lsassdump.md`](../credentials/lsassdump.md). Stub
-entries below cover signature + the OPSEC bullet most relevant to a
-collection-time consumer; cross-link to the canonical page for the
-rest of the fielded fields.
-
-### Handle lifecycle
-
-#### `OpenLSASS(caller *wsyscall.Caller) (uintptr, error)`
-
-- godoc: walk `NtGetNextProcess` with `QUERY_LIMITED`, match `lsass.exe` by `ProcessImageFileName`, reopen with `NtOpenProcess(pid, QUERY_LIMITED|VM_READ)`. Always pair with `CloseLSASS`. Full coverage: [`credentials/lsassdump.md` § OpenLSASS](../credentials/lsassdump.md).
-- OPSEC: opening LSASS with `VM_READ` is the highest-fidelity Sysmon Event 10 trigger on every shipped EDR. The PPL gate refuses the open without driver-side help — see byovd-rtcore64 chain.
-- Required privileges: SYSTEM + `SeDebugPrivilege`. Even then, refused for PPL-protected LSASS without a kernel-mode helper.
-- Platform: Windows.
-
-#### `CloseLSASS(h uintptr) error`
-
-- godoc: close the handle returned by `OpenLSASS`. Full coverage: [`credentials/lsassdump.md` § CloseLSASS](../credentials/lsassdump.md).
-- OPSEC: silent.
-- Required privileges: none.
-- Platform: Windows.
-
-### Dump producers
-
-#### `Dump(h uintptr, w io.Writer, caller *wsyscall.Caller) (Stats, error)`
-
-- godoc: stream a MINIDUMP blob (MDMP signature, `MiniDumpWithFullMemory + HandleData + ThreadInfo + TokenInformation`) describing handle `h` to `w`. Returns `Stats` summarising what landed. Full coverage: [`credentials/lsassdump.md` § Dump](../credentials/lsassdump.md).
-- OPSEC: the dump itself is the loudest indicator-on-disk if `w` is a file — MDMP magic is a flat YARA hit. Stream into `crypto.EncryptAESGCM` + `cleanup/ads.Write` to avoid the artifact entirely.
-- Required privileges: `VM_READ` on `h`.
-- Platform: Windows.
-
-#### `DumpToFile(path string, caller *wsyscall.Caller) (Stats, error)`
-
-- godoc: `OpenLSASS` + `Dump` + `file.Sync` + `file.Close` in one call. File is created 0o600; removed if `Dump` fails. Full coverage: [`credentials/lsassdump.md` § DumpToFile](../credentials/lsassdump.md).
-- OPSEC: cleartext MDMP file on disk — only acceptable in lab/CTF contexts. Production paths should use `Dump` with an encrypting writer.
-- Required privileges: as `OpenLSASS`.
-- Platform: Windows.
-
-#### `Build(w io.Writer, cfg Config) (Stats, error)`
-
-- godoc: lower-level — build a MINIDUMP from arbitrary memory described by `cfg` (the regular `Dump` builds its own `cfg` by walking `h`). Use for test fixtures or replay from memory snapshots. Full coverage: [`credentials/lsassdump.md` § Build + Config](../credentials/lsassdump.md).
-- OPSEC: same on-disk concerns as `Dump`.
-- Required privileges: depends on the source memory the `Config` describes.
-- Platform: Windows.
-
-### Sentinel errors and Stats
-
-```go
-var (
-    ErrLSASSNotFound = errors.New("lsass.exe not found via NtGetNextProcess walk")
-    ErrOpenDenied    = errors.New("OpenProcess denied — likely missing SeDebugPrivilege or running medium-IL")
-    ErrPPL           = errors.New("LSASS is PPL-protected — driver-side bypass required")
-)
-
-type Stats struct {
-    Regions     int    // number of memory regions captured
-    Bytes       uint64 // total bytes streamed
-    ModuleCount int    // entries in the MDMP MODULE_LIST_STREAM
-    ThreadCount int    // entries in the MDMP THREAD_INFO_LIST_STREAM
-}
-```
-
-The three sentinels let operator code branch on the failure mode —
-`errors.Is(err, ErrPPL)` triggers the byovd-rtcore64 fallback path
-without needing to parse the wrapped error message.
+[`pkg.go.dev/github.com/oioio-space/maldev/credentials/lsassdump`](https://pkg.go.dev/github.com/oioio-space/maldev/credentials/lsassdump) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## See also
 

@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/process/tamper/herpaderping
-last_reviewed: 2026-05-04
-reflects_commit: ecf5d89
 ---
 
 # Process Herpaderping & Ghosting
@@ -77,72 +75,11 @@ The on-disk decoy can be a signed system binary so authenticode
 verification at the EDR-callback time succeeds against the wrong
 PE.
 
-## API Reference
+## API → godoc
 
-### `type Mode int`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/tamper/herpaderping#Mode)
-
-Selects which kernel-cache exploit `Run` performs. Constants:
-
-- `ModeHerpaderping` (zero / default) — write payload, create
-  section, overwrite the disk file with decoy content before
-  `NtCreateThreadEx`.
-- `ModeGhosting` — mark the target file delete-pending before
-  `NtCreateSection`; the file is gone from disk by the time
-  `NtCreateProcessEx` runs. No on-disk artefact at thread-creation.
-
-**Platform:** Windows-only.
-
-### `type Config struct { Mode; PayloadPath, TargetPath, DecoyPath string; Caller *wsyscall.Caller; Opener stealthopen.Opener }`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/tamper/herpaderping#Config)
-
-Inputs to `Run`. `PayloadPath` is required (the PE actually
-executed). `TargetPath` is the on-disk section source; empty ⇒ a
-temp file. `DecoyPath` is the decoy PE used to overwrite
-`TargetPath` (Herpaderping only — empty ⇒ random bytes; ignored
-for Ghosting). `Caller` routes NT syscalls through direct/indirect
-methods; nil ⇒ `LazyProc.Call`. `Opener` routes payload + decoy
-*reads* through a stealth strategy; nil ⇒ `os.Open`.
-
-**Platform:** Windows-only.
-
-### `Run(cfg Config) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/tamper/herpaderping#Run)
-
-One-shot execution: read payload, prepare target file, create
-section, create process, mutate target (overwrite/delete),
-create thread.
-
-**Parameters:** see `Config`.
-
-**Side effects:** creates / overwrites / deletes `TargetPath` on
-disk; spawns a process from the cached image.
-
-**OPSEC:** Sysmon Event 25 (ProcessTampering) is the primary
-detection on every modern stack. Win11 26100+ rejects the
-operation with `STATUS_NOT_SUPPORTED`.
-
-**Required privileges:** none beyond write access to `TargetPath`.
-
-**Platform:** Windows; the package has no Linux stub — non-Windows
-builds simply don't compile this entry point.
-
-### `Technique(cfg Config) evasion.Technique`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/process/tamper/herpaderping#Technique)
-
-`evasion.Technique` adapter wrapping `Run` for use with
-`evasion.ApplyAll`.
-
-**Returns:** a `Technique` whose `Name()` is `"herpaderping"` and
-whose `Apply(c)` calls `Run(cfg)`. If `c` is a `*wsyscall.Caller`,
-it overrides `cfg.Caller`; the cfg copy keeps shared state safe
-across re-use.
-
-**Platform:** Windows-only.
+[`pkg.go.dev/github.com/oioio-space/maldev/process/tamper/herpaderping`](https://pkg.go.dev/github.com/oioio-space/maldev/process/tamper/herpaderping) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

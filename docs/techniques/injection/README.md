@@ -1,6 +1,4 @@
 ---
-last_reviewed: 2026-04-27
-reflects_commit: 4798780
 ---
 
 # Injection techniques

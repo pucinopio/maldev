@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/inject
-last_reviewed: 2026-04-27
-reflects_commit: 4798780
 ---
 
 # Thread pool injection
@@ -84,53 +82,11 @@ Steps:
    `TpReleaseWork` frees the object underneath the running callback.
 6. **`TpReleaseWork`** — clean up.
 
-## API Reference
+## API → godoc
 
-### `inject.ThreadPoolExec(shellcode []byte) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/inject#ThreadPoolExec)
-
-Execute `shellcode` on the current process's default thread pool. Owns
-allocation (RW → RX), the `TpAllocWork`/`TpPostWork`/`TpWaitForWork`/
-`TpReleaseWork` lifecycle, and cleanup.
-
-**Parameters:**
-- `shellcode` — bytes to execute. The function copies them into a
-  freshly allocated RW page, flips to RX, then dispatches.
-
-**Returns:** `error` — wraps `ntdll` failures and protection-flip
-errors. `nil` only after the shellcode callback returns.
-
-**Side effects:** allocates `len(shellcode)`-rounded-up RX page in the
-current process. The page is **not** released — wipe it with
-[`cleanup/memory.WipeAndFree`](../cleanup/memory-wipe.md) when done.
-
-**OPSEC:** the callback target is the only anomaly. Pair with
-[`ModuleStomp`](module-stomping.md) to make it image-backed.
-
-### `inject.ThreadPoolExecCET(shellcode []byte) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/inject#ThreadPoolExecCET)
-
-CET-aware wrapper around `ThreadPoolExec`. Calls
-[`cet.Wrap`](../evasion/cet.md) on the shellcode when
-[`cet.Enforced`](../evasion/cet.md) is true, then forwards to
-`ThreadPoolExec`.
-
-**Why future-proofed.** Current shipping Windows builds do **not**
-enforce CET on the thread-pool dispatcher — meaning plain
-`ThreadPoolExec` works fine today. If a future Windows build
-flips the dispatcher to ENDBR64-required (the same model
-`KiUserApcDispatcher` uses), implants built against this helper
-keep working without a code change. The cost of a no-op wrap on
-non-enforced hosts is 4 bytes of shellcode prefix.
-
-**Parameters / Returns / Side effects:** identical to
-`ThreadPoolExec`.
-
-**Required privileges:** `unprivileged`.
-
-**Platform:** `windows` amd64.
+[`pkg.go.dev/github.com/oioio-space/maldev/inject`](https://pkg.go.dev/github.com/oioio-space/maldev/inject) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

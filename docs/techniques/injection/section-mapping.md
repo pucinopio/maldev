@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/inject
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # Section mapping injection
@@ -86,39 +84,11 @@ Steps:
 5. **`NtUnmapViewOfSection`** locally — no longer needed.
 6. **`NtCreateThreadEx`** at `remoteBase` (or any other trigger).
 
-## API Reference
+## API → godoc
 
-### `inject.SectionMapInject(pid int, shellcode []byte, caller *wsyscall.Caller) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/inject#SectionMapInject)
-
-Cross-process inject `shellcode` into `pid` via shared section mapping
-and a remote thread.
-
-**Parameters:**
-- `pid` — target process ID. Must allow `PROCESS_DUP_HANDLE`,
-  `PROCESS_VM_OPERATION`, `PROCESS_CREATE_THREAD`.
-- `shellcode` — bytes to execute in the target.
-- `caller` — optional `*wsyscall.Caller`. When non-nil, all `Nt*`
-  calls route through it (direct/indirect syscalls); when nil, falls
-  back to `windows.Nt*` userland-hooked stubs.
-
-**Returns:** `error` — wraps `NtCreateSection` /
-`NtMapViewOfSection` / `NtCreateThreadEx` failures, or invalid-PID
-errors.
-
-**Side effects:** allocates a page-file-backed section sized to the
-shellcode in the kernel; maps two views, unmaps the local one. The
-section handle is closed when the function returns; the remote
-mapping persists until the target process exits.
-
-**OPSEC:** **no `WriteProcessMemory`**. The remaining tells are the
-section creation, the cross-process map, and the final
-`NtCreateThreadEx`.
-
-**Required privileges:** medium-IL for same-user cross-process targets;
-admin to cross security boundaries (`PROCESS_DUP_HANDLE |
-PROCESS_VM_OPERATION | PROCESS_CREATE_THREAD`).
+[`pkg.go.dev/github.com/oioio-space/maldev/inject`](https://pkg.go.dev/github.com/oioio-space/maldev/inject) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

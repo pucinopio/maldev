@@ -1,6 +1,4 @@
 ---
-last_reviewed: 2026-04-27
-reflects_commit: 23c9331
 ---
 
 # PE manipulation

@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/inject
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # Callback-based execution
@@ -115,49 +113,11 @@ APC dispatcher.
 > to `ExecuteCallback(addr, method)`, or [`evasion/cet.Disable()`](../evasion/cet.md)
 > once at start-up to opt the whole process out.
 
-## API Reference
+## API → godoc
 
-### `inject.CallbackMethod`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/inject#CallbackMethod)
-
-Enum identifying which API the dispatcher routes through. Values:
-
-| Constant | API | Thread context | CET-affected |
-|---|---|---|---|
-| `CallbackEnumWindows` | `user32!EnumWindows` | calling thread | no |
-| `CallbackCreateTimerQueue` | `kernel32!CreateTimerQueueTimer` | timer thread | no |
-| `CallbackCertEnumSystemStore` | `crypt32!CertEnumSystemStore` | calling thread | no |
-| `CallbackReadDirectoryChanges` | `kernel32!ReadDirectoryChangesW` | calling thread (sync) | no |
-| `CallbackRtlRegisterWait` | `ntdll!RtlRegisterWait` | thread-pool worker | **yes** |
-| `CallbackNtNotifyChangeDirectory` | `ntdll!NtNotifyChangeDirectoryFile` | APC dispatcher | **yes** |
-
-### `inject.ExecuteCallback(addr uintptr, method CallbackMethod) error`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/inject#ExecuteCallback)
-
-Invoke the shellcode at `addr` through the chosen callback API.
-
-**Parameters:**
-- `addr` — pointer to executable memory holding the shellcode. The
-  caller must have placed it there beforehand (RX-protected).
-- `method` — one of the `CallbackMethod` constants.
-
-**Returns:** `error` — propagates the underlying API error, plus a
-sentinel for unknown methods.
-
-**Side effects:** depends on the chosen method — `CreateTimerQueueTimer`
-allocates a timer queue, `ReadDirectoryChangesW` opens
-`C:\Windows\Temp`, `CertEnumSystemStore` enumerates certificate stores.
-None of the callback APIs persist state after the call returns.
-
-**OPSEC:** very low signal on thread-creation telemetry; medium on
-behavioural telemetry — the same six APIs in known-bad-behaviour rules
-exist in MDE / Defender catalogues.
-
-**Required privileges:** unprivileged — local-only, executes in the
-calling process; some methods (`CallbackReadDirectoryChanges`) need
-read access to `C:\Windows\Temp`, available to standard users.
+[`pkg.go.dev/github.com/oioio-space/maldev/inject`](https://pkg.go.dev/github.com/oioio-space/maldev/inject) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

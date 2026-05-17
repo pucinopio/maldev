@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/inject
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # Module stomping
@@ -76,44 +74,11 @@ Steps:
 5. **Flip back** to `PAGE_EXECUTE_READ`.
 6. **Return** the address.
 
-## API Reference
+## API → godoc
 
-### `inject.ModuleStomp(dllName string, shellcode []byte) (uintptr, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/inject#ModuleStomp)
-
-Map `dllName` (a System32 leaf, e.g. `"msftedit.dll"`) and overwrite
-its `.text` section with `shellcode`.
-
-**Parameters:**
-- `dllName` — leaf or full path. The package resolves to
-  `C:\Windows\System32\<dllName>` if no path is given.
-- `shellcode` — bytes to place; must be smaller than the target's
-  `.text` section.
-
-**Returns:**
-- `uintptr` — RX address inside the stomped `.text`. Hand to
-  `ExecuteCallback`, a fiber, or any other trigger.
-- `error` — wraps `LoadLibraryEx` / `VirtualProtect` failures, or
-  reports if the shellcode is too big for the target section.
-
-**Side effects:** maps the cover DLL into the current process and
-**leaves it loaded**. The DLL's `DllMain` does not run. There is no
-unmap helper — the region persists until process exit.
-
-**OPSEC:** the strongest signal is the `VirtualProtect` flip on a
-loaded image's `.text`; mid-tier EDRs catch it. Memory scanners
-*by themselves* are defeated.
-
-**Required privileges:** unprivileged (own-process `LoadLibraryEx` +
-`VirtualProtect`).
-
-> [!CAUTION]
-> Pick a DLL the implant does not load anywhere else (no other code
-> path calls into it). If the cover DLL is already loaded with
-> dependencies resolved, `LoadLibraryEx` returns the existing handle
-> and the stomp clobbers a working module — every subsequent call
-> into it crashes.
+[`pkg.go.dev/github.com/oioio-space/maldev/inject`](https://pkg.go.dev/github.com/oioio-space/maldev/inject) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

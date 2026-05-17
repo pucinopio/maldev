@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/inject
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 ---
 
 # CreateRemoteThread injection
@@ -91,65 +89,11 @@ The package fans out steps 2–5 through the configured
 runs through WinAPI, NativeAPI, direct syscalls, or indirect syscalls
 depending on EDR posture.
 
-## API Reference
+## API → godoc
 
-### `Method = MethodCreateRemoteThread`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/inject#MethodCreateRemoteThread)
-
-The constant `"crt"`. Pass to [`Config.Method`](#configmethod-byte-error)
-or [`InjectorBuilder.Method`](#builderpattern).
-
-### `inject.DefaultWindowsConfig(method, pid) *WindowsConfig`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/inject#DefaultWindowsConfig)
-
-Convenience constructor. Returns a `*WindowsConfig` with sensible defaults
-and the requested method + PID set.
-
-**Parameters:**
-- `method` — `MethodCreateRemoteThread`.
-- `pid` — non-zero PID of the target process.
-
-**Returns:** `*WindowsConfig` ready to pass to `NewWindowsInjector`.
-
-**Required privileges:** unprivileged (config struct only; no syscalls).
-
-### `inject.NewWindowsInjector(cfg *WindowsConfig) (Injector, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/inject#NewWindowsInjector)
-
-Build an `Injector` for the configured method.
-
-**Returns:**
-- `Injector` — call `.Inject(shellcode)` to perform the operation.
-- `error` — `ErrNotSupported` if the method is unknown, or
-  config-validation errors (PID required for cross-process methods,
-  ProcessPath required for child-process methods).
-
-**Side effects:** none until `Inject` is called.
-
-**OPSEC:** very-noisy on `Inject` — see *OPSEC & Detection* below.
-
-**Required privileges:** medium-IL for same-user cross-process; admin
-to cross security boundaries (`OpenProcess(PROCESS_VM_OPERATION |
-PROCESS_VM_WRITE | PROCESS_CREATE_THREAD)` against another user's or
-elevated process).
-
-### `Builder` pattern
-
-```go
-inj, err := inject.Build().
-    Method(inject.MethodCreateRemoteThread).
-    TargetPID(pid).
-    IndirectSyscalls().                    // or .DirectSyscalls(), .NativeAPI(), .WinAPI()
-    Use(inject.WithCPUDelayConfig(...)).   // optional middleware
-    Create()
-```
-
-`Build()` returns an [`*InjectorBuilder`](https://pkg.go.dev/github.com/oioio-space/maldev/inject#InjectorBuilder).
-`Method`, `TargetPID`, `*Syscalls`, `Use`, and `Create` are the relevant
-methods for this technique.
+[`pkg.go.dev/github.com/oioio-space/maldev/inject`](https://pkg.go.dev/github.com/oioio-space/maldev/inject) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

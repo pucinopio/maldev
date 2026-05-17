@@ -1,6 +1,4 @@
 ---
-last_reviewed: 2026-05-04
-reflects_commit: 3de532d
 mitre: T1548.002
 detection_level: noisy
 ---
@@ -80,50 +78,11 @@ Common implementation skeleton (all 4 follow the same shape):
    is a fast-cleanup target).
 6. Delete the hijack key.
 
-## API Reference
+## API → godoc
 
-```go
-func FODHelper(path string) error
-func SLUI(path string) error
-func SilentCleanup(path string) error
-func EventVwr(path string) error
-func EventVwrLogon(domain, user, password, path string) error
-```
-
-### `FODHelper(path) / SLUI(path) / SilentCleanup(path) / EventVwr(path)`
-
-**Parameters:**
-- `path` — full command line that runs at High IL. Use a quoted
-  absolute path with arguments, e.g.
-  `"C:\\Users\\Public\\impl.exe --once"`.
-
-**Returns:** `error` — non-nil if the registry write fails or the
-auto-elevating binary cannot be launched. Returns `nil` once the
-hijack is registered and the binary is launched — the function does
-**not** wait for the elevated child to exit.
-
-**Side effects:**
-- HKCU registry write under `Software\Classes\<scheme>\Shell\Open\Command`
-  (or task-env equivalent for `SilentCleanup`).
-- Spawn of `fodhelper.exe` / `slui.exe` / `taskeng.exe` /
-  `eventvwr.exe` parented to the calling implant.
-- Cleanup runs in a deferred goroutine — **the registry key is left
-  briefly visible** during the spawn window.
-
-**OPSEC:** noisy. Process-tree (`fodhelper.exe → cmd.exe`) is the
-detection focus, plus `Microsoft-Windows-Sysmon/Operational` event
-13 (registry write) under `HKCU\Software\Classes\<unusual>`.
-
-**Required privileges:** medium-IL caller in the local Administrators
-group with UAC at "Default" (not "Always notify"); the bypass *yields*
-a high-IL token without prompting.
-
-### `EventVwrLogon(domain, user, password, path)`
-
-EventVwr variant that uses `CreateProcessWithLogonW` to launch the
-auto-elev binary under different credentials. Useful when the
-current implant is running as a non-admin user and you have admin
-creds — the Secondary Logon service runs the elevated child.
+[`pkg.go.dev/github.com/oioio-space/maldev/privesc/uac`](https://pkg.go.dev/github.com/oioio-space/maldev/privesc/uac) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

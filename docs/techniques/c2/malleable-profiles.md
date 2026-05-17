@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/c2/transport
-last_reviewed: 2026-05-04
-reflects_commit: 31f8854
 ---
 
 # Malleable HTTP profiles
@@ -91,84 +89,11 @@ The handler on the operator side accepts requests on the same URIs
 and responds with the next chunk. With realistic timing (jitter, sleep)
 the traffic is indistinguishable from a slow CDN page-load.
 
-## API Reference
+## API → godoc
 
-Package: `github.com/oioio-space/maldev/c2/transport`. The
-`Malleable` transport implements the standard `Transport` contract
-on top of HTTP/HTTPS — see [`c2/transport.md`](transport.md) for
-the base contract.
-
-### `type transport.Profile struct`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport#Profile)
-
-```go
-type Profile struct {
-    GetURIs     []string                  // GET endpoints rotated round-robin per beacon
-    PostURIs    []string                  // POST endpoints (same rotation)
-    Headers     map[string]string         // applied to every request
-    UserAgent   string                    // overrides Headers["User-Agent"] when non-empty
-    DataEncoder func([]byte) []byte       // applied to outbound bodies (encode → wire)
-    DataDecoder func([]byte) []byte       // applied to inbound bodies (wire → decode)
-}
-```
-
-**Side effects:** pure data — `Encoder`/`Decoder` are run inside
-`Read`/`Write` paths.
-
-**OPSEC:** the GET/POST URI sets and User-Agent are the most
-fingerprintable fields — defaults are tools-of-the-trade signatures
-(`/api/v1/...`). Match the target's existing web traffic patterns
-(real `Referer`, real cookie names, real CDN URI shapes).
-
-**Required privileges:** none.
-
-**Platform:** cross-platform.
-
-### `transport.NewMalleable(address string, timeout time.Duration, profile *Profile, opts ...MalleableOption) *Malleable`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport#NewMalleable)
-
-Construct a malleable HTTP transport.
-
-**Parameters:** `address` operator endpoint (e.g.
-`https://operator.example`); `timeout` per-request; `profile`
-shapes traffic (nil falls back to a minimal default with
-`/api/data` GET and POST paths); `opts` include `WithTLSConfig(...)`
-for the underlying `*http.Transport`.
-
-**Returns:** `*Malleable` (implements `transport.Transport`).
-
-**Side effects:** none at construction.
-
-**OPSEC:** as `Profile` — the configured pattern dictates the
-network footprint.
-
-**Required privileges:** outbound network connectivity to `address`.
-
-**Platform:** cross-platform.
-
-### `transport.WithTLSConfig(*http.Transport) MalleableOption`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport#WithTLSConfig)
-
-Inject the underlying `*http.Transport`. Compose with uTLS,
-cert-pinning, or proxy-routing.
-
-**Parameters:** `*http.Transport` carrying the operator's chosen
-TLS configuration.
-
-**Returns:** `MalleableOption` for use with `NewMalleable(..., opts...)`.
-
-**Side effects:** none until applied.
-
-**OPSEC:** the transport's `TLSClientConfig` controls JA3
-fingerprint and cert validation. Pair with `transport.NewUTLS`-
-style ClientHello mimicry for full traffic blending.
-
-**Required privileges:** none.
-
-**Platform:** cross-platform.
+[`pkg.go.dev/github.com/oioio-space/maldev/c2/transport`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 

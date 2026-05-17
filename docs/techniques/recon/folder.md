@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/recon/folder
-last_reviewed: 2026-04-27
-reflects_commit: f31fca1
 ---
 
 # Windows special-folder paths
@@ -30,86 +28,11 @@ The function is technically deprecated in favor of
 older API remains widely supported and avoids COM
 initialization overhead.
 
-## API Reference
+## API → godoc
 
-Two paths: the **modern** [GetKnown] (KNOWNFOLDERID, recommended
-by Microsoft for new code) and the **legacy** [Get] (CSIDL, kept
-for backwards compatibility).
-
-### `GetKnown(rfid *windows.KNOWNFOLDERID, flags uint32) (string, error)`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/recon/folder#GetKnown)
-
-Thin wrapper around `golang.org/x/sys/windows.KnownFolderPath` —
-that helper already handles the `SHGetKnownFolderPath` HRESULT
-contract + `CoTaskMemFree` of the API-allocated `PWSTR`. The
-package-local wrapper exists only to wrap the underlying error
-in [`ErrKnownFolderNotFound`](https://pkg.go.dev/github.com/oioio-space/maldev/recon/folder#ErrKnownFolderNotFound)
-for `errors.Is` discrimination on the caller side.
-
-**Parameters:**
-- `rfid` — pointer to one of the `windows.FOLDERID_*` constants
-  (e.g. `windows.FOLDERID_RoamingAppData`) or a `windows.KNOWNFOLDERID`
-  parsed from a custom GUID (3rd-party Shell extensions).
-- `flags` — bitwise OR of any `windows.KF_FLAG_*` bits — typically
-  `0` (default), `windows.KF_FLAG_CREATE` (force directory
-  creation), `windows.KF_FLAG_DONT_VERIFY` (skip existence check).
-
-**Returns:**
-- `string` — resolved path. Not `MAX_PATH`-capped.
-- `error` — wraps [`ErrKnownFolderNotFound`](https://pkg.go.dev/github.com/oioio-space/maldev/recon/folder#ErrKnownFolderNotFound)
-  via `%w` when Shell32 returns a non-success HRESULT.
-
-**Side effects:** none. `windows.KnownFolderPath` releases the
-API-allocated `PWSTR` internally.
-
-**OPSEC:** very-quiet. `SHGetKnownFolderPath` is in every
-modern installer / Office app / browser path.
-
-**Required privileges:** `unprivileged`.
-
-**Platform:** `windows` ≥ Vista (KNOWNFOLDERID introduced in Vista).
-
-### `Get(csidl CSIDL, createIfNotExist bool) string`
-
-[godoc](https://pkg.go.dev/github.com/oioio-space/maldev/recon/folder#Get)
-
-Legacy path. Resolves a `CSIDL` constant via
-`SHGetSpecialFolderPathW`. Microsoft recommends `GetKnown` for
-new code; keep this for callers that already key on CSIDL.
-
-**Parameters:**
-- `csidl` — one of the `CSIDL_*` constants.
-- `createIfNotExist` — pass `true` to create the folder when
-  missing.
-
-**Returns:**
-- `string` — resolved path or empty on failure.
-
-**Side effects:** caps at `MAX_PATH` (260 chars).
-
-**OPSEC:** very-quiet. Universal Win32 API.
-
-**Required privileges:** `unprivileged`.
-
-**Platform:** `windows` (all versions).
-
-### Common KNOWNFOLDERID constants
-
-Use any `windows.FOLDERID_*` GUID directly — the catalogue lives
-in [`golang.org/x/sys/windows`](https://pkg.go.dev/golang.org/x/sys/windows)
-and covers everything from `FOLDERID_Profile` /
-`FOLDERID_Desktop` / `FOLDERID_Documents` / `FOLDERID_Downloads`
-to per-extension entries that 3rd-party Shell extensions
-register. No package-local re-export — saves the maintenance
-burden of mirroring upstream.
-
-### Common CSIDL constants (legacy)
-
-`CSIDL_DESKTOP`, `CSIDL_APPDATA`, `CSIDL_LOCAL_APPDATA`,
-`CSIDL_COMMON_APPDATA`, `CSIDL_STARTUP`, `CSIDL_COMMON_STARTUP`,
-`CSIDL_PROGRAM_FILES`, `CSIDL_PROGRAM_FILESX86`, `CSIDL_SYSTEM`,
-`CSIDL_WINDOWS`, `CSIDL_TEMPLATES`.
+[`pkg.go.dev/github.com/oioio-space/maldev/recon/folder`](https://pkg.go.dev/github.com/oioio-space/maldev/recon/folder) is the authoritative
+reference for every exported symbol. This page teaches the
+*concepts*; the godoc is the *specification*.
 
 ## Examples
 
