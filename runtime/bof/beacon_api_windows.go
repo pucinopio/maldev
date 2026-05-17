@@ -134,6 +134,7 @@ func initBeaconCallbacks() {
 		"__imp_BeaconErrorNA":        syscall.NewCallback(beaconErrorNAImpl),
 		"__imp_BeaconGetSpawnTo":     syscall.NewCallback(beaconGetSpawnToImpl),
 	}
+	registerExtraBeaconCallbacks(beaconCBs)
 }
 
 // beaconPrintfImpl handles BeaconPrintf(int type, const char *fmt, ...).

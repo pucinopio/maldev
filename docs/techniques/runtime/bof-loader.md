@@ -132,6 +132,29 @@ little-endian load. Use `AddInt` / `AddShort` for fixed-width
 ints, `AddString` for length-prefixed NUL-terminated strings,
 `AddBytes` for raw blobs.
 
+### Token impersonation + spawn-and-inject
+
+The slice-1 surface lets a CS BOF impersonate, spawn a sacrificial
+target, and inject without any extra glue:
+
+```go
+b, _ := bof.Load(coffBytes)
+b.SetSpawnTo(`C:\Windows\System32\notepad.exe`)
+b.SetUserData(payloadShellcode) // optional, surfaced via BeaconGetCustomUserData
+
+out, _ := b.Execute(nil)
+// The BOF internally calls:
+//   BeaconUseToken(handle)             → ImpersonateLoggedOnUser
+//   BeaconSpawnTemporaryProcess(...)   → CreateProcess suspended
+//   BeaconInjectTemporaryProcess(...)  → write + CreateRemoteThread + Resume
+//   BeaconRevertToken()                → RevertToSelf
+fmt.Println(string(out))
+```
+
+Execute pins the goroutine to its OS thread for the entire call, so the
+impersonation in step 1 is honoured by the syscalls the BOF issues in
+later steps.
+
 ## OPSEC & Detection
 
 | Artefact | Where defenders look |
@@ -163,18 +186,36 @@ ints, `AddString` for length-prefixed NUL-terminated strings,
 
 ## Limitations
 
-- **Beacon-API surface — full set with one varargs caveat.**
-  Implemented: `BeaconPrintf` + `BeaconFormatPrintf` (format
-  string forwarded verbatim — see vararg note below),
-  `BeaconOutput`, `BeaconDataParse` / `DataInt` / `DataShort` /
-  `DataLength` / `DataExtract`, `BeaconFormatAlloc` / `Reset` /
-  `Free` / `Append` / `Int` / `ToString`, `BeaconErrorD` /
-  `ErrorDD` / `ErrorNA` (routed to a per-BOF errors buffer
-  exposed via `(*BOF).Errors()`), `BeaconGetSpawnTo`
-  (path settable via `(*BOF).SetSpawnTo`). Any other
-  `__imp_Beacon*` import fails at relocation time with
-  `unresolved external symbol __imp_BeaconXxx` — the failure
-  is loud and traceable rather than silent NULL-patching.
+- **Beacon-API surface — full 27-symbol set (slice 1, v0.151+).**
+  All `beacon.h` groups are wired:
+  - **Data parsing**: `BeaconDataParse` / `DataInt` / `DataShort` /
+    `DataLength` / `DataExtract`.
+  - **Output / format**: `BeaconPrintf` + `BeaconFormatPrintf`
+    (format string forwarded verbatim — varargs caveat below),
+    `BeaconOutput`, `BeaconFormatAlloc` / `Reset` / `Free` /
+    `Append` / `Int` / `ToString`, `BeaconErrorD` / `ErrorDD` /
+    `ErrorNA`.
+  - **Tokens**: `BeaconUseToken` (`ImpersonateLoggedOnUser`) /
+    `BeaconRevertToken` (`RevertToSelf`). Execute pins the
+    goroutine to its OS thread for the BOF call so the
+    impersonation is honoured by subsequent Win32 calls; we
+    `RevertToSelf` on Execute exit as a safety net.
+  - **Injection**: `BeaconInjectProcess` (VirtualAllocEx +
+    WriteProcessMemory + CreateRemoteThread on a host handle),
+    `BeaconSpawnTemporaryProcess` (`CreateProcess` suspended on
+    the configured SpawnTo — `rundll32.exe` by default),
+    `BeaconInjectTemporaryProcess` (spawn + inject + resume,
+    teardown on failure), `BeaconCleanupProcess` (terminate +
+    close).
+  - **Helpers**: `BeaconIsAdmin`, `BeaconGetCustomUserData`
+    (blob configured via `(*BOF).SetUserData`), `toWideChar`
+    (UTF-8 → UTF-16LE, NUL-terminated).
+  - **Key-value store**: `BeaconAddValue` / `BeaconGetValue` /
+    `BeaconRemoveValue`. Scope is the single Execute call —
+    cross-Run state must go through the implant.
+  Any unknown `__imp_Beacon*` import still fails at relocation
+  time with `unresolved external symbol __imp_BeaconXxx` — loud
+  and traceable rather than silent NULL-patching.
 - **`BeaconPrintf` / `BeaconFormatPrintf` varargs are not
   expanded.** `syscall.NewCallback` binds a fixed-arity Go
   function as a stdcall callback; Go cannot introspect cdecl

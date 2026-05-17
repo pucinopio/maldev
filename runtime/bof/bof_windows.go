@@ -5,6 +5,7 @@ package bof
 import (
 	"encoding/binary"
 	"fmt"
+	"runtime"
 	"syscall"
 	"unsafe"
 
@@ -101,6 +102,26 @@ type BOF struct {
 	// spawnToCStr so the address handed to native code stays stable.
 	spawnTo     string
 	spawnToCStr []byte
+
+	// userData is the blob BeaconGetCustomUserData returns to the BOF.
+	// Pinned for the BOF instance's lifetime so the pointer handed to
+	// native code stays stable across callbacks.
+	userData []byte
+
+	// kv backs BeaconAddValue / GetValue / RemoveValue. Lazily allocated
+	// on first call and reset between Execute invocations (see Execute).
+	kv *kvStore
+}
+
+// SetUserData configures the blob BeaconGetCustomUserData returns to the
+// BOF. The slice is retained by value — callers may reuse the original
+// buffer afterwards without disturbing the BOF.
+func (b *BOF) SetUserData(data []byte) {
+	if len(data) == 0 {
+		b.userData = nil
+		return
+	}
+	b.userData = append([]byte(nil), data...)
 }
 
 // SetSpawnTo configures the path BeaconGetSpawnTo returns when the BOF
@@ -170,12 +191,23 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 	b.output = newBeaconOutput()
 	b.errors = newBeaconOutput()
 	b.argBuf = args
+	b.kv = nil // fresh KV store per Execute — cross-Run state goes through the implant
 
+	// Pin the goroutine to its OS thread for the BOF call. BeaconUseToken
+	// impersonates on the *current thread*; without LockOSThread the Go
+	// scheduler could migrate the goroutine after the impersonation call
+	// and run subsequent Win32 calls under the original token.
+	runtime.LockOSThread()
 	bofMu.Lock()
 	currentBOF = b
 	defer func() {
+		// Best-effort revert in case the BOF impersonated and didn't
+		// revert. Errors are ignored — RevertToSelf can only fail when
+		// no impersonation is active, which is the common case.
+		_ = windows.RevertToSelf()
 		currentBOF = nil
 		bofMu.Unlock()
+		runtime.UnlockOSThread()
 	}()
 
 	hdr := parseCOFFHeader(b.Data)
