@@ -19,6 +19,43 @@ type peLayout struct {
 	numSections  uint16
 }
 
+// ErrUnsupportedMachine fires when an input PE's COFF Machine
+// field is not [MachineAMD64]. The packer's stubs are amd64-only;
+// silently producing output for an x86 or ARM64 input would yield
+// a non-executable file. Caught explicitly at input detection
+// rather than at runtime decryption.
+var ErrUnsupportedMachine = fmt.Errorf("transform: unsupported COFF Machine — packer requires IMAGE_FILE_MACHINE_AMD64 (0x8664)")
+
+// ErrUnsupportedOptMagic fires when an input PE's Optional Header
+// Magic is not PE32+ (0x020B). PE32 (32-bit) inputs are rejected
+// because every header offset in this package is keyed on the
+// 64-bit Optional Header layout.
+var ErrUnsupportedOptMagic = fmt.Errorf("transform: unsupported Optional Header Magic — packer requires PE32+ (0x020B)")
+
+// ValidateAMD64PE32Plus checks that `pe` is a PE32+ amd64 image.
+// Returns [ErrUnsupportedMachine] / [ErrUnsupportedOptMagic] on
+// mismatch, or a layout-parse error if the headers are malformed.
+//
+// Called at FormatPE detection so the operator gets an immediate,
+// readable rejection — packing an x86 EXE through this library
+// would otherwise succeed at every header-rewrite step and only
+// fail at LoadLibrary on Win64 with a cryptic STATUS_INVALID_IMAGE.
+func ValidateAMD64PE32Plus(pe []byte) error {
+	l, err := parsePELayout(pe)
+	if err != nil {
+		return err
+	}
+	machine := binary.LittleEndian.Uint16(pe[l.coffOff+COFFMachineOffset : l.coffOff+COFFMachineOffset+2])
+	if machine != MachineAMD64 {
+		return fmt.Errorf("%w (got %#04x)", ErrUnsupportedMachine, machine)
+	}
+	magic := binary.LittleEndian.Uint16(pe[l.optOff+OptMagicOffset : l.optOff+OptMagicOffset+2])
+	if magic != OptMagicPE32Plus {
+		return fmt.Errorf("%w (got %#04x)", ErrUnsupportedOptMagic, magic)
+	}
+	return nil
+}
+
 // parsePELayout validates DOS magic, e_lfanew, the PE signature,
 // and the COFF / Optional / section-table bounds, then returns the
 // resolved offsets. Patchers in this package call it before

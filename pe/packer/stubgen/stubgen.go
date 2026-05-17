@@ -170,6 +170,14 @@ func Generate(opts Options) ([]byte, []byte, error) {
 	var plan transform.Plan
 	switch format {
 	case transform.FormatPE:
+		// Reject non-amd64 / non-PE32+ inputs up front. Every header
+		// patcher in this pipeline is keyed on the PE32+ Optional
+		// Header layout and the stub asm is amd64-only — silently
+		// producing output for an x86 or ARM64 EXE would yield a
+		// non-executable file with a cryptic loader error.
+		if err := transform.ValidateAMD64PE32Plus(opts.Input); err != nil {
+			return nil, nil, fmt.Errorf("stubgen: %w", err)
+		}
 		var err error
 		switch {
 		case transform.IsDLL(opts.Input):

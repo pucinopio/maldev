@@ -18,8 +18,8 @@ reflects_commit: 1.B.1.a refactor
 | **1** | **Mode 8 args injection — `DefaultArgs` opt + `RunWithArgs` export** | ~200 LOC | 🟢 in progress (1.A done, 1.B scoped) | v0.130/0.131 |
 | **9** | **E2E PrivEsc DLL hijack proof** — VM provisioning + probe + orchestrator + driver + doc, demonstrating full chain from `lowuser` shell to SYSTEM whoami marker | ~600 LOC | 🟢 in progress | — |
 | 2 | Mode 7 + Compress symmetry with Mode 8 | ~80 LOC | ⏳ scoped | — |
-| 3 | `RandomizeStubSectionName` ON by default (OPSEC quick win) | ~5 LOC + tests | ⏳ scoped | — |
-| 4 | PE32+ Machine check explicite (silent breakage guard) | ~10 LOC | ⏳ scoped | — |
+| 3 | Stub section name randomized by default (`KeepDefaultStubSectionName` opts back into ".mldv") | ~85 LOC w/ tests | ✅ shipped (c86fb1e) | — |
+| 4 | PE32+ Machine check explicite: `transform.ValidateAMD64PE32Plus` + `ErrUnsupportedMachine`/`ErrUnsupportedOptMagic`, called at FormatPE detection in `stubgen.Generate`. Rejects non-amd64 or PE32 inputs with a readable error instead of silently producing broken output. | ~85 LOC w/ tests | ✅ shipped | — |
 | 5 | Walker interface unifié (R2 in audit) | ~150 LOC | ⏳ scoped | — |
 | 6 | SGN body dedup (R1 in audit) | ~100 LOC | ⏳ scoped | — |
 | 7 | MSVC fixture provisioning on Win10 VM | ~setup + 1 fixture | ⏳ scoped | — |

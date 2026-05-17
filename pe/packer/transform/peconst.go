@@ -111,4 +111,21 @@ const (
 	// ImageFileDLL is bit 0x2000 of COFF Characteristics —
 	// IMAGE_FILE_DLL, distinguishing a DLL from an EXE.
 	ImageFileDLL uint16 = 0x2000
+
+	// COFFMachineOffset is the file offset of the Machine field
+	// inside the COFF File Header — uint16 identifying the target
+	// CPU architecture (IMAGE_FILE_MACHINE_*).
+	COFFMachineOffset = 0x00
+
+	// OptMagicOffset is the file offset of the Magic field at the
+	// start of the Optional Header. PE32 = 0x010B, PE32+ = 0x020B.
+	OptMagicOffset = 0x00
+
+	// MachineAMD64 is IMAGE_FILE_MACHINE_AMD64 — the only Machine
+	// value the packer's amd64 stubs are designed to handle.
+	MachineAMD64 uint16 = 0x8664
+
+	// OptMagicPE32Plus is the Optional Header Magic for PE32+ (64-bit).
+	// PE32 (32-bit, magic 0x010B) is not supported by the packer.
+	OptMagicPE32Plus uint16 = 0x020B
 )
