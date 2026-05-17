@@ -153,6 +153,13 @@
 - [Packer elevation tour](examples/packer-elevation-tour.md)
 - [Runnable examples (`examples/` tree)](examples/runnable.md)
 
+## Runbooks (when things go wrong)
+
+- [Index](examples/runbooks/README.md)
+- [Defender catch on dropper](examples/runbooks/defender-catch.md)
+- [DLL hijack succeeded but silent](examples/runbooks/dll-hijack-silent.md)
+- [AMSI re-armed mid-flight](examples/runbooks/amsi-re-armed.md)
+
 # Tooling
 
 - [CLI tools overview](tools/index.md)
@@ -188,6 +195,7 @@
 ## Reference lookups
 
 - [MITRE ATT&CK + D3FEND mapping](mitre.md)
+- [Glossary](glossary.md)
 
 # Contributing
 
