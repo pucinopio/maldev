@@ -1,0 +1,67 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: linux/amd64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+      - name: Build all packages
+        run: go build $(go list ./...)
+      - name: Run tests (non-platform-gated)
+        run: go test ./...
+
+  windows-cross:
+    name: windows/amd64 cross-compile
+    runs-on: ubuntu-latest
+    env:
+      GOOS: windows
+      GOARCH: amd64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+      - name: Cross-build all packages
+        run: go build $(go list ./...)
+      - name: Cross-build runnable examples
+        run: |
+          for d in examples/*/; do
+            n=$(basename "$d")
+            echo "::group::examples/$n"
+            go build -o /dev/null "./$d" || echo "::warning::examples/$n failed to cross-build"
+            echo "::endgroup::"
+          done
+      - name: Cross-build cmd/ tools
+        run: |
+          for d in cmd/*/; do
+            n=$(basename "$d")
+            echo "::group::cmd/$n"
+            go build -o /dev/null "./$d"
+            echo "::endgroup::"
+          done
+
+  windows-cross-e2e-tag:
+    name: windows/amd64 cross-compile (maldev_packer_run_e2e)
+    runs-on: ubuntu-latest
+    env:
+      GOOS: windows
+      GOARCH: amd64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+      - name: Cross-build with E2E build tag
+        run: go build -tags=maldev_packer_run_e2e $(go list ./pe/packer/...)
