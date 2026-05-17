@@ -5,8 +5,7 @@
 # Get started
 
 - [Quick start](getting-started.md)
-- [Architecture](architecture.md)
-- [OPSEC build](opsec-build.md)
+- [Your first packed payload (tutorial)](get-started/first-payload.md)
 
 # Techniques
 
@@ -174,13 +173,21 @@
 
 # Concepts
 
-> Explanation-oriented. Why the library is shaped the way it is,
-> and reading paths for each kind of reader.
+> Explanation-oriented. Why the library is shaped the way it is.
+
+- [Architecture](architecture.md)
+- [OPSEC build pipeline](opsec-build.md)
+- [Design decisions (ADRs)](concepts/decisions/README.md)
+
+## Guides by role
+
+- [Operator guide](by-role/operator.md)
+- [Researcher guide](by-role/researcher.md)
+- [Detection engineer guide](by-role/detection-eng.md)
+
+## Reference lookups
 
 - [MITRE ATT&CK + D3FEND mapping](mitre.md)
-- [Reading path — operator](by-role/operator.md)
-- [Reading path — researcher](by-role/researcher.md)
-- [Reading path — detection engineer](by-role/detection-eng.md)
 
 # Contributing
 
