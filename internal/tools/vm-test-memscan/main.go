@@ -8,10 +8,10 @@
 //
 // Usage:
 //
-//	go run scripts/vm-test-memscan.go               # full matrix
-//	go run scripts/vm-test-memscan.go -only SSN     # only SSN group
-//	go run scripts/vm-test-memscan.go -host 1.2.3.4 # override VM IP
-//	go run scripts/vm-test-memscan.go -skip-build   # reuse .exe in guest
+//	go run internal/tools/vm-test-memscan               # full matrix
+//	go run internal/tools/vm-test-memscan -only SSN     # only SSN group
+//	go run internal/tools/vm-test-memscan -host 1.2.3.4 # override VM IP
+//	go run internal/tools/vm-test-memscan -skip-build   # reuse .exe in guest
 package main
 
 import (

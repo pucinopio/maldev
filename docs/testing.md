@@ -18,7 +18,7 @@ The maldev project uses a multi-layered testing strategy:
 
 1. **Unit tests** (`go test ./...`) — 64 packages, 500+ tests
 2. **VM integration tests** (`MALDEV_INTRUSIVE=1 MALDEV_MANUAL=1`) — privileged operations in isolated VMs
-3. **memscan binary verification** (`scripts/vm-test-memscan.go`) — 77 byte-pattern sub-checks read via the memscan HTTP API
+3. **memscan binary verification** (`internal/tools/vm-test-memscan`) — 77 byte-pattern sub-checks read via the memscan HTTP API
 4. **Meterpreter end-to-end** — real shellcode → real MSF sessions on Kali
 5. **BSOD verification** — crashes the VM, restores the snapshot (uses the `cmd/vmtest` driver; see `scripts/vm-test.ps1`)
 
@@ -42,7 +42,7 @@ go test $(go list ./... | grep -v scripts) -count=1 -short
 MALDEV_INTRUSIVE=1 MALDEV_MANUAL=1 go test ./... -count=1 -timeout 300s
 
 # memscan binary verification (77-row matrix, from host)
-go run scripts/vm-test-memscan.go
+go run internal/tools/vm-test-memscan
 
 # Meterpreter matrix (from host, needs Kali)
 # See Meterpreter section below

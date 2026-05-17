@@ -77,7 +77,7 @@ bash scripts/vm-provision.sh                    # one-time, installs NetFx3 + MS
 bash scripts/full-coverage.sh --snapshot=TOOLS  # each run; produces ignore/coverage/report-full.md
 
 # memscan binary-pattern verification (77-row matrix, from host).
-go run scripts/vm-test-memscan.go
+go run internal/tools/vm-test-memscan
 
 # Meterpreter matrix (20 injection techniques × MSF sessions)
 # Requires: Kali VM with MSF, see docs/testing.md.

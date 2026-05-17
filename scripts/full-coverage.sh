@@ -212,7 +212,7 @@ if [ "${#profiles[@]}" -eq 0 ]; then
     warn "No profiles to merge — aborting"
     exit 1
 fi
-go run scripts/coverage-merge.go \
+go run internal/tools/coverage-merge \
     -out "$COVER_DIR/cover-merged-full.out" \
     -report "$COVER_DIR/report-full.md" \
     "${profiles[@]}"

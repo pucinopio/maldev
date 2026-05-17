@@ -93,7 +93,7 @@ banner() {
 run_memscan() {
     banner "[memscan] 77-row static verification matrix"
     local log="/tmp/maldev-test-memscan.log"
-    go run scripts/vm-test-memscan.go 2>&1 | tee "$log"
+    go run internal/tools/vm-test-memscan 2>&1 | tee "$log"
     layer_rc[memscan]=${PIPESTATUS[0]}
     layer_line[memscan]=$(grep -oE 'total sub-checks: [0-9]+ passed / [0-9]+ failed \([0-9]+ fatal[^)]*\)' "$log" | tail -1)
     # Leave the Windows VM in its INIT state for the subsequent windows layer.

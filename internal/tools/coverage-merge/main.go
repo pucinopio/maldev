@@ -8,7 +8,7 @@
 //
 // Usage:
 //
-//	go run scripts/coverage-merge.go -report ignore/coverage/report.md \
+//	go run internal/tools/coverage-merge -report ignore/coverage/report.md \
 //	    ignore/coverage/cover-linux-host.out \
 //	    ignore/coverage/win10/cover.out \
 //	    ignore/coverage/ubuntu20.04-/cover.out

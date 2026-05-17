@@ -7,7 +7,7 @@
 // Run from the repo root:
 //
 //	scripts/build-fixture-winres.sh    # convenience wrapper
-//	go run scripts/build-fixture-winres.go
+//	go run internal/tools/build-fixture-winres
 package main
 
 import (

@@ -59,8 +59,8 @@ Outputs (written to `ignore/coverage/`, which is gitignored):
 |---|---|---|
 | `cmd/vmtest` | VM orchestrator (start, push, exec, fetch, stop, restore). Extension of the existing tool: new `-report-dir` flag auto-fetches `cover.out` + `test.log` | libvirt **or** VirtualBox; `scripts/vm-test/config.yaml` + `config.local.yaml` |
 | `scripts/vm-provision.sh` | Installs missing tools in each VM and snapshots `TOOLS` | SSH to the 3 VMs; sudo on Kali; UAC bypass via `schtasks SYSTEM` on Windows |
-| `scripts/full-coverage.sh` | End-to-end wrapper: boots the 3 VMs, exports all gates, runs host + Linux VM + Windows VM, merges profiles, restores snapshots | `scripts/coverage-merge.go`, `cmd/vmtest` |
-| `scripts/coverage-merge.go` | Merges N Go cover profiles (union, per-block max hit count), renders Markdown | `go tool cover` |
+| `scripts/full-coverage.sh` | End-to-end wrapper: boots the 3 VMs, exports all gates, runs host + Linux VM + Windows VM, merges profiles, restores snapshots | `internal/tools/coverage-merge`, `cmd/vmtest` |
+| `internal/tools/coverage-merge` | Merges N Go cover profiles (union, per-block max hit count), renders Markdown | `go tool cover` |
 
 **Common flags:**
 
@@ -96,7 +96,7 @@ MALDEV_INTRUSIVE=1 MALDEV_MANUAL=1 \
     "./runtime/clr/..." "-count=1 -v -timeout=5m"
 
 # Merge arbitrary profiles by hand.
-go run scripts/coverage-merge.go \
+go run internal/tools/coverage-merge \
   -out ignore/coverage/cover-merged.out \
   -report ignore/coverage/report.md \
   ignore/coverage/cover-linux-host.out \
@@ -302,7 +302,7 @@ cmd/vmtest/runner.go                       # +-report-dir, -coverprofile inject,
 cmd/vmtest/runner_test.go                  # 4 unit tests (injectCoverprofile, safeLabel, guestCoverPath, guestClrhostCoverPath)
 cmd/vmtest/main.go                         # +-report-dir flag
 
-scripts/coverage-merge.go                  # merge N cover profiles → Markdown
+internal/tools/coverage-merge                  # merge N cover profiles → Markdown
 scripts/full-coverage.sh                   # end-to-end workflow
 scripts/vm-provision.sh                    # install tools + snapshot TOOLS
 

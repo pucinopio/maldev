@@ -6,4 +6,4 @@
 # was promoted from).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-go run scripts/build-fixture-winres.go
+go run internal/tools/build-fixture-winres
