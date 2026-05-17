@@ -5,7 +5,7 @@
 //
 // Build for Windows + run as administrator:
 //
-//	GOOS=windows GOARCH=amd64 go build -o lsass-dump-test.exe ./cmd/lsass-dump-test
+//	GOOS=windows GOARCH=amd64 go build -o lsass-dump-test.exe ./internal/tools/lsass-dump-test
 //	scp lsass-dump-test.exe test@vm:lsass-dump-test.exe
 //	ssh test@vm 'powershell -Command "Start-Process .\\lsass-dump-test.exe -Verb RunAs -ArgumentList -out=C:\\ProgramData\\lsass.dmp -Wait"'
 //	scp test@vm:C:/ProgramData/lsass.dmp ./ignore/lsass-dumps/win10-22h2.dmp

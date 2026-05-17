@@ -10,8 +10,8 @@
 //
 // Usage:
 //
-//	go run ./cmd/docgen           # rewrite the autogen blocks
-//	go run ./cmd/docgen --check   # exit non-zero when the autogen blocks
+//	go run ./internal/tools/docgen           # rewrite the autogen blocks
+//	go run ./internal/tools/docgen --check   # exit non-zero when the autogen blocks
 //	                              # would change (CI / pre-commit guard)
 //
 // See docs/conventions/documentation.md § Auto-generation.

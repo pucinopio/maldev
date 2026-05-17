@@ -33,7 +33,7 @@ field in its `doc.go`. Buckets:
 | `noisy` | No without effort | ETW provider, event log entry, cross-process activity. |
 | `very-noisy` | No | Signature-detected by Defender or EDR; specific API hooks watched. |
 
-`cmd/docgen` (Phase 3 of the doc refactor) produces a flat table of all
+`internal/tools/docgen` (Phase 3 of the doc refactor) produces a flat table of all
 public packages by detection level. Until then, see each package's
 `doc.go`.
 

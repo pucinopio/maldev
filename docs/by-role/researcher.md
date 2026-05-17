@@ -153,7 +153,7 @@ The harness orchestrates Windows + Linux + Kali VMs; gating env vars
 3. Add the method to the [CallerMatrix test](../testing.md#injection-callermatrix).
 4. Update [docs/techniques/injection/](../techniques/injection/README.md)
    per the [doc-conventions template](../conventions/documentation.md).
-5. Tag the MITRE ID in the new package's `doc.go`; `cmd/docgen` rolls it
+5. Tag the MITRE ID in the new package's `doc.go`; `internal/tools/docgen` rolls it
    into [mitre.md](../mitre.md).
 
 ### Adding a new evasion technique

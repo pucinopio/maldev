@@ -3,7 +3,7 @@
 #   git config core.hooksPath scripts
 #
 # What it checks:
-#   1. Doc-tables drift: cmd/docgen --check must exit 0.
+#   1. Doc-tables drift: internal/tools/docgen --check must exit 0.
 #      (Edit doc.go in the source package, regenerate, commit.)
 #   2. (Future) Markdown link checker, last_reviewed bump validator.
 #
@@ -24,8 +24,8 @@ if ! command -v go >/dev/null 2>&1; then
     exit 0
 fi
 
-if ! go run ./cmd/docgen --check 2>/dev/null; then
+if ! go run ./internal/tools/docgen --check 2>/dev/null; then
     echo "pre-commit: documentation tables are out of sync." >&2
-    echo "            Run 'go run ./cmd/docgen' and stage the result." >&2
+    echo "            Run 'go run ./internal/tools/docgen' and stage the result." >&2
     exit 1
 fi

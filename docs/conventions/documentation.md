@@ -341,7 +341,7 @@ Required sections:
 
 ## Auto-generation
 
-`cmd/docgen/main.go` (to be added) walks `go list ./...`, parses `doc.go`
+`internal/tools/docgen/main.go` (to be added) walks `go list ./...`, parses `doc.go`
 for the structured fields (MITRE T-IDs, Detection level, summary), and
 regenerates:
 
@@ -349,7 +349,7 @@ regenerates:
 - `docs/index.md` — "By package" + "By MITRE ATT&CK ID" sections.
 - `docs/mitre.md` — full MITRE table.
 
-Pre-commit hook runs `cmd/docgen` and fails the commit on diff. CI
+Pre-commit hook runs `internal/tools/docgen` and fails the commit on diff. CI
 re-checks. **Tables are read-only handcraft-wise** — edit the source
 `doc.go`, regenerate.
 
@@ -406,7 +406,7 @@ omitted for these multi-package documents).
    new template, all packages have `example_test.go`. Acts as the
    reference for subsequent areas. Suggested: `cleanup/*` (small,
    well-bounded, mix of simple and complex).
-3. `cmd/docgen` + pre-commit hook + CI gh-pages workflow. Once these
+3. `internal/tools/docgen` + pre-commit hook + CI gh-pages workflow. Once these
    exist, the autogen tables are live for any new doc.
 4. Remaining technique areas, one PR per area:
    `c2`, `crypto`+`encode`+`hash`, `evasion`, `collection`, `credentials`,
@@ -420,7 +420,7 @@ omitted for these multi-package documents).
 
 The `pre-commit-checks` skill is extended to include:
 
-1. `cmd/docgen --check` — autogen tables are up to date.
+1. `internal/tools/docgen --check` — autogen tables are up to date.
 2. Markdown link checker (e.g., `lychee` or `markdown-link-check`) — no
    dead links.
 3. `doc.go` linter — every public package has a `doc.go` matching the
