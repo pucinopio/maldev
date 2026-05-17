@@ -22,7 +22,7 @@ slices:
     title: Loader-format plug-in
     status: closed
     commits:
-      - 'pending-1'  # this commit — loader_windows.go + Run/Spec/Kind/DetectKind + 7 tests
+      - 3edaeda  # loader_windows.go + Run/Spec/Kind/DetectKind + 7 tests
     vm_e2e: pass (Win10 INIT, 7 tests incl. table-driven, 0.453s)
   - id: 3
     title: goloader integration
