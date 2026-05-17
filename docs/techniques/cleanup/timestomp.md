@@ -62,17 +62,6 @@ you'd need a kernel driver — out of scope here.
 
 ## How it works
 
-```mermaid
-flowchart LR
-    SRC["reference file<br>e.g. notepad.exe"] -->|"GetFileTime"| TIMES["3 FILETIMEs"]
-    TIMES -->|"SetFileTime"| DST["target file<br>e.g. impl.exe"]
-
-    classDef ref fill:#e8f4ff
-    classDef tgt fill:#ffeae8
-    class SRC ref
-    class DST tgt
-```
-
 `CopyFrom` is the common path: open the reference, read its three
 timestamps, apply them to the target. `Set` is the explicit-value path
 when you want a specific date.

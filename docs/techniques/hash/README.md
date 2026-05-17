@@ -13,13 +13,6 @@ for variant detection and similarity scoring.
 
 ## TL;DR
 
-```mermaid
-flowchart TD
-    Q{What do you need?} -->|fingerprint a buffer| C[SHA256 / MD5]
-    Q -->|resolve a Win32 API by hash| R[ROR13]
-    Q -->|find variants of a known sample| F[ssdeep / TLSH]
-```
-
 > **Where to start (novice path):**
 > 1. Need to fingerprint a buffer? → [`SHA256`](cryptographic-hashes.md)
 >    (cryptographic-hashes.md). Standard integrity hash.

@@ -12,15 +12,6 @@ land, and OPSEC that holds. This page walks the curated reading order.
 
 ## TL;DR
 
-```mermaid
-flowchart LR
-    A[recon] --> B[evasion]
-    B --> C[inject]
-    C --> D[sleepmask]
-    D --> E[collection / lateral]
-    E --> F[cleanup]
-```
-
 Six packages — `recon` → `evasion` → `inject` → `sleepmask` → `collection`
 → `cleanup` — share one [`*wsyscall.Caller`](../techniques/syscalls/README.md).
 Plug it once, every package below it inherits the syscall stealth.

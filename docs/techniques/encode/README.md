@@ -13,16 +13,6 @@ strings, PowerShell command lines, stdin pipes).
 
 ## TL;DR
 
-```mermaid
-flowchart LR
-    PT[plaintext] -->|encrypt| ENC[crypto.EncryptAESGCM]
-    ENC -->|then encode| B64[encode.Base64Encode]
-    B64 --> WIRE[ship over HTTP / JSON / PS]
-    WIRE -.unwrap.-> B64D[encode.Base64Decode]
-    B64D --> DEC[crypto.DecryptAESGCM]
-    DEC --> PAYLOAD[shellcode]
-```
-
 Encrypt first, then encode. Decode last, then decrypt.
 
 > **Where to start (novice path):**

@@ -28,14 +28,6 @@ go get github.com/oioio-space/maldev@latest
 
 maldev is a **library**, not a framework. You import the packages you need and compose them:
 
-```mermaid
-graph LR
-    A[Your implant] --> B[inject/ — run shellcode]
-    A --> C[evasion/ — avoid detection]
-    A --> D[c2/ — communicate home]
-    A --> E[cleanup/ — cover tracks]
-```
-
 ### The Five Levels of Stealth
 
 Every technique has a **detection level** declared in its `doc.go`.

@@ -12,14 +12,6 @@ in-memory state). Compose them as the implant tears itself down.
 
 ## TL;DR
 
-```mermaid
-flowchart LR
-    A[wipe sensitive memory] --> B[reset timestamps]
-    B --> C[remove files]
-    C --> D[hide service / clear logs]
-    D --> E[self-delete or BSOD]
-```
-
 A typical end-of-mission chain: `memory.WipeAndFree` keys → `timestomp` any
 artefacts you can't delete → `wipe.File` what you can → `service.HideService`
 or unregister → `selfdelete.Run` (or `bsod.Trigger` if egress is critical).
