@@ -157,95 +157,26 @@ func ShiftImageVA(pe []byte, delta uint32) ([]byte, error) {
 	//    snapshot for entry-location lookups, and read/write
 	//    pointer values directly (no resolver needed since the
 	//    file offset was captured by the walker).
-	// 5b. Walk the IMPORT directory and bump every internal RVA
-	//     field. Without this the loader fails import resolution
-	//     with STATUS_DLL_NOT_FOUND because import descriptor
-	//     OriginalFirstThunk/Name/FirstThunk and the by-name
-	//     thunks they point at are RVAs the linker bakes as raw
-	//     uint32, NOT covered by the .reloc table.
-	if walkErr := WalkImportDirectoryRVAs(pe, func(rvaFileOff uint32) error {
-		if int(rvaFileOff)+4 > len(out) {
-			return fmt.Errorf("import RVA patch past EOF (file 0x%x)", rvaFileOff)
-		}
-		cur := binary.LittleEndian.Uint32(out[rvaFileOff:])
-		if cur == 0 {
-			return nil
-		}
-		binary.LittleEndian.PutUint32(out[rvaFileOff:], cur+delta)
-		return nil
-	}); walkErr != nil {
-		return nil, fmt.Errorf("transform: import directory fixup: %w", walkErr)
+	// 5. Drive every data-directory fixup pass through the unified
+	//     [DirectoryWalkers] registry. The loop replaces three
+	//     near-identical RVA-bump blocks (IMPORT, RESOURCE,
+	//     BASERELOC) with one delta-apply pass. R2 from
+	//     docs/refactor-2026-doc/audit-2026-04-27.md — future
+	//     plug-in walkers (EXCEPTION / LOAD_CONFIG / EXPORT) drop
+	//     in via a single map entry.
+	//
+	//     Why the BASERELOC walker still needs special handling:
+	//     each entry's absolute pointer lives at an RVA whose file
+	//     offset must be resolved against the PRE-shift section
+	//     layout (the headers in `out` already carry the NEW VAs).
+	//     ApplyRVAShiftAllDirectories takes a closure that resolves
+	//     RVAs against the captured `ranges` snapshot, threading
+	//     the OLD coordinate system through cleanly.
+	rvaToFile := func(rva uint32) (uint32, error) {
+		return rvaToFileOffOld(out, l, ranges, rva)
 	}
-
-	// 5c. Walk the RESOURCE directory tree and bump every leaf
-	//     IMAGE_RESOURCE_DATA_ENTRY.OffsetToData RVA. Without this
-	//     FindResource/FindResourceEx return wrong byte ranges (or
-	//     wander into garbage) because the leaf data pointers in
-	//     the resource tree are static RVAs the linker bakes,
-	//     NOT covered by the .reloc table. Empirically observed:
-	//     packing a binary with embedded icon + manifest under
-	//     RandomizeAll + RandomizeImageVAShift produced a
-	//     "data entry out of bounds" error from winres.LoadFromEXE
-	//     until this walker landed.
-	if walkErr := WalkResourceDirectoryRVAs(pe, func(rvaFileOff uint32) error {
-		if int(rvaFileOff)+4 > len(out) {
-			return fmt.Errorf("resource RVA patch past EOF (file 0x%x)", rvaFileOff)
-		}
-		cur := binary.LittleEndian.Uint32(out[rvaFileOff:])
-		if cur == 0 {
-			return nil
-		}
-		binary.LittleEndian.PutUint32(out[rvaFileOff:], cur+delta)
-		return nil
-	}); walkErr != nil {
-		return nil, fmt.Errorf("transform: resource directory fixup: %w", walkErr)
-	}
-
-	walkErr := WalkBaseRelocs(pe, func(e BaseRelocEntry) error {
-		// (a) Repack the block's PageRVA in `out`. We do this
-		//     once per block; the walker yields entries in
-		//     ascending order so detect the first entry of a
-		//     block via EntryIdx == 0.
-		if e.EntryIdx == 0 {
-			binary.LittleEndian.PutUint32(out[e.BlockOff:], e.BlockVA+delta)
-		}
-		// (b) Patch the absolute pointer value at the entry's
-		//     target file location. The target RVA in OLD
-		//     coordinates is `e.RVA`; translate to file offset
-		//     via the OLD ranges snapshot.
-		switch e.Type {
-		case RelTypeAbsolute:
-			return nil // padding entry; no patch
-		case RelTypeDir64:
-			fileOff, ferr := rvaToFileOffOld(out, l, ranges, e.RVA)
-			if ferr != nil {
-				return fmt.Errorf("dir64 reloc at RVA 0x%x: %w", e.RVA, ferr)
-			}
-			if int(fileOff)+8 > len(out) {
-				return fmt.Errorf("dir64 reloc patch past EOF (RVA 0x%x → file 0x%x)", e.RVA, fileOff)
-			}
-			val := binary.LittleEndian.Uint64(out[fileOff:])
-			// Stored value = imageBase + targetRVA. Every
-			// section moved by `delta`, so every relocated
-			// pointer's value also gets += delta.
-			binary.LittleEndian.PutUint64(out[fileOff:], val+uint64(delta))
-		case RelTypeHighLow:
-			fileOff, ferr := rvaToFileOffOld(out, l, ranges, e.RVA)
-			if ferr != nil {
-				return fmt.Errorf("highlow reloc at RVA 0x%x: %w", e.RVA, ferr)
-			}
-			if int(fileOff)+4 > len(out) {
-				return fmt.Errorf("highlow reloc patch past EOF (RVA 0x%x → file 0x%x)", e.RVA, fileOff)
-			}
-			val := binary.LittleEndian.Uint32(out[fileOff:])
-			binary.LittleEndian.PutUint32(out[fileOff:], val+delta)
-		default:
-			return fmt.Errorf("unsupported reloc type 0x%x at RVA 0x%x", e.Type, e.RVA)
-		}
-		return nil
-	})
-	if walkErr != nil {
-		return nil, walkErr
+	if _, err := ApplyRVAShiftAllDirectories(pe, out, delta, rvaToFile); err != nil {
+		return nil, err
 	}
 
 	return out, nil

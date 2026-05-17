@@ -20,7 +20,7 @@ reflects_commit: 1.B.1.a refactor
 | 2 | Mode 7 + Compress symmetry with Mode 8: `EmitDLLStub` now takes `EmitOptions` and emits the shared `emitLZ4DecompressBlock` after SGN rounds. `InjectStubDLL` widens the appended stub section's VirtualSize by `plan.StubScratchSize` (mirrors `pe.go`) and shifts `relocRVA` past the scratch slack. `ErrCompressDLLUnsupported` removed; `TestPackBinary_FormatWindowsDLL_RejectsCompress` flipped to `_AcceptsCompress`; new VM E2E `TestPackBinary_FormatWindowsDLL_LoadLibrary_Compress_E2E`. | ~70 LOC + 1 E2E | ✅ shipped |
 | 3 | Stub section name randomized by default (`KeepDefaultStubSectionName` opts back into ".mldv") | ~85 LOC w/ tests | ✅ shipped (c86fb1e) | — |
 | 4 | PE32+ Machine check explicite: `transform.ValidateAMD64PE32Plus` + `ErrUnsupportedMachine`/`ErrUnsupportedOptMagic`, called at FormatPE detection in `stubgen.Generate`. Rejects non-amd64 or PE32 inputs with a readable error instead of silently producing broken output. | ~85 LOC w/ tests | ✅ shipped | — |
-| 5 | Walker interface unifié (R2 in audit) | ~150 LOC | ❌ rejected (over-engineering) | — |
+| 5 | Walker interface unifié (R2 in audit) — implemented properly via a sealed `DirectoryPatchEvent` sum (`RVAFileOffEvent` for Import/Resource, `BaseRelocEvent` for BASERELOC carrying block context + pre-resolved PtrSize). `DirectoryWalker` function type + `DirectoryWalkers` registry indexed by `IMAGE_DIRECTORY_ENTRY_*`. New `ApplyRVAShiftAllDirectories(pe, out, delta, rvaToFile)` collapses ShiftImageVA's three manual fixup passes into one loop; signature takes both `pe` (pre-shift for header reads) and `out` (post-shift write target). Future EXCEPTION/LOAD_CONFIG/EXPORT walkers plug in via a single map entry. | ~250 LOC w/ tests | ✅ shipped |
 | 6 | LZ4-decompress block dedup (R1 in audit, repurposed — SGN body was already shared via `emitSGNRounds`). New `emitLZ4DecompressBlock(b, opts, errPrefix)` helper folds the register-setup + inflate + memcpy block previously duplicated between `EmitStub` and `EmitConvertedDLLStub`. Byte-identical output (pinned tests stay green). | ~70 LOC factored out | ✅ shipped | — |
 | 7 | MSVC fixture provisioning on Win10 VM: **infrastructure shipped, fixture .dll pending.** `scripts/vm-provision.sh` extended with a SYSTEM-scheduled-task that downloads + installs VS Build Tools 2022 (VCTools + Win10 SDK 19041). Fixture sources `testdata/testlib_msvc.{c,def}`, guest-side `build_testlib_msvc.cmd`, host-side driver `build_testlib_msvc.sh`. E2E tests `TestPackBinary_FormatWindowsDLL_MSVC_E2E` + `_MSVC_Compress_E2E` skip-clean when the .dll is absent. **Known blocker**: `vs_buildtools.exe --quiet --wait` returns exit=0 from its bootstrap stage on the Win10 VM but doesn't actually deploy the VCTools workload (the bootstrapper fork detaches → setup processes vanish without producing `cl.exe`). The VS Installer itself ships in `C:\Program Files (x86)\Microsoft Visual Studio\Installer\` but invoking it via SSH-medium-integrity fails with UnauthorizedAccessException. Requires either interactive admin elevation (PsExec / RDP) OR a different bootstrap channel (e.g., chocolatey, custom layout cache). Sources + tests stage cleanly for the next interactive iteration. | ~140 LOC + provision step | 🟠 BLOCKED (infrastructure shipped 0d1f4a8, .dll pending) |
 | 8 | Cert preservation opt-out: `PackBinaryOptions.PreserveAuthenticodeDirectory bool` — default-off keeps the v0.126.0 strip behaviour; opt-in keeps the (now-tampered) `DataDirectory[SECURITY]` pointer so operators can masquerade as a damaged-signed binary or steg-stash payload in the cert region. | ~85 LOC w/ tests | ✅ shipped | — |
@@ -81,36 +81,36 @@ end (1.A complete = v0.130.0, 1.B complete = v0.131.0).
 
 ### Cross-machine resume — current state
 
-## Item #5 — rejected on review (2026-05-17)
+## Item #5 — shipped 2026-05-17 (revisited)
 
-The audit-2026-04-27 R2 proposal sketched a unified
-`DirectoryWalker(pe []byte, cb WalkerCallback) error` interface
-keyed by data-directory index, with `ShiftImageVA` iterating a
-`map[int]DirectoryWalker` instead of three sequential calls.
+Originally rejected on review for over-engineering (the bare-uint32
+walker interface couldn't model BASERELOC entries without lossy
+narrowing). User re-asked to ship properly; the redesign that
+landed honours the shape difference via a sealed sum type:
 
-Re-examining the call sites:
+- `DirectoryPatchEvent` (sealed interface, `isDirectoryPatchEvent`
+  marker).
+- `RVAFileOffEvent{FileOff}` — for IMPORT/RESOURCE descriptors.
+- `BaseRelocEvent{BlockOff, BlockVA, EntryIdx, RVA, Type, PtrSize}`
+  — preserves the block-shaped context, plus PtrSize pre-resolved
+  from Type (0 for padding, 4 HIGHLOW, 8 DIR64).
+- `DirectoryWalker` function type + `DirectoryWalkers` registry
+  indexed by `IMAGE_DIRECTORY_ENTRY_*`. Three current entries
+  (Import, Resource, BaseReloc); new walkers plug in as a single
+  map entry.
 
-- `WalkBaseRelocs` yields `BaseRelocEntry{BlockOff, BlockVA, EntryIdx,
-  RVA, Type}` — block-shaped, with rich per-entry context.
-- `WalkImportDirectoryRVAs` / `WalkResourceDirectoryRVAs` yield a
-  bare `uint32 rvaFileOff`.
+`ApplyRVAShiftAllDirectories(pe, out, delta, rvaToFile)` is the
+unified delta-applier: walks every registered walker, dispatches on
+the event variant, applies the right read-modify-write at the right
+byte width. The pre-shift `pe` vs post-shift `out` split is
+deliberate — `pe` carries the OLD section table the directory
+walkers need for descriptor traversal; `out` is where the bumped
+RVAs land.
 
-Forcing them under one signature would either (a) fatten the
-import/resource walkers with unused fields, or (b) lossily
-narrow the base-reloc walker. The audit comment itself flags it:
-
-> "// ... DirBaseReloc has different sig, would need adapter"
-
-The only consumer is `ShiftImageVA`, which calls each walker exactly
-once with different per-walker patch logic. Three direct calls
-already read as the simplest possible code; a map-dispatched
-indirection adds layers without removing duplication.
-
-Per CLAUDE.md ("don't introduce abstractions beyond what the task
-requires"), this refactor is rejected. Future plug-in walkers
-(EXCEPTION / LOAD_CONFIG / EXPORT) can be added as their own
-exported `WalkXxx` functions with the right shape for their
-fields — the dispatch isn't load-bearing.
+`ShiftImageVA`'s three manual fixup passes collapsed into one
+loop via this helper. All existing tests pass unchanged; new
+unit tests cover registry shape, BASERELOC event yield, end-to-end
+patch counting, and resolver-error propagation.
 
 ## Item #9 — E2E PrivEsc DLL hijack chain
 
