@@ -1,6 +1,6 @@
 //go:build windows
 
-// recon-suite — panorama 3 of the doc-truth audit.
+// recon-host — panorama 3 of the doc-truth audit.
 //
 // Built strictly from the user-facing markdown:
 //   - docs/techniques/recon/anti-analysis.md (antidebug + antivm)

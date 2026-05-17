@@ -1,4 +1,4 @@
-// packer-suite — runnable companion to docs/examples/upx-style-packer.md.
+// packer-tour — runnable companion to docs/examples/upx-style-packer.md.
 //
 // Reads an input PE32+ or ELF64, applies the v0.61.0 UPX-style
 // transform via packer.PackBinary, then chains the cover layer
@@ -7,8 +7,8 @@
 //
 // Usage:
 //
-//	go build -o /tmp/packer-suite ./examples/packer-suite
-//	/tmp/packer-suite <input> <output>
+//	go build -o /tmp/packer-tour ./examples/packer-tour
+//	/tmp/packer-tour <input> <output>
 //
 // Cross-platform — runs on linux/windows/darwin. The output binary
 // runs on the platform matching its detected format.

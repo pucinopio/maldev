@@ -1,6 +1,6 @@
 //go:build windows
 
-// credentials-suite — panorama 9 of the doc-truth audit.
+// credentials-dump — panorama 9 of the doc-truth audit.
 //
 // Built strictly from the user-facing markdown:
 //   - docs/techniques/credentials/lsassdump.md   — DumpToFile + sentinel errors

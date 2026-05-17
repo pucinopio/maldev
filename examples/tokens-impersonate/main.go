@@ -1,6 +1,6 @@
 //go:build windows
 
-// tokens-impersonation — panorama 7 of the doc-truth audit.
+// tokens-impersonate — panorama 7 of the doc-truth audit.
 //
 // Built strictly from the user-facing markdown:
 //   - docs/techniques/tokens/impersonation.md         — ThreadEffectiveTokenOwner

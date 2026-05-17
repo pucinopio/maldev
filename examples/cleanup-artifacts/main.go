@@ -1,6 +1,6 @@
 //go:build windows
 
-// cleanup-suite — panorama 10 of the doc-truth audit.
+// cleanup-artifacts — panorama 10 of the doc-truth audit.
 //
 // Built strictly from the user-facing markdown:
 //   - docs/techniques/cleanup/ads.md         — NTFS Alternate Data Streams

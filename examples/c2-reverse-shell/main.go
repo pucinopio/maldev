@@ -1,6 +1,6 @@
 //go:build windows
 
-// c2-suite — panorama 15 of the doc-truth audit.
+// c2-reverse-shell — panorama 15 of the doc-truth audit.
 //
 // Built strictly from the user-facing markdown:
 //   - docs/techniques/c2/transport.md  — TCP transport

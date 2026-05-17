@@ -358,29 +358,29 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 
 | Package | Detection | Summary |
 |---|---|---|
-| [`examples/c2-suite`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/c2-suite) | — | c2-suite — panorama 15 of the doc-truth audit |
-| [`examples/cleanup-suite`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/cleanup-suite) | — | cleanup-suite — panorama 10 of the doc-truth audit |
-| [`examples/collection-suite`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/collection-suite) | — | collection-suite — panorama 13 of the doc-truth audit |
-| [`examples/credentials-suite`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/credentials-suite) | — | credentials-suite — panorama 9 of the doc-truth audit |
-| [`examples/injection-evasion`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/injection-evasion) | — | injection-evasion — panorama 2 of the doc-truth audit |
+| [`examples/c2-reverse-shell`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/c2-reverse-shell) | — | c2-reverse-shell — panorama 15 of the doc-truth audit |
+| [`examples/cleanup-artifacts`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/cleanup-artifacts) | — | cleanup-artifacts — panorama 10 of the doc-truth audit |
+| [`examples/collection-screen-keylog`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/collection-screen-keylog) | — | collection-screen-keylog — panorama 13 of the doc-truth audit |
+| [`examples/credentials-dump`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/credentials-dump) | — | credentials-dump — panorama 9 of the doc-truth audit |
+| [`examples/inject-evasive`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/inject-evasive) | — | inject-evasive — panorama 2 of the doc-truth audit |
 | [`examples/kernel-byovd`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/kernel-byovd) | — | kernel-byovd — panorama 16 of the doc-truth audit |
 | [`examples/packer-shellcode`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/packer-shellcode) | — | packer-shellcode — runnable companion to Mode 6 of docs/techniques/pe/packer.md |
-| [`examples/packer-suite`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/packer-suite) | — | packer-suite — runnable companion to docs/examples/upx-style-packer.md |
-| [`examples/pe-suite`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/pe-suite) | — | pe-suite — panorama 11 of the doc-truth audit |
-| [`examples/persistence-admin`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/persistence-admin) | — | persistence-admin — panorama 6 of the doc-truth audit |
+| [`examples/packer-tour`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/packer-tour) | — | packer-tour — runnable companion to docs/examples/upx-style-packer.md |
+| [`examples/pe-modify`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/pe-modify) | — | pe-modify — panorama 11 of the doc-truth audit |
+| [`examples/persistence-system`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/persistence-system) | — | persistence-system — panorama 6 of the doc-truth audit |
 | [`examples/persistence-user`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/persistence-user) | — | persistence-user — panorama 5 of the doc-truth audit |
-| [`examples/preset-suite`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/preset-suite) | — | preset-suite — panorama 18 of the doc-truth audit |
+| [`examples/preset-stacks`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/preset-stacks) | — | preset-stacks — panorama 18 of the doc-truth audit |
 | [`examples/privesc-dll-hijack`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/privesc-dll-hijack) | — | privesc-e2e is the orchestrator for the maldev DLL-hijack privilege-escalation E2E proof |
 | [`examples/privesc-dll-hijack/fakelib`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/privesc-dll-hijack/fakelib) | — | fakelib — a real Windows DLL with three named C exports |
 | [`examples/privesc-dll-hijack/probe`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/privesc-dll-hijack/probe) | — | Probe for the privesc-e2e chain |
 | [`examples/privesc-uac`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/privesc-uac) | — | privesc-uac — panorama 8 of the doc-truth audit |
 | [`examples/process-tamper`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/process-tamper) | — | process-tamper — panorama 12 of the doc-truth audit |
-| [`examples/recon-suite`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/recon-suite) | — | recon-suite — panorama 3 of the doc-truth audit |
+| [`examples/recon-host`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/recon-host) | — | recon-host — panorama 3 of the doc-truth audit |
+| [`examples/recon-stealth-ppid`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/recon-stealth-ppid) | — | recon-stealth-ppid — example assembled from the user-facing markdown docs only |
 | [`examples/runtime-loaders`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/runtime-loaders) | — | runtime-loaders — panorama 14 of the doc-truth audit |
-| [`examples/stealth-recon-ppid`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/stealth-recon-ppid) | — | stealth-recon-ppid — example assembled from the user-facing markdown docs only |
 | [`examples/syscall-matrix`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/syscall-matrix) | — | syscall-matrix — panorama 17 of the doc-truth audit |
-| [`examples/tokens-impersonation`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/tokens-impersonation) | — | tokens-impersonation — panorama 7 of the doc-truth audit |
-| [`examples/unhook-suite`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/unhook-suite) | — | unhook-suite — panorama 4 of the doc-truth audit |
+| [`examples/tokens-impersonate`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/tokens-impersonate) | — | tokens-impersonate — panorama 7 of the doc-truth audit |
+| [`examples/unhook-ntdll`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/unhook-ntdll) | — | unhook-ntdll — panorama 4 of the doc-truth audit |
 
 </details>
 

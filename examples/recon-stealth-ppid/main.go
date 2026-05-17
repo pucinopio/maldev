@@ -1,6 +1,6 @@
 //go:build windows
 
-// stealth-recon-ppid — example assembled from the user-facing markdown docs only.
+// recon-stealth-ppid — example assembled from the user-facing markdown docs only.
 //
 // Combines:
 //   - win/syscall: Tartarus SSN resolver + MethodIndirectAsm calling method

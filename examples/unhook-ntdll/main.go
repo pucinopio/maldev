@@ -1,6 +1,6 @@
 //go:build windows
 
-// unhook-suite — panorama 4 of the doc-truth audit.
+// unhook-ntdll — panorama 4 of the doc-truth audit.
 //
 // Built strictly from the user-facing markdown:
 //   - docs/techniques/evasion/ntdll-unhooking.md  — ClassicUnhook, FullUnhook,

@@ -1,6 +1,6 @@
 //go:build windows
 
-// collection-suite — panorama 13 of the doc-truth audit.
+// collection-screen-keylog — panorama 13 of the doc-truth audit.
 //
 // Built strictly from the user-facing markdown:
 //   - docs/techniques/collection/clipboard.md   — clipboard.ReadText / WriteText

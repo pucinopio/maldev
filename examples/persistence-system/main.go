@@ -1,6 +1,6 @@
 //go:build windows
 
-// persistence-admin — panorama 6 of the doc-truth audit.
+// persistence-system — panorama 6 of the doc-truth audit.
 //
 // Built strictly from the user-facing markdown:
 //   - docs/techniques/persistence/user.md   — local account creation

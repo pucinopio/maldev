@@ -1,6 +1,6 @@
 //go:build windows
 
-// preset-suite — panorama 18 of the doc-truth audit.
+// preset-stacks — panorama 18 of the doc-truth audit.
 //
 // Built strictly from the user-facing markdown:
 //   - docs/techniques/evasion/preset.md  — 4 presets (Minimal /

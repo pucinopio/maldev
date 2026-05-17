@@ -1,6 +1,6 @@
 //go:build windows
 
-// pe-suite — panorama 11 of the doc-truth audit.
+// pe-modify — panorama 11 of the doc-truth audit.
 //
 // Built strictly from the user-facing markdown:
 //   - docs/techniques/pe/imports.md           — imports.List

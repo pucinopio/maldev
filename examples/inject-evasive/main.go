@@ -1,6 +1,6 @@
 //go:build windows
 
-// injection-evasion — panorama 2 of the doc-truth audit.
+// inject-evasive — panorama 2 of the doc-truth audit.
 //
 // Built strictly from the user-facing markdown:
 //   - docs/techniques/evasion/preset.md       — preset.Stealth() through a Caller
