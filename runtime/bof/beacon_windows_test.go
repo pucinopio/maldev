@@ -75,6 +75,23 @@ func TestArgsPackString(t *testing.T) {
 	require.Equal(t, byte(0), packed[8])
 }
 
+func TestArgsPackWideString(t *testing.T) {
+	args := NewArgs()
+	args.AddWideString("hi")
+	packed := args.Pack()
+	// 4-byte length (in wide units, includes NUL = 3) + 3 × 2 bytes
+	// of UTF-16LE = 4 + 6 = 10 bytes total.
+	require.Len(t, packed, 4+6)
+	require.Equal(t, uint32(3), binary.LittleEndian.Uint32(packed[:4]))
+	// First wide unit 'h' = 0x0068 LE → 0x68 0x00.
+	require.Equal(t, byte('h'), packed[4])
+	require.Equal(t, byte(0), packed[5])
+	require.Equal(t, byte('i'), packed[6])
+	require.Equal(t, byte(0), packed[7])
+	require.Equal(t, byte(0), packed[8])
+	require.Equal(t, byte(0), packed[9])
+}
+
 func TestArgsPackStringEmpty(t *testing.T) {
 	args := NewArgs()
 	args.AddString("")

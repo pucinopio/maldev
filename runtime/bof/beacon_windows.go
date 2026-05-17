@@ -11,10 +11,16 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// beaconOutput is a thread-safe buffer for capturing BOF output.
+// beaconOutput is a thread-safe buffer for capturing BOF output. Each
+// write is appended to the buf AND, if a stream channel is wired, sent
+// to it (non-blocking — if the receiver isn't draining, the buffer
+// keeps growing and the stream loses the chunk). Streaming lets
+// operators consume long-running BOFs in real time via
+// (*BOF).ExecuteStream.
 type beaconOutput struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
+	mu     sync.Mutex
+	buf    bytes.Buffer
+	stream chan<- []byte
 }
 
 func newBeaconOutput() *beaconOutput {
@@ -31,6 +37,18 @@ func (o *beaconOutput) write(data []byte) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.buf.Write(data)
+	if o.stream != nil {
+		// Snapshot the bytes — the BOF may reuse the source buffer.
+		chunk := make([]byte, len(data))
+		copy(chunk, data)
+		select {
+		case o.stream <- chunk:
+		default:
+			// Receiver not draining — drop the chunk so we don't
+			// stall the BOF on a slow consumer. The full output is
+			// still recoverable via Bytes() after Execute returns.
+		}
+	}
 }
 
 func (o *beaconOutput) String() string {

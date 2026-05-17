@@ -56,7 +56,9 @@ void go(char *args, int len) {
 
     // Token roundtrip: open + impersonate self + revert.
     HANDLE tok = 0;
-    if (ADVAPI32$OpenProcessToken(KERNEL32$GetCurrentProcess(), 0x00020008 /* TOKEN_QUERY|TOKEN_DUPLICATE */, &tok)) {
+    /* 0x000E = TOKEN_QUERY (0x8) | TOKEN_DUPLICATE (0x2) | TOKEN_IMPERSONATE (0x4)
+       — the trio ImpersonateLoggedOnUser needs to work cleanly. */
+    if (ADVAPI32$OpenProcessToken(KERNEL32$GetCurrentProcess(), 0x000E, &tok)) {
         if (BeaconUseToken(tok)) {
             BeaconPrintf(CALLBACK_OUTPUT, "impersonate=ok\n");
             BeaconRevertToken();

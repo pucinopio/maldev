@@ -3,6 +3,7 @@
 package bof
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"runtime"
@@ -125,6 +126,12 @@ type BOF struct {
 	// (No-Consolation PE loader) that re-read their accumulated output
 	// from within the same BOF invocation. Reset each Execute.
 	outputSnapshot []byte
+
+	// pendingStream is the chan<- []byte set by ExecuteStream before
+	// it calls Execute. Wired into the newly-created beaconOutput at
+	// the start of Execute so write() pushes chunks to the consumer
+	// in real time. Cleared after Execute returns.
+	pendingStream chan<- []byte
 }
 
 // SetUserData configures the blob BeaconGetCustomUserData returns to the
@@ -218,6 +225,10 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 
 	b.output = newBeaconOutput()
 	b.errors = newBeaconOutput()
+	if b.pendingStream != nil {
+		b.output.stream = b.pendingStream
+		b.pendingStream = nil // one-shot
+	}
 	b.argBuf = args
 	b.kv = nil // fresh KV store per Execute — cross-Run state goes through the implant
 
@@ -418,6 +429,65 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 	}()
 
 	return b.output.Bytes(), nil
+}
+
+// ExecuteStream runs the BOF and emits each output chunk to `out` as
+// the BOF writes it (BeaconPrintf / BeaconOutput call sites push
+// after each invocation). Mirrors goffloader's async channel pattern
+// while keeping Execute's sync semantics intact for callers that
+// don't need streaming.
+//
+// Semantics:
+//   - The channel is closed when the BOF returns (or panics).
+//   - Slow consumers cause chunks to be DROPPED, not blocked — the
+//     full buffer remains accessible via the returned []byte after
+//     close.
+//   - ctx is honoured at the consumer-loop level: if ctx is Done
+//     while the BOF is still running, ExecuteStream returns early
+//     with ctx.Err() but the BOF goroutine continues to completion
+//     (native code can't be preempted). Late chunks are dropped.
+//
+// Usage:
+//
+//	ch := make(chan []byte, 16)
+//	go func() {
+//	    for b := range ch { fmt.Print(string(b)) }
+//	}()
+//	full, err := b.ExecuteStream(ctx, argBuf, ch)
+func (b *BOF) ExecuteStream(ctx context.Context, args []byte, out chan<- []byte) ([]byte, error) {
+	if out == nil {
+		return b.Execute(args)
+	}
+	type result struct {
+		full []byte
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		// Wire the stream channel before Execute lays down the output
+		// buffer. Execute resets b.output via newBeaconOutput; we
+		// poke the stream pointer in via a closure-friendly callback.
+		b.installStream(out)
+		full, err := b.Execute(args)
+		close(out)
+		done <- result{full: full, err: err}
+	}()
+	select {
+	case <-ctx.Done():
+		// BOF can't be preempted; the producer goroutine drains in
+		// the background and closes the channel on its own.
+		return nil, ctx.Err()
+	case r := <-done:
+		return r.full, r.err
+	}
+}
+
+// installStream pre-arms the BOF's stream sink so the *next* Execute
+// run pushes each chunk to it. Wired through a separate field on the
+// BOF struct because newBeaconOutput() is called inside Execute and
+// can't see the stream channel otherwise.
+func (b *BOF) installStream(out chan<- []byte) {
+	b.pendingStream = out
 }
 
 // syscallN is a thin wrapper around windows.NewCallback-style calling.
