@@ -96,12 +96,16 @@ type BOF struct {
 	// produces a parser cursor over this slice.
 	argBuf []byte
 
-	// spawnTo is the path BeaconGetSpawnTo returns to the BOF — the
-	// fork-and-run target. Empty string by default; set per-BOF via
-	// SetSpawnTo. The pinned []byte form (with trailing NUL) lives in
-	// spawnToCStr so the address handed to native code stays stable.
-	spawnTo     string
-	spawnToCStr []byte
+	// spawnTo / spawnToX86 are the paths BeaconGetSpawnTo returns to
+	// the BOF. The CS signature is `char *BeaconGetSpawnTo(BOOL x86)`
+	// — operators that target both architectures supply two distinct
+	// hosts (rundll32 x86 vs x64, for instance). The pinned []byte
+	// forms (with trailing NUL) live in spawnToCStr / spawnToX86CStr
+	// so the addresses handed to native code stay stable.
+	spawnTo        string
+	spawnToCStr    []byte
+	spawnToX86     string
+	spawnToX86CStr []byte
 
 	// userData is the blob BeaconGetCustomUserData returns to the BOF.
 	// Pinned for the BOF instance's lifetime so the pointer handed to
@@ -138,6 +142,20 @@ func (b *BOF) SetSpawnTo(path string) {
 		return
 	}
 	b.spawnToCStr = append([]byte(path), 0)
+}
+
+// SetSpawnToX86 configures the path BeaconGetSpawnTo returns when the
+// BOF asks for an x86 host (the `BOOL x86` arg is TRUE). Distinct from
+// the default SetSpawnTo, which configures the x64 path. Empty string
+// clears the override; BOFs that ask for x86 without an x86 path
+// configured see an empty C string.
+func (b *BOF) SetSpawnToX86(path string) {
+	b.spawnToX86 = path
+	if path == "" {
+		b.spawnToX86CStr = nil
+		return
+	}
+	b.spawnToX86CStr = append([]byte(path), 0)
 }
 
 // Errors returns whatever the BOF emitted via BeaconErrorD / DD / NA

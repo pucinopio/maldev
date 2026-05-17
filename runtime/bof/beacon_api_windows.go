@@ -138,17 +138,21 @@ func initBeaconCallbacks() {
 }
 
 // beaconPrintfImpl handles BeaconPrintf(int type, const char *fmt, ...).
-// The C signature is variadic; syscall.NewCallback can only forward a
-// fixed number of arguments and Go cannot introspect cdecl varargs from
-// a callback. We forward the format string verbatim and document the
-// limitation in the tech md / doc.go. BOFs that pass a literal format
-// string with no % directives work correctly; BOFs relying on
-// printf-style expansion see the format string raw.
-func beaconPrintfImpl(typ uintptr, fmtPtr uintptr) uintptr {
-	if currentBOF == nil {
+// Up to 6 variadic args are captured from the Windows x64 callback
+// frame (RCX/RDX/R8/R9 = type+fmt+arg0+arg1, then four stack slots).
+// The format string is parsed and the placeholders are expanded via
+// expandCFormat per the CS BOF conventions (%s/%d/%u/%x/%lld/%I64x/…).
+//
+// 6 is the public corpus's practical ceiling — TrustedSec SA / Outflank
+// / FortyNorth modules use up to ~5 args in a single BeaconPrintf
+// invocation. BOFs exceeding it see the trailing conversions filled
+// with zero rather than reading uninitialised memory.
+func beaconPrintfImpl(typ, fmtPtr, a1, a2, a3, a4, a5, a6 uintptr) uintptr {
+	if currentBOF == nil || fmtPtr == 0 {
 		return 0
 	}
-	currentBOF.output.write([]byte(cStringFromPtr(fmtPtr, 65535)))
+	fmtStr := cStringFromPtr(fmtPtr, 65535)
+	currentBOF.output.write(expandCFormat(fmtStr, []uintptr{a1, a2, a3, a4, a5, a6}))
 	_ = typ
 	return 0
 }
@@ -417,22 +421,21 @@ func beaconFormatToStringImpl(formatPtr, outSizePtr uintptr) uintptr {
 }
 
 // beaconFormatPrintfImpl handles BeaconFormatPrintf(format*, fmt, ...).
-// Like BeaconPrintf, the variadic argument list cannot be expanded from
-// inside a syscall.NewCallback thunk — Go has no way to walk a cdecl
-// va_list captured by a stdcall callback. We forward the format string
-// verbatim into the format buffer; BOFs that pass a literal string
-// with no `%` directives behave correctly. See tech md "Beacon-API
-// limitations" for the full rationale and the design alternatives
-// (no-resolve / cgo) the project rejected.
-func beaconFormatPrintfImpl(formatPtr, fmtPtr uintptr) uintptr {
+// Same vararg-capture trick as beaconPrintfImpl — 6 trailing uintptrs
+// from the callback frame, parsed and expanded via expandCFormat,
+// then appended to the format buffer through the public Append path
+// so size/cursor accounting stays consistent with the rest of the
+// formatp lifecycle.
+func beaconFormatPrintfImpl(formatPtr, fmtPtr, a1, a2, a3, a4, a5, a6 uintptr) uintptr {
 	if formatPtr == 0 || fmtPtr == 0 {
 		return 0
 	}
-	s := []byte(cStringFromPtr(fmtPtr, 65535))
-	if len(s) == 0 {
+	fmtStr := cStringFromPtr(fmtPtr, 65535)
+	rendered := expandCFormat(fmtStr, []uintptr{a1, a2, a3, a4, a5, a6})
+	if len(rendered) == 0 {
 		return 0
 	}
-	beaconFormatAppendImpl(formatPtr, uintptr(unsafe.Pointer(&s[0])), uintptr(len(s)))
+	beaconFormatAppendImpl(formatPtr, uintptr(unsafe.Pointer(&rendered[0])), uintptr(len(rendered)))
 	return 0
 }
 
@@ -462,11 +465,29 @@ func beaconErrorNAImpl(typ uintptr) uintptr {
 }
 
 // beaconGetSpawnToImpl returns a pointer to the configured spawn-to
-// path (NUL-terminated), or 0 when none was set. The path bytes live
-// in the BOF's spawnToCStr field — pinned for the BOF instance's
-// lifetime so the address stays stable across Beacon API callbacks.
-func beaconGetSpawnToImpl(_ uintptr, _ uintptr) uintptr {
-	if currentBOF == nil || len(currentBOF.spawnToCStr) == 0 {
+// path (NUL-terminated), or 0 when none is set. CS signature is
+// `char *BeaconGetSpawnTo(BOOL x86)` — the bool selects which of the
+// two configured paths to return. The pinned []byte forms live in
+// the BOF's spawnTo*CStr fields so the address stays stable across
+// Beacon API callbacks.
+func beaconGetSpawnToImpl(x86 uintptr, _ uintptr) uintptr {
+	if currentBOF == nil {
+		return 0
+	}
+	// Legacy compatibility: BOFs built against `char *BeaconGetSpawnTo(void)`
+	// pass garbage in the first register. Only honour the x86 dispatch
+	// when the operator actually configured an x86 path — otherwise
+	// fall back to the x64 path. This matches the goffloader behaviour
+	// (which ignores the arg) and won't fail BOFs from either API era.
+	if x86 != 0 && len(currentBOF.spawnToX86CStr) != 0 {
+		return uintptr(unsafe.Pointer(&currentBOF.spawnToX86CStr[0]))
+	}
+	if len(currentBOF.spawnToCStr) == 0 {
+		// x64 path empty too — last resort: try the x86 path so a BOF
+		// configured for x86-only doesn't see a null pointer.
+		if len(currentBOF.spawnToX86CStr) != 0 {
+			return uintptr(unsafe.Pointer(&currentBOF.spawnToX86CStr[0]))
+		}
 		return 0
 	}
 	return uintptr(unsafe.Pointer(&currentBOF.spawnToCStr[0]))

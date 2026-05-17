@@ -18,6 +18,27 @@ slices:
       - ed07614  # 12 new symbols (Groups 3/4/5/6) + LockOSThread
       - ab72b6e  # behavioural tests + CI honesty (audit closure)
     vm_e2e: pass (Win10 INIT, 50+ tests, 0.165s)
+  - id: 1.b
+    title: Gap closure — varargs, x86 SpawnTo, lpParameter
+    status: closed
+    commits:
+      - 'pending-1.b'  # this commit — printf_windows.go + SpawnToX86 + arg lpParameter
+    vm_e2e: pass (Win10 INIT, 76 tests incl. 13 new, 0.297s)
+  - id: 1.c
+    title: goffloader-parity-and-then-some (see goffloader-comparison.md)
+    status: queued
+    sub_items:
+      - 1.c.1 string-obfuscate Beacon import names
+      - 1.c.2 bump vararg capture from 6 to 10
+      - 1.c.3 wide-string %s heuristic in expandCFormat
+      - 1.c.4 RW→RX section flip via VirtualProtect (drop RWX)
+      - 1.c.5 MEM_TOP_DOWN VirtualAlloc flag
+      - 1.c.6 panic recovery wrapper around BOF entry
+      - 1.c.7 async output streaming API ExecuteStream
+      - 1.c.8 BeaconGetOutputData symbol
+      - 1.c.9 runtime/pe — embed No-Consolation, RunExecutable
+      - 1.c.10 cmd/bof-runner — type-prefixed CLI args
+      - 1.c.11 garble literal obfuscation in make release
   - id: 2
     title: Loader-format plug-in
     status: closed

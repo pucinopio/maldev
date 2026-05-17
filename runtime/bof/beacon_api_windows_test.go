@@ -87,7 +87,7 @@ func TestBeaconPrintfImpl_CapturesOutput(t *testing.T) {
 		// NUL-terminated C string in a stable backing array.
 		msg := []byte("hello bof\x00")
 		ptr := uintptr(unsafe.Pointer(&msg[0]))
-		ret := beaconPrintfImpl(0, ptr)
+		ret := beaconPrintfImpl(0, ptr, 0, 0, 0, 0, 0, 0)
 		assert.Zero(t, ret)
 		assert.Equal(t, "hello bof", b.output.String())
 	})
@@ -100,7 +100,7 @@ func TestBeaconPrintfImpl_NoCurrentBOF(t *testing.T) {
 	defer bofMu.Unlock()
 	currentBOF = nil
 	msg := []byte("ignored\x00")
-	ret := beaconPrintfImpl(0, uintptr(unsafe.Pointer(&msg[0])))
+	ret := beaconPrintfImpl(0, uintptr(unsafe.Pointer(&msg[0])), 0, 0, 0, 0, 0, 0)
 	assert.Zero(t, ret)
 }
 
@@ -252,7 +252,7 @@ func TestBeaconFormatAlloc_NilGuards(t *testing.T) {
 // TestBeaconFormatPrintf_VerbatimAppend — varargs aren't expandable from
 // a NewCallback thunk; the implementation forwards the format string
 // verbatim. Test asserts the bytes land in the format buffer.
-func TestBeaconFormatPrintf_VerbatimAppend(t *testing.T) {
+func TestBeaconFormatPrintf_ExpandsArgs(t *testing.T) {
 	withCurrentBOF(t, func(_ *BOF) {
 		var fmt formatp
 		beaconFormatAllocImpl(uintptr(unsafe.Pointer(&fmt)), 64)
@@ -260,11 +260,11 @@ func TestBeaconFormatPrintf_VerbatimAppend(t *testing.T) {
 		beaconFormatPrintfImpl(
 			uintptr(unsafe.Pointer(&fmt)),
 			uintptr(unsafe.Pointer(&fmtStr[0])),
+			42, 0, 0, 0, 0, 0,
 		)
-		// Verbatim — the %d stays as-is. CS BOFs that pass a literal
-		// format string see this as the shipped behaviour.
+		// Varargs are now expanded — locked in slice 1.b.
 		got := unsafe.Slice((*byte)(unsafe.Pointer(fmt.original)), int(fmt.length))
-		assert.Equal(t, []byte("hello %d"), got)
+		assert.Equal(t, []byte("hello 42"), got)
 		beaconFormatFreeImpl(uintptr(unsafe.Pointer(&fmt)))
 	})
 }
