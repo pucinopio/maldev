@@ -300,6 +300,21 @@ var tarExcludes = []string{
 	"node_modules",
 }
 
+// buildTarStreamArgs computes the host-side tar argv and the remote
+// shell command for tarStreamToWindows. Factored out so the quoting
+// rules — forward slashes for bsdtar's -C, exclude list ordering,
+// hostRoot canonicalisation — are unit-testable without spawning ssh.
+func buildTarStreamArgs(hostRoot, dst string) (tarArgs []string, remoteCmd string) {
+	winDst := strings.ReplaceAll(dst, `\`, "/")
+	tarArgs = []string{"-cf", "-"}
+	for _, ex := range tarExcludes {
+		tarArgs = append(tarArgs, "--exclude="+ex)
+	}
+	tarArgs = append(tarArgs, "-C", filepath.Clean(hostRoot), ".")
+	remoteCmd = fmt.Sprintf("tar -xf - -C %s", winDst)
+	return
+}
+
 // tarStreamToWindows pipes `tar -cf -` from the host into `tar -xf -`
 // on the guest. Exclude flags shrink a 333-MB repo down to a few MB of
 // actual source. The guest's tar is bsdtar (Windows 10 1803+ /
@@ -311,18 +326,8 @@ func tarStreamToWindows(ctx context.Context, vm *VMConfig, hostRoot, dst, key st
 	// — the default ssh-on-Windows shell already invokes commands
 	// directly, so we hand the bare `tar -xf - -C C:/maldev` form to
 	// ssh without a cmd.exe /c wrapper.
-	winDst := strings.ReplaceAll(dst, `\`, "/")
-
-	tarArgs := []string{"-cf", "-"}
-	for _, ex := range tarExcludes {
-		tarArgs = append(tarArgs, "--exclude="+ex)
-	}
-	tarArgs = append(tarArgs, "-C", filepath.Clean(hostRoot), ".")
+	tarArgs, remoteCmd := buildTarStreamArgs(hostRoot, dst)
 	tarCmd := exec.CommandContext(ctx, "tar", tarArgs...)
-
-	// Guest side: tar -xf - with explicit -C target. No cd, no cmd.exe
-	// wrapper — the default ssh-on-Windows shell is cmd.exe already.
-	remoteCmd := fmt.Sprintf(`tar -xf - -C %s`, winDst)
 	sshCmd := exec.CommandContext(ctx, "ssh",
 		"-i", key,
 		"-p", strconv.Itoa(port),
