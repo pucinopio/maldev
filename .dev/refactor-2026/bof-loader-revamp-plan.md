@@ -1,5 +1,5 @@
 ---
-status: draft
+status: in-progress
 opened: 2026-05-17
 owner: oioio-space
 scope: runtime/bof (+ new packages)
@@ -10,6 +10,29 @@ references:
   - https://github.com/Binject/universal (Plan9 reflection)
   - https://github.com/eh-steve/goloader
   - https://github.com/tetratelabs/wazero
+slices:
+  - id: 1
+    title: Beacon API completion
+    status: closed
+    commits:
+      - ed07614  # 12 new symbols (Groups 3/4/5/6) + LockOSThread
+      - ab72b6e  # behavioural tests + CI honesty (audit closure)
+    vm_e2e: pass (Win10 INIT, 50+ tests, 0.165s)
+  - id: 2
+    title: Loader-format plug-in
+    status: closed
+    commits:
+      - 'pending-1'  # this commit — loader_windows.go + Run/Spec/Kind/DetectKind + 7 tests
+    vm_e2e: pass (Win10 INIT, 7 tests incl. table-driven, 0.453s)
+  - id: 3
+    title: goloader integration
+    status: queued
+  - id: 4
+    title: .gof custom format
+    status: queued
+  - id: 5
+    title: Build-tag gating + docs
+    status: queued
 ---
 
 # BOF loader revamp
