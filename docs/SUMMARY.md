@@ -161,4 +161,23 @@
 - [Full chain](examples/full-chain.md)
 - [DLL proxy side-load](examples/dllproxy-side-load.md)
 - [UPX-style packer + cover](examples/upx-style-packer.md)
+- [Runnable examples (`examples/` tree)](examples/runnable.md)
+
+# CLI Tools
+
+- [Overview](tools/index.md)
+- [packer](tools/packer.md)
+- [packer-vis](tools/packer-vis.md)
+- [packerscope](tools/packerscope.md)
+- [cert-snapshot](tools/cert-snapshot.md)
+- [bof-runner](tools/bof-runner.md)
+- [bundle-launcher](tools/bundle-launcher.md)
+- [rshell](tools/rshell.md)
+- [sleepmask-demo](tools/sleepmask-demo.md)
+- [memscan-server](tools/memscan-server.md)
+- [memscan-harness](tools/memscan-harness.md)
+- [memscan-mcp](tools/memscan-mcp.md)
+- [hashgen](tools/hashgen.md)
+- [vmtest](tools/vmtest.md)
+- [test-report](tools/test-report.md)
 
