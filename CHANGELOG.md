@@ -7,6 +7,30 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — slice 1.d step 1.g: printf% expansion (2026-05-18)
+
+BeaconPrintf and BeaconFormatPrintf now expand %d / %i / %u / %x /
+%X / %p / %s / %c / %% from cdecl varargs. Width / padding /
+precision flags are honoured at the parser level (skipped to find
+the specifier) but don't affect the rendered output — matches the
+goffloader convention for the BOFs sampled to date.
+
+# Implementation
+
+- Single `printf_engine(fmt, ap, sink, ctx)` walks fmt with a
+  switch on the specifier letter, dispatching to a tiny inline
+  itoa_radix for numeric formats.
+- Varargs read via cdecl stack arithmetic: first vararg sits at
+  `&fmt + 1` (4 bytes higher than the fmt slot). No stdarg.h
+  dependency — the loader stays in -nostdlib mode.
+- Two sinks: sink_to_out (writes to params->out via append_out)
+  and sink_to_format (appends to a bof_formatp buffer).
+
+# Fixture + test (9/9 VM PASS)
+
+  testdata/printf_specifiers.x86.{c,o}    // %d, %X, %u, %s, %c, %%
+  TestX86BOF_Execute_PrintfSpecifiers     PASS
+
 ### runtime/bof — slice 1.d step 1.f: Token + IsAdmin via advapi32 (2026-05-18)
 
 # 3 new Beacon API symbols

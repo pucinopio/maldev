@@ -100,6 +100,24 @@ typedef struct {
     pfn_GetTokenInformation     GetTokenInformation;
 } advapi32_api_t;
 
+/* CS-compatible parser + format-buffer wire types. Both share the
+ * same struct shape (matching beacon.h); duplicated to keep the
+ * function signatures self-documenting. Declared up here so the
+ * printf-engine sink can dereference them. */
+typedef struct {
+    char *original;
+    char *buffer;
+    int   length;
+    int   size;
+} bof_datap;
+
+typedef struct {
+    char *original;
+    char *buffer;
+    int   length;
+    int   size;
+} bof_formatp;
+
 /* loader_memcpy — byte-wise copy used for COFF section data and
  * Beacon output buffers. Tiny and forwarder-immune. */
 static void loader_memcpy(void *dst, const void *src, uint32_t n)
@@ -292,11 +310,142 @@ static void append_err(const void *src, uint32_t n)
  * BOFs that pass a literal format see correct output, those that
  * rely on `%`-expansion see the raw template. Step 1.c.2 will add
  * a tiny printf engine. */
-__declspec(dllexport) void __cdecl BeaconPrintf(int type, const char *fmt)
+/* — printf-with-% expansion (step 1.g) ----------------------------
+ *
+ * The canonical CS BeaconPrintf takes (int type, char *fmt, ...).
+ * For step 1.g we honour the vararg expansion for the common
+ * specifiers (%d / %i / %u / %x / %X / %s / %c / %% ; raw on
+ * unknown). Width / padding / precision are not honoured —
+ * specifiers like %08x emit the same as %x; that matches the
+ * goffloader convention for the BOFs we've sampled.
+ *
+ * Varargs are read directly from the cdecl stack — no
+ * stdarg.h dependency. On i386, args are pushed RTL, so the
+ * first vararg sits at `&fmt + 1` (4 bytes higher in memory
+ * than the fmt slot). */
+
+static uint32_t itoa_radix(uint32_t value, char *out, uint32_t radix, int upper)
+{
+    char tmp[16];
+    uint32_t n = 0;
+    if (value == 0) tmp[n++] = '0';
+    else {
+        while (value) {
+            uint32_t d = value % radix;
+            tmp[n++] = (char)(d < 10 ? '0' + d : (upper ? 'A' : 'a') + d - 10);
+            value /= radix;
+        }
+    }
+    uint32_t w = 0;
+    while (n--) out[w++] = tmp[n];
+    return w;
+}
+
+/* sink_t lets BeaconPrintf and BeaconFormatPrintf share the
+ * format engine while writing to different destinations. */
+typedef void (*sink_t)(const void *data, uint32_t n, void *ctx);
+
+static void sink_to_out(const void *data, uint32_t n, void *ctx)
+{
+    (void)ctx;
+    append_out(data, n);
+}
+
+static void sink_to_format(const void *data, uint32_t n, void *ctx)
+{
+    bof_formatp *fp = (bof_formatp *)ctx;
+    if (!fp) return;
+    int room = fp->size - fp->length;
+    if (room <= 0) return;
+    if ((int)n > room) n = (uint32_t)room;
+    loader_memcpy(fp->original + fp->length, data, n);
+    fp->length += (int)n;
+    fp->buffer = fp->original + fp->length;
+}
+
+static void printf_engine(const char *fmt, uint32_t *ap, sink_t sink, void *ctx)
+{
+    if (!fmt) return;
+    char buf[16];
+    while (*fmt) {
+        if (*fmt != '%') {
+            sink(fmt, 1, ctx);
+            fmt++;
+            continue;
+        }
+        fmt++;
+        /* Skip flag chars / digit run / dot / digit run — we honour
+         * the specifier letter but not the width / precision. */
+        while (*fmt == '-' || *fmt == '+' || *fmt == ' ' ||
+               *fmt == '#' || *fmt == '0') fmt++;
+        while (*fmt >= '0' && *fmt <= '9') fmt++;
+        if (*fmt == '.') {
+            fmt++;
+            while (*fmt >= '0' && *fmt <= '9') fmt++;
+        }
+        if (*fmt == 'l' || *fmt == 'h' || *fmt == 'z') fmt++;
+
+        char spec = *fmt;
+        if (spec == 0) break;
+        switch (spec) {
+            case 'd': case 'i': {
+                int v = (int)*ap++;
+                uint32_t u;
+                uint32_t n = 0;
+                if (v < 0) { buf[n++] = '-'; u = (uint32_t)(-(int64_t)v); }
+                else       { u = (uint32_t)v; }
+                n += itoa_radix(u, buf + n, 10, 0);
+                sink(buf, n, ctx);
+                break;
+            }
+            case 'u': {
+                uint32_t n = itoa_radix(*ap++, buf, 10, 0);
+                sink(buf, n, ctx);
+                break;
+            }
+            case 'x': {
+                uint32_t n = itoa_radix(*ap++, buf, 16, 0);
+                sink(buf, n, ctx);
+                break;
+            }
+            case 'X': case 'p': {
+                uint32_t n = itoa_radix(*ap++, buf, 16, 1);
+                sink(buf, n, ctx);
+                break;
+            }
+            case 's': {
+                const char *s = (const char *)*ap++;
+                if (s) sink(s, cstr_len(s), ctx);
+                else   sink("(null)", 6, ctx);
+                break;
+            }
+            case 'c': {
+                char c = (char)*ap++;
+                sink(&c, 1, ctx);
+                break;
+            }
+            case '%': {
+                char pct = '%';
+                sink(&pct, 1, ctx);
+                break;
+            }
+            default: {
+                char raw[2] = {'%', spec};
+                sink(raw, 2, ctx);
+                break;
+            }
+        }
+        fmt++;
+    }
+}
+
+__declspec(dllexport) void __cdecl BeaconPrintf(int type, const char *fmt, ...)
 {
     (void)type;
     if (!fmt) return;
-    append_out(fmt, cstr_len(fmt));
+    /* First vararg sits at &fmt + 1 on i386 cdecl. */
+    uint32_t *ap = (uint32_t *)((const char **)&fmt + 1);
+    printf_engine(fmt, ap, sink_to_out, 0);
 }
 
 __declspec(dllexport) void __cdecl BeaconOutput(int type, const char *data, int len)
@@ -336,13 +485,9 @@ __declspec(dllexport) void __cdecl BeaconErrorNA(int code)
  *   12  int   size      (total)
  *
  * The reads are length-prefixed for BeaconDataExtract; 4-byte LE
- * for BeaconDataInt; 2-byte LE for BeaconDataShort. */
-typedef struct {
-    char *original;
-    char *buffer;
-    int   length;
-    int   size;
-} bof_datap;
+ * for BeaconDataInt; 2-byte LE for BeaconDataShort. The bof_datap
+ * typedef lives near the top of the file alongside bof_formatp so
+ * the shared printf-engine sink can dereference them. */
 
 __declspec(dllexport) void __cdecl BeaconDataParse(bof_datap *p, char *buf, int size)
 {
@@ -405,16 +550,10 @@ __declspec(dllexport) char * __cdecl BeaconDataExtract(bof_datap *p, int *out_si
 
 /* — Format -------------------------------------------------------
  *
- * formatp shares datap's struct shape; BeaconFormatAlloc HeapAllocs
- * a fresh buffer the BOF appends into via Append/Int/Printf, then
- * ToString returns its contents + length. Free releases the heap
- * allocation. */
-typedef struct {
-    char *original;
-    char *buffer;
-    int   length;
-    int   size;
-} bof_formatp;
+ * formatp shares datap's struct shape; BeaconFormatAlloc
+ * VirtualAlloc's a fresh buffer the BOF appends into via
+ * Append/Int/Printf, then ToString returns its contents + length.
+ * Free releases the page. Typedef lives near the top of the file. */
 
 __declspec(dllexport) void __cdecl BeaconFormatAlloc(bof_formatp *fp, int maxsz)
 {
@@ -489,14 +628,13 @@ __declspec(dllexport) void __cdecl BeaconFormatInt(bof_formatp *fp, int value)
     BeaconFormatAppend(fp, buf, (int)n);
 }
 
-/* BeaconFormatPrintf — same vararg trade-off as BeaconPrintf: fmt
- * copied verbatim, no `%` expansion (step 1.c.2 will add a tiny
- * vsnprintf if a fixture needs it). */
-__declspec(dllexport) void __cdecl BeaconFormatPrintf(bof_formatp *fp, const char *fmt)
+/* BeaconFormatPrintf — same vararg expansion as BeaconPrintf,
+ * appended to the formatp buffer instead of params->out. */
+__declspec(dllexport) void __cdecl BeaconFormatPrintf(bof_formatp *fp, const char *fmt, ...)
 {
-    if (!fmt) return;
-    uint32_t n = cstr_len(fmt);
-    BeaconFormatAppend(fp, fmt, (int)n);
+    if (!fp || !fmt) return;
+    uint32_t *ap = (uint32_t *)((const char **)&fmt + 1);
+    printf_engine(fmt, ap, sink_to_format, fp);
 }
 
 __declspec(dllexport) char * __cdecl BeaconFormatToString(bof_formatp *fp, int *size)
@@ -634,8 +772,9 @@ __declspec(dllexport) void __cdecl BeaconRemoveValue(const char *key)
  * advapi32 already loaded; if not, kernel32!LoadLibraryA pulls
  * it in. */
 
-#define TOKEN_QUERY                  0x0008u
-#define TOKEN_INFORMATION_ELEVATION  20  /* TokenElevation enum value */
+/* TOKEN_QUERY comes from winnt.h via windows.h.
+ * TokenElevation is the enum value (20). */
+#define TOKEN_INFORMATION_ELEVATION  20
 
 __declspec(dllexport) int __cdecl BeaconUseToken(void *token)
 {
