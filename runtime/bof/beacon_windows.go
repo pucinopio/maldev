@@ -117,14 +117,14 @@ func (a *Args) AddString(s string) {
 // directly-castable UTF-16LE blob.
 func (a *Args) AddWideString(s string) {
 	utf16 := windows.StringToUTF16(s) // includes trailing NUL
-	bytes := make([]byte, len(utf16)*2)
+	wideBytes := make([]byte, len(utf16)*2)
 	for i, u := range utf16 {
-		binary.LittleEndian.PutUint16(bytes[i*2:], u)
+		binary.LittleEndian.PutUint16(wideBytes[i*2:], u)
 	}
 	var lb [4]byte
-	binary.LittleEndian.PutUint32(lb[:], uint32(len(bytes)))
+	binary.LittleEndian.PutUint32(lb[:], uint32(len(wideBytes)))
 	a.buf.Write(lb[:])
-	a.buf.Write(bytes)
+	a.buf.Write(wideBytes)
 }
 
 // AddBytes appends a byte slice with a 4-byte little-endian length prefix.

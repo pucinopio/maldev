@@ -20,34 +20,34 @@ import (
 //
 // The 28-field sequence (in order):
 //
-//	 1. pe_wname        wide string
-//	 2. pe_name         string
-//	 3. pe_wpath        wide string
-//	 4. pe_bytes        bytes (length-prefixed)
-//	 5. pe_path         string
-//	 6. local           int
-//	 7. timeout         int (seconds)
-//	 8. headers         int
-//	 9. cmdwline        wide string
-//	10. cmdline         string
-//	11. method          string
-//	12. use_unicode     int
-//	13. nooutput        int
-//	14. alloc_console   int
-//	15. close_handles   int
-//	16. unload_libs     string
-//	17. dont_save       int
-//	18. list_pes        int
-//	19. unload_pe       string
-//	20. username        string
-//	21. loadtime        string
-//	22. link_to_peb     int
-//	23. dont_unload     int
-//	24. load_all_deps   int
-//	25. load_all_deps_but   string
-//	26. load_deps       string
-//	27. search_paths    string
-//	28. inthread        int
+//  1. pe_wname        wide string
+//  2. pe_name         string
+//  3. pe_wpath        wide string
+//  4. pe_bytes        bytes (length-prefixed)
+//  5. pe_path         string
+//  6. local           int
+//  7. timeout         int (seconds)
+//  8. headers         int
+//  9. cmdwline        wide string
+//  10. cmdline         string
+//  11. method          string
+//  12. use_unicode     int
+//  13. nooutput        int
+//  14. alloc_console   int
+//  15. close_handles   int
+//  16. unload_libs     string
+//  17. dont_save       int
+//  18. list_pes        int
+//  19. unload_pe       string
+//  20. username        string
+//  21. loadtime        string
+//  22. link_to_peb     int
+//  23. dont_unload     int
+//  24. load_all_deps   int
+//  25. load_all_deps_but   string
+//  26. load_deps       string
+//  27. search_paths    string
+//  28. inthread        int
 func packArgs(peBytes []byte, opt Options) []byte {
 	a := bof.NewArgs()
 

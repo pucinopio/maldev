@@ -17,30 +17,30 @@ var errUnsupported = errors.New("runtime/pe: not supported on this platform")
 // can build the struct unconditionally. Fields documented in
 // options_windows.go.
 type Options struct {
-	Args            []string
-	Method          string
-	Timeout         time.Duration
-	UseUnicode      bool
-	NoOutput        bool
-	InThread        bool
-	LinkToPEB       bool
-	DontUnload      bool
-	AllocConsole    bool
-	CloseHandles    bool
-	UnloadLibs      string
-	DontSave        bool
-	ListPEs         bool
-	LoadAllDeps     bool
-	Headers         bool
-	Local           bool
-	Name            string
-	Path            string
-	UnloadPE        string
-	Username        string
-	LoadTime        string
-	LoadAllDepsBut  string
-	LoadDeps        string
-	SearchPaths     string
+	Args           []string
+	Method         string
+	Timeout        time.Duration
+	UseUnicode     bool
+	NoOutput       bool
+	InThread       bool
+	LinkToPEB      bool
+	DontUnload     bool
+	AllocConsole   bool
+	CloseHandles   bool
+	UnloadLibs     string
+	DontSave       bool
+	ListPEs        bool
+	LoadAllDeps    bool
+	Headers        bool
+	Local          bool
+	Name           string
+	Path           string
+	UnloadPE       string
+	Username       string
+	LoadTime       string
+	LoadAllDepsBut string
+	LoadDeps       string
+	SearchPaths    string
 }
 
 // RunExecutable returns errUnsupported on non-Windows.

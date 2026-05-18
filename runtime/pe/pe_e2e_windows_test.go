@@ -76,13 +76,23 @@ func helloOptions() Options {
 // install ONE pipe at TestMain init, leave it in place for the
 // whole test run, and drain it per-test via a mutex-guarded
 // buffer that gets snapshot+reset around each RunExecutable.
+//
+// Tests in this file MUST NOT call t.Parallel() — the shared
+// capture buffer would interleave across runs and break the
+// per-test drain assertion.
 var (
 	captureMu       sync.Mutex
 	captureBuf      bytes.Buffer
 	capturePipeRead *os.File
 	captureOrigOut  windows.Handle
-	captureDrainErr error
 )
+
+// captureBufCap is the upper bound on captureBuf size. A test that
+// drives an unusually chatty BOF (or a future test that forgets to
+// drain) would otherwise grow the buffer unbounded. On overflow we
+// reset and accept the loss — the test will fail loudly on the
+// canary-not-found assertion, which is the right signal.
+const captureBufCap = 1 << 20 // 1 MiB
 
 // installStdoutCapture is called once at TestMain. It replaces
 // STD_OUTPUT_HANDLE with a pipe write end and launches a reader
@@ -112,11 +122,13 @@ func installStdoutCapture() error {
 			n, err := r.Read(buf)
 			if n > 0 {
 				captureMu.Lock()
+				if captureBuf.Len()+n > captureBufCap {
+					captureBuf.Reset()
+				}
 				captureBuf.Write(buf[:n])
 				captureMu.Unlock()
 			}
 			if err != nil {
-				captureDrainErr = err
 				return
 			}
 		}
@@ -188,9 +200,9 @@ func TestE2E_HelloSmoke(t *testing.T) {
 // TestE2E_ArgvSingle proves the joinArgs → cmdline → CRT argv
 // path round-trips a single token. The DLL re-echoes it as
 // "ARGV[1]=<token>".
-// TestE2E_CmdlineSingle proves the joinArgs → cmdline → DLL
-// entry parameter path round-trips. hello_main echoes its
-// cmdline as "CMDLINE=<full string>".
+// TestE2E_CmdlineSingle proves the joinArgs → cmdline → DLL entry
+// parameter path round-trips. hello_main echoes its cmdline as
+// "CMDLINE=<full string>".
 func TestE2E_CmdlineSingle(t *testing.T) {
 	const marker = "MALDEV_E2E_MARKER"
 	opt := helloOptions()

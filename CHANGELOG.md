@@ -7,6 +7,48 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/pe — in-process PE / DLL execution via No-Consolation (2026-05-18)
+
+**New package** `runtime/pe`. Wraps the MIT-licensed Fortra
+No-Consolation BOF on top of `runtime/bof` to run full Windows
+EXEs / DLLs in the implant's own address space.
+
+- `RunExecutable(peBytes []byte, opt Options) (string, error)` —
+  marshals 28-field bofdata, dispatches via `bof.Run`, returns
+  captured stdout.
+- 22 `Options` fields mirror No-Consolation's full surface
+  (cmdline, method, timeout, headers, link-to-PEB, load-all-deps,
+  unload-libs, search-paths, …).
+- Embed gated behind `pe_noconsolation` build tag (default
+  build returns `ErrLoaderMissing`); `NoConsolation.x64.o`
+  committed to the repo under
+  `runtime/pe/internal/noconsolation/` alongside upstream MIT
+  `LICENSE`. Same model as `kernel/driver/rtcore64/RTCore64.sys`.
+- `scripts/build-no-consolation.sh` rebuilds the `.o` from a
+  pinned upstream commit (`fortra/No-Consolation @ dbdb16b`)
+  via `x86_64-w64-mingw32-gcc`.
+- 7 E2E tests passing on Windows10 VM via vendored mingw DLL
+  fixture `runtime/pe/testdata/hello.x64.dll`.
+
+**Upstream bugfixes surfaced + fixed in the slice:**
+
+- `runtime/bof.Args.AddWideString` wrote length in wide-units;
+  `BeaconDataExtract` reads bytes. Wide-string fields were
+  framed at half-size, corrupting parser cursor.
+- `runtime/bof.beaconAddValueImpl` / `beaconRemoveValueImpl`
+  returned `0`. No-Consolation extends CS's `void` contract to
+  `BOOL`; callers treat `0` as failure.
+- `win/api.ExportByHash` didn't detect export forwarders.
+  `kernel32!HeapAlloc` forwards to `ntdll!RtlAllocateHeap` on
+  Win 8+; the resolver returned the forwarder-string address
+  (non-exec memory), so calling it tripped DEP. Forwarders now
+  resolve recursively.
+
+Documentation: new tech md `docs/techniques/runtime/pe-loader.md`,
+README packages table + decision tree, `docs/mitre.md` T1059 +
+T1620 rows include `runtime/pe`. Slice 1.c of the BOF revamp
+plan now closed (11/11 items).
+
 ### v0.134.0 — privesc-e2e probe shipped in Go (2026-05-13)
 
 **Role swap.** `cmd/privesc-e2e/probe/main.go` (full Go: `os.WriteFile`

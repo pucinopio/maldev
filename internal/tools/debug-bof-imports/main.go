@@ -20,6 +20,10 @@ import (
 	"github.com/oioio-space/maldev/win/api"
 )
 
+// bareSearch lists the DLLs probed for `__imp_<Func>` (no DLL$
+// prefix) imports. Order matters — first hit wins. Mirrors
+// runtime/bof.bareImportSearchOrder; future BOFs that pull from
+// WININET / CRYPT32 / etc. need both lists extended in lockstep.
 var bareSearch = []string{
 	"KERNEL32.DLL", "ADVAPI32.dll", "USER32.dll",
 	"WS2_32.dll", "OLE32.dll", "SHELL32.dll",
@@ -104,4 +108,10 @@ func main() {
 		}
 	}
 	fmt.Printf("\n%d / %d imports unresolved\n", unresolved, total)
+	// Non-zero exit so CI / wrapper scripts can branch on unresolved
+	// without parsing the textual summary. 2 keeps it distinct from
+	// "argument error" (1) and "panic" (>= 130 on Windows).
+	if unresolved > 0 {
+		os.Exit(2)
+	}
 }

