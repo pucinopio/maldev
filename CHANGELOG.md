@@ -7,6 +7,56 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — slice 1.d phase B-bis step 0: PIC shellcode loader skeleton (2026-05-18)
+
+# Architecture pivot
+
+The prior phase B + C ("DLL + rundll32 with %TEMP% files") was
+rejected: it dropped 4 temp files per Execute and used rundll32
+to LoadLibrary our DLL, both clean IOCs. The reworked design
+matches the repo's no-disk / no-LoadLibrary philosophy
+(runtime/pe pattern, inject/* pattern):
+
+  Position-independent x86 shellcode injected into a
+  freshly-spawned WoW64 host via VirtualAllocEx +
+  WriteProcessMemory + CreateRemoteThread. Loader walks PEB
+  for kernel32 base, resolves symbols via ROR13 (same primitive
+  as win/api.ResolveByHash), runs the BOF in-process inside
+  the child, writes captured output into a parent-allocated
+  RW region, ExitThread. Parent ReadProcessMemory's the output
+  and TerminateProcess's the child.
+
+# What landed (step 0)
+
+  runtime/bof/internal/x86loader/abi.h          // loader_params_t wire format
+  runtime/bof/internal/x86loader/loader.c       // PIC skeleton (320 B blob)
+  runtime/bof/internal/x86loader/loader.ld      // linker script (flat .text)
+  runtime/bof/internal/x86loader/bof_x86_loader.x86.bin  // committed artefact
+  scripts/build-bof-x86-loader.sh               // emits .bin via objcopy
+
+# Go-side stub
+
+The bof_x86_loader build tag now embeds the shellcode bytes
+into the implant binary. `go build` requires only the Go
+toolchain — the C/mingw32 dependency is maintainer-only,
+matching the pe_noconsolation / NoConsolation.x64.o pattern in
+runtime/pe. coffX86Loader.Load currently returns
+ErrCrossArchX86Unsupported (the orchestrator is step 2, queued);
+the embed-slot wiring is exercised by TestX86Loader_Embedded_*.
+
+# Step 0 tests
+
+  TestX86Loader_Embedded_NotEmpty                // bytes are linked in
+  TestX86Loader_Entry_PrologueLooksReasonable    // offset 0 = loader_entry
+  TestRor13_KnownAnswers                         // matches loader.c hashes
+  TestABIMagic_LittleEndianMatchesCSide          // 'BC86' byte order
+
+# Reverts
+
+Reverts the rundll32+tempfiles model from 9d7b15b (commits left
+in history; the architecture-change rationale is recorded in
+.dev/refactor-2026/bof-loader-revamp-plan.md).
+
 ### runtime/bof — slice 1.d phase B: fork-and-run orchestrator (2026-05-18)
 
 # What landed

@@ -1,94 +1,107 @@
-# `runtime/bof/internal/x86loader` — WoW64 BOF loader DLL
+# `runtime/bof/internal/x86loader` — WoW64 BOF loader shellcode
 
-32-bit (i386) DLL injected into a SysWOW64 helper process by the
-parent x64 implant so a Beacon Object File compiled for x86 can
-execute despite the implant being 64-bit. Slice 1.d phase C of the
+32-bit (i386) position-independent shellcode injected into a fresh
+WoW64 host by the parent x64 implant so a Beacon Object File
+compiled for x86 can execute despite the implant being 64-bit.
+Slice 1.d phase B-bis of the
 [BOF loader revamp](../../../../.dev/refactor-2026/bof-loader-revamp-plan.md).
 
-## Build
+## Build (maintainer only — `go build` does not need this)
 
 ```bash
 # From repo root. Uses host i686-w64-mingw32-gcc when present,
 # falls back to a Podman container (fedora:42 + mingw32-gcc) for
-# reproducibility on hosts that don't ship the toolchain.
+# reproducibility on hosts without the toolchain on PATH.
 bash scripts/build-bof-x86-loader.sh
 ```
 
-The build produces `bof_x86_loader.x86.dll` in this directory. The
-file is committed to the repo (same model as
-`runtime/pe/internal/noconsolation/NoConsolation.x64.o` and
-`kernel/driver/rtcore64/RTCore64.sys`) so operators don't need a
-toolchain at runtime; the script exists for rebuilds when the
-ABI bumps or a new feature lands.
+The build produces `bof_x86_loader.x86.bin` — a flat `.text` blob
+(no PE wrapper, no static imports, no `.rodata`) committed to the
+repo. Operators never invoke this script: `go build` (and
+`go build -tags=bof_x86_loader`) embeds the committed `.bin`
+verbatim via `go:embed`, so a Go-only toolchain is sufficient
+to build a fully-functional implant.
 
-## Architecture — rundll32-as-host
-
-The orchestrator never injects into a separate process. Instead it
-spawns `SysWOW64\rundll32.exe` against the loader DLL, and rundll32
-handles `LoadLibrary` + `GetProcAddress` + the calling convention:
+## Architecture — no-disk, no-LoadLibrary
 
 ```
-parent (x64 Go)                    helper (x86 rundll32)
-─────────────────                  ─────────────────────
-1. write .dll → %TEMP%\ld…dll
-2. write bof  → %TEMP%\b…bin
-3. write args → %TEMP%\a…bin
-4. CreateProcess(
-     SysWOW64\rundll32.exe,
-     "%TEMP%\ld…dll,BOFExec
-      v=1 bof=… args=… out=… err=…")
-                                    LoadLibrary(loader.dll)
-                                    GetProcAddress("BOFExec")
-                                    BOFExec(HWND, HINST, lpCmdLine, nCmdShow)
-                                      ├─ parse lpCmdLine tokens
-                                      ├─ read bof / args files
-                                      ├─ run BOF in-process       ← phase C step 1
-                                      ├─ write out / err files
-                                      └─ ExitProcess(BOF_EXIT_*)
-5. WaitForSingleObject(rundll32)
-6. ReadFile(out, err)
-7. RemoveAll(%TEMP%\…)
+parent (x64 Go)                      child (x86 WoW64 host)
+─────────────────                    ──────────────────────
+1. CreateProcess(SysWOW64\…\rundll32.exe, CREATE_SUSPENDED)
+   (rundll32 with no argv is a benign WoW64 placeholder —
+   never LoadLibrary's anything from us)
+
+2. VirtualAllocEx(child, _,  CODE_LEN, …, PAGE_READWRITE)
+   → write loader shellcode bytes
+   → VirtualProtectEx(PAGE_EXECUTE_READ)
+
+3. VirtualAllocEx(child, _, len(bof)+len(args)+out_cap+err_cap)
+   → write BOF .o, args, zero out/err buffers
+
+4. VirtualAllocEx(child, _, sizeof(loader_params_t))
+   → write magic + version + all four buffer addresses
+
+5. CreateRemoteThread(child, _, _,
+       lpStartAddress=<loader CODE region offset 0>,
+       lpParameter=<params region address>, …)
+
+                                      loader_entry(params):
+                                        validate magic+version
+                                        walk PEB → kernel32 base
+                                        resolve kernel32 by ROR13
+                                        run BOF in-process       ← step 1
+                                        write out/err buffers
+                                        params.status = DONE
+                                        ExitThread(DONE)
+
+6. WaitForSingleObject(thread, timeout)
+7. ReadProcessMemory(params)         → status + lengths
+8. ReadProcessMemory(out, err)       → captured BOF output
+9. TerminateProcess(child)
+10. CloseHandle(thread, process)
 ```
+
+No file lands on disk in the BOF execution path. The implant
+binary ships the shellcode as embedded bytes; the only host
+artefact is the rundll32 process, which lives for the duration
+of one BOF call.
 
 ## ABI (`abi.h` ↔ `runtime/bof/x86fork_windows.go`)
 
-The wire format is the single ASCII line passed to rundll32 as
-the post-comma argv, plus the helper's exit code as the structured
-status word. No shared memory, no control block.
+The parent (Go) and the loader (C) communicate through a single
+`loader_params_t` struct written into the child's IO region. The
+struct is mirrored byte-for-byte on both sides — any change in
+`abi.h` MUST land in the Go mirror in the same commit, with a
+`LOADER_ABI_VERSION` bump if the change is wire-incompatible.
 
-| Token | Direction | Purpose |
+| Field | Direction | Purpose |
 |---|---|---|
-| `v=1`           | parent → loader | Protocol version. Mismatch → `BOF_EXIT_BAD_VERSION`. |
-| `bof=<path>`    | parent → loader | Temp file with the BOF `.o` bytes. |
-| `args=<path>`   | parent → loader | Temp file with the BeaconDataPack blob (may be 0-byte). |
-| `out=<path>`    | parent ← loader | Temp file the loader truncates + fills with BOF output. |
-| `err=<path>`    | parent ← loader | Temp file the loader truncates + fills with BeaconError*. |
-| `spawnto=<path>` | parent → loader | Optional NUL-terminated UTF-8 SpawnTo (Phase C step 1). |
-| `user-data=<path>` | parent → loader | Optional BeaconGetCustomUserData blob (Phase C step 1). |
-| `entry=<symbol>` | parent → loader | Optional explicit entry symbol (default `"go"`). |
+| `magic`                       | parent → loader | `0x36384342` (`'BC86'`). Refuses corrupted blocks. |
+| `version`                     | parent → loader | `1`. Loader writes `LOADER_STATUS_ABI_MISMATCH` on mismatch. |
+| `status`                      | loader → parent | One of the `LOADER_STATUS_*` codes; populated before ExitThread. |
+| `error_code`                  | loader → parent | SEH exception code / GetLastError on failure paths. |
+| `bof_addr` / `bof_len`        | parent → loader | Remote address + length of the BOF `.o` bytes. |
+| `args_addr` / `args_len`      | parent → loader | Remote address + length of the `BeaconDataPack` blob. |
+| `user_data_addr` / `_len`     | parent → loader | `BeaconGetCustomUserData` blob (0 = none). |
+| `spawn_to_addr`               | parent → loader | NUL-terminated UTF-8 SpawnTo path (0 = none). |
+| `out_addr` / `out_cap` / `_len` | parent allocates; loader fills `_len` | BOF stdout. |
+| `err_addr` / `err_cap` / `_len` | parent allocates; loader fills `_len` | `BeaconErrorD/DD/NA`. |
+| `reserved[12]`                | — | Fixed-size tail for forward-compat. |
 
-Helper exit codes: see `bof_exit_t` in `abi.h`. `0` = DONE; non-zero
-maps to a structured Go error via `classifyX86Exit`.
+## Symbol resolution — ROR13 against kernel32
 
-## Threat model + opsec
+The loader has zero static imports. At entry it walks the WoW64
+PEB (`fs:[0x30]` → `Ldr` → `InMemoryOrderModuleList`) to find
+kernel32's base address, then hashes each export name with the
+same 13-bit-right-rotate accumulator used by
+`win/api.ResolveByHash`. Pre-computed hashes in `loader.c` match
+the ones produced by the Go-side test
+(`TestRor13_KnownAnswers` in `x86fork_present_windows_test.go`).
 
-The default path produces three artefacts: a 5 KB i386 DLL plus
-two transient `.bin` files under `%TEMP%`. The DLL lives only for
-the rundll32 lifetime — the orchestrator `os.RemoveAll`s the temp
-dir on Execute return. The `rundll32 <dll>,BOFExec` command line
-itself is the most visible IOC (sysmon event 1, etlw process
-create).
+## Step roadmap
 
-Phase D (queued) will replace the rundll32 host with a reflective
-injector — no disk artefact, no rundll32 process tree, no
-LoadLibraryA API trail. The DLL is reflective-friendly because it
-has no static imports beyond `kernel32` (resolved manually by the
-reflective stub).
-
-## See also
-
-- `abi.h` — wire format definition (source of truth).
-- `loader.c` — current skeleton; replace with the full parser in
-  phase C step 1.
-- `scripts/build-bof-x86-loader.sh` — build invocation.
-- [BOF loader revamp plan](../../../../.dev/refactor-2026/bof-loader-revamp-plan.md).
+| Step | Status | Scope |
+|---|---|---|
+| 0 | **closed (this commit)** | Skeleton: PEB walk, ROR13, ExitThread resolution, status = DONE. |
+| 1 | queued | Real loader: COFF parser + IMAGE_REL_I386_* relocs + Beacon API impl writing into the out/err buffers. |
+| 2 | queued | Goroutine + Go-side orchestrator (VirtualAllocEx × 3 + WriteProcessMemory + CreateRemoteThread + ReadProcessMemory). |

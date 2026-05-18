@@ -110,32 +110,72 @@ slices:
           wraps the same sentinel instead of leaking the raw machine
           hex code. Tests pin both Run() and Load() paths.
       - phase: B
-        title: fork-and-run orchestrator (Go side)
-        status: closed
-        commits:
-          - HEAD  # this commit
-        deliverable: |
-          rundll32-as-host orchestrator: writes the loader DLL +
-          the BOF + args to four %TEMP% files, spawns
-          SysWOW64\rundll32.exe with "loader.dll,BOFExec <proto>"
-          as argv, waits up to 30s (configurable via
-          SetTimeout), reads back the out/err files, classifies
-          rundll32's exit code as a structured Go error. Gated
-          behind //go:build bof_x86_loader; default builds keep
-          the slice 1.d phase A sentinel behaviour.
-        architecture_change: |
-          Original plan: CreateProcess suspended + VirtualAllocEx
-          + remote-thread injection of BOFExec at a parent-resolved
-          address. Switched to rundll32-as-host during phase B
-          design because rundll32 handles LoadLibrary +
-          GetProcAddress + the calling convention for us — saves
-          ~400 LOC of WoW64 PEB walking + remote PE export
-          parsing. Phase D will swap rundll32 for a reflective
-          injector once the value of the lower-IOC path
-          justifies the implementation cost.
-      - phase: C
-        title: x86 loader DLL (C, mingw32)
+        title: fork-and-run orchestrator — design pivots
+        status: reverted-in-favour-of-B-bis
+        history: |
+          v1 plan (rundll32 + temp files): shipped briefly in
+          9d7b15b. Rejected by the user 2026-05-18: violates
+          the repo's "no disk artefact" rule (4 temp files per
+          Execute call) and uses rundll32 to LoadLibrary the
+          loader, leaving an obvious IOC trail. Reverted /
+          superseded by phase B-bis.
+      - phase: B-bis
+        title: PIC shellcode + cross-process injection (no disk, no LoadLibrary)
         status: in-progress (step 0 closed)
+        steps:
+          - step: 0
+            title: C shellcode skeleton + flat .bin build pipeline
+            status: closed
+            commits:
+              - HEAD  # this commit
+            deliverable: |
+              loader.c rewritten as position-independent x86
+              shellcode: walks PEB (fs:[0x30]) to find kernel32,
+              resolves ExitThread via ROR13 (matches
+              win/api.ResolveByHash), validates the params block
+              magic + version, sets status = DONE, ExitThread.
+              No PE wrapper, no static imports, no .rodata.
+              Build script emits a flat .text blob via
+              i686-w64-mingw32-objcopy; committed .bin is the
+              source of truth for `go build`. abi.h holds the
+              loader_params_t wire format; Go-side has
+              the matching status / magic constants. 320-byte
+              skeleton verified to disassemble correctly
+              (force_align_arg_pointer prologue at offset 0,
+              `mov eax, fs:0x30` for PEB load).
+          - step: 1
+            title: real loader — COFF parser + Beacon API impl
+            status: queued
+            scope: |
+              Port the loader half of runtime/bof/bof_windows.go
+              to i386 inside the shellcode: parse + VirtualAlloc
+              + IMAGE_REL_I386_* relocations + Beacon API stubs
+              writing into the params block's out/err buffers.
+              All kernel32 calls resolved through the same
+              PEB-walk-by-hash primitive.
+          - step: 2
+            title: Go-side orchestrator
+            status: queued
+            scope: |
+              CreateProcess(SysWOW64\rundll32.exe, CREATE_SUSPENDED)
+              + 3 × VirtualAllocEx (code RX, IO RW, params RW)
+              + WriteProcessMemory + CreateRemoteThread targeting
+              offset 0 of the code region + WaitForSingleObject
+              + ReadProcessMemory of out/err/status +
+              TerminateProcess. Zero disk writes in the BOF
+              execution path.
+      - phase: C
+        title: x86 loader DLL (C, mingw32) — SUPERSEDED by B-bis
+        status: superseded-2026-05-18
+        note: |
+          The DLL+rundll32 path was the original phase B+C. After
+          the design pivot to PIC shellcode + cross-process
+          injection (phase B-bis), the loader is no longer a
+          DLL and is no longer reflective-DLL-loaded — it's a
+          flat shellcode blob. The original phase C entry is
+          kept for historical context; everything has moved to
+          phase B-bis above.
+        legacy_steps_for_history:
         steps:
           - step: 0
             title: ABI design + build pipeline + skeleton DLL
