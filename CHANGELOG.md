@@ -7,6 +7,28 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — slice 1.d step 1.h: Inject + Spawn family (2026-05-18)
+
+4 new Beacon API exports — the process-control surface every
+post-ex CS BOF expects:
+
+  BeaconSpawnTemporaryProcess   // CreateProcessA(SpawnTo, CREATE_SUSPENDED)
+  BeaconInjectProcess           // VirtualAllocEx + WriteProcessMemory
+                                //   + CreateRemoteThread
+  BeaconInjectTemporaryProcess  // Inject + ResumeThread on pInfo.hThread
+  BeaconCleanupProcess          // TerminateProcess + CloseHandle pair
+
+# kernel32 added to kapi
+
+CreateProcessA, VirtualAllocEx, WriteProcessMemory,
+CreateRemoteThread, TerminateProcess, ResumeThread. All __stdcall,
+no forwarder traps on the SKUs sampled.
+
+# Fixture + test (10/10 VM PASS)
+
+  testdata/inject_spawn.x86.{c,o}      // Spawn → cleanup round-trip
+  TestX86BOF_Execute_InjectSpawn       PASS
+
 ### runtime/bof — slice 1.d step 1.g: printf% expansion (2026-05-18)
 
 BeaconPrintf and BeaconFormatPrintf now expand %d / %i / %u / %x /

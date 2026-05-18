@@ -323,6 +323,34 @@ func TestX86BOF_Execute_PrintfSpecifiers(t *testing.T) {
 	assert.Contains(t, out, "pct=%",            "%% emits literal percent")
 }
 
+// TestX86BOF_Execute_InjectSpawn exercises BeaconSpawnTemporaryProcess
+// + BeaconCleanupProcess. The fixture spawns its configured SpawnTo
+// suspended, captures the PID, then tears the child down. The
+// orchestrator surfaces the BOF's stdout — we assert the pid is
+// non-zero (proves CreateProcessA actually launched something).
+//
+// SpawnTo is set to SysWOW64\rundll32.exe — a 32-bit Windows
+// process that's safe to spawn-and-kill repeatedly.
+func TestX86BOF_Execute_InjectSpawn(t *testing.T) {
+	if _, err := os.Stat(defaultX86Host); err != nil {
+		t.Skipf("WoW64 host %s missing: %v", defaultX86Host, err)
+	}
+	bof, err := os.ReadFile("testdata/inject_spawn.x86.o")
+	require.NoError(t, err, "inject_spawn.x86.o fixture missing")
+
+	res, err := Run(context.Background(), Spec{
+		Bytes:   bof,
+		SpawnTo: `C:\Windows\SysWOW64\rundll32.exe`,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	out := string(res.Output)
+	assert.Contains(t, out, "spawn=ok pid=",
+		"BeaconSpawnTemporaryProcess must surface a non-zero PID")
+	assert.Contains(t, out, "cleanup=done",
+		"BeaconCleanupProcess must complete cleanly")
+}
+
 // TestX86BOF_Execute_BadHost_FailsSpawn exercises the
 // CreateProcess failure path. A bogus SpawnTo must surface a
 // "spawn rundll32" error rather than crash. Deterministic — no

