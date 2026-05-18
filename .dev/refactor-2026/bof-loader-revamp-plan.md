@@ -48,11 +48,30 @@ slices:
     followups_runtime_bof:
       # Surfaced by the simplify/efficiency review of 1.c.9 — these are
       # upstream improvements that benefit every BOF consumer, not just pe.
-      - bof.Args.Pack does a defensive copy of bytes.Buffer.Bytes() that
-        doubles peak memory of the packed payload (pe_bytes can be MB-scale)
-      - bof.Run is Load → Execute coupled; runtime/pe re-parses the
-        No-Consolation COFF on every call. Consider a bof.Loaded cache
-        keyed on &bytes[0] so Execute(args) can run alone
+      - status: closed
+        item: bof.Args.Pack double-copy
+        commit: 4636bbf+  # next commit after the runtime/bof CS-SA suite
+        notes: |
+          Args refactored from bytes.Buffer to a chunk list. AddBytes
+          now references the caller's slice (no copy); Pack does the
+          single concat into a fresh output. Peak memory dropped from
+          3x peBytes to 2x. TestArgsAddBytes_ReferenceContract pins
+          the new behaviour. Pack-isolation contract preserved.
+      - status: deferred to a dedicated slice
+        item: bof.Run Load/Execute caching
+        notes: |
+          Investigation showed the reviewer's premise was incomplete.
+          bof.Load only validates the COFF header (5 lines); the real
+          work — parse sections, layout, VirtualAlloc, relocations,
+          VirtualProtect — all lives in Execute, which `defer
+          VirtualFree`s the mapping on every return. Caching *BOF at
+          runtime/pe saves ~nothing; the real win requires splitting
+          Execute into prepare() (alloc + reloc, idempotent) + run()
+          (output reset + entry call) with explicit Close() / finalizer
+          for VirtualFree. Non-trivial semantic decisions involved (BOFs
+          with .data globals like No-Consolation's libs_loaded cache
+          BENEFIT from shared state; stateless BOFs like hello_beacon
+          need .data/.bss zeroed each run). Slice 6 candidate.
     sub_items:
       - 1.c.1 string-obfuscate Beacon import names
       - 1.c.2 bump vararg capture from 6 to 10

@@ -7,6 +7,36 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — Args memory-efficiency fix (2026-05-18)
+
+`runtime/bof.Args` refactored from `bytes.Buffer` to an
+internal chunk list. `AddBytes` now references the caller's
+slice (no copy); `Pack` does the single concat into a fresh
+output. Peak memory for a payload carrying a multi-MB blob
+drops from 3x (caller + Buffer + Pack output) to 2x (caller
++ Pack output).
+
+The matters for `runtime/pe.RunExecutable` which packs the PE
+bytes inline — a 5 MB PE previously consumed 15 MB peak; now
+10 MB. Pack-isolation contract preserved (each call returns
+a fresh slice that callers can mutate safely).
+
+New test `TestArgsAddBytes_ReferenceContract` pins the no-copy
+behaviour explicitly so the optimisation isn't accidentally
+reverted by a future "defensive copy" reflex.
+
+Investigation note: the simplify-agent's twin recommendation
+to add a `bof.Run` Load/Execute cache turned out to be based
+on a misread of the loader — `bof.Load` only validates the
+COFF header, while parse + alloc + reloc all live in
+`Execute` which `defer VirtualFree`s the mapping each return.
+Caching `*BOF` saves ~nothing. Real win requires splitting
+`Execute` (`prepare()` + `run()` with explicit `Close()`),
+deferred to a dedicated slice — semantic decisions involved
+(stateful vs stateless BOFs disagree on whether .data should
+persist across calls). Notes in
+`.dev/refactor-2026/bof-loader-revamp-plan.md`.
+
 ### runtime/bof — Beacon API full coverage + admin CS-SA suite (2026-05-18)
 
 # Custom BOFs exercising every Beacon API symbol

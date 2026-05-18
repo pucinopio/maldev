@@ -69,13 +69,29 @@ func (o *beaconOutput) Bytes() []byte {
 // Args packs arguments into the format expected by the BOF entry point.
 // BOF loaders expect a flat buffer where each argument is prefixed with
 // its length — this mirrors the Cobalt Strike BeaconDataParse convention.
+//
+// Internally the struct keeps a list of byte chunks instead of a
+// bytes.Buffer. AddBytes can then reference the caller's slice
+// directly without copying; the single concatenation pass happens
+// at Pack time. Matters when the payload carries large binary
+// blobs (e.g. runtime/pe packs a multi-MB PE inline) — the prior
+// bytes.Buffer-based design copied the blob once into the buffer
+// and again into Pack's output, tripling peak memory.
 type Args struct {
-	buf bytes.Buffer
+	chunks [][]byte
+	size   int
 }
 
 // NewArgs allocates an empty argument packer.
 func NewArgs() *Args {
 	return &Args{}
+}
+
+// append registers a chunk in the cumulative buffer. Centralises
+// the size bookkeeping so every Add* helper stays one-liner-ish.
+func (a *Args) append(b []byte) {
+	a.chunks = append(a.chunks, b)
+	a.size += len(b)
 }
 
 // Wire format: little-endian to match the CS canonical (TrustedSec
@@ -85,27 +101,26 @@ func NewArgs() *Args {
 
 // AddInt appends a 32-bit signed integer in little-endian byte order.
 func (a *Args) AddInt(v int32) {
-	var b [4]byte
-	binary.LittleEndian.PutUint32(b[:], uint32(v))
-	a.buf.Write(b[:])
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, uint32(v))
+	a.append(b)
 }
 
 // AddShort appends a 16-bit signed integer in little-endian byte order.
 func (a *Args) AddShort(v int16) {
-	var b [2]byte
-	binary.LittleEndian.PutUint16(b[:], uint16(v))
-	a.buf.Write(b[:])
+	b := make([]byte, 2)
+	binary.LittleEndian.PutUint16(b, uint16(v))
+	a.append(b)
 }
 
 // AddString appends a null-terminated string with a 4-byte little-endian
 // length prefix. The length includes the null terminator.
 func (a *Args) AddString(s string) {
-	length := uint32(len(s) + 1) // +1 for the null terminator
-	var lb [4]byte
-	binary.LittleEndian.PutUint32(lb[:], length)
-	a.buf.Write(lb[:])
-	a.buf.WriteString(s)
-	a.buf.WriteByte(0)
+	body := make([]byte, 4+len(s)+1)
+	binary.LittleEndian.PutUint32(body[:4], uint32(len(s)+1))
+	copy(body[4:], s)
+	// body[4+len(s)] is already zero from make — that's the NUL.
+	a.append(body)
 }
 
 // AddWideString appends a UTF-16LE-encoded NUL-terminated string with a
@@ -117,28 +132,40 @@ func (a *Args) AddString(s string) {
 // directly-castable UTF-16LE blob.
 func (a *Args) AddWideString(s string) {
 	utf16 := windows.StringToUTF16(s) // includes trailing NUL
-	wideBytes := make([]byte, len(utf16)*2)
+	body := make([]byte, 4+len(utf16)*2)
+	binary.LittleEndian.PutUint32(body[:4], uint32(len(utf16)*2))
 	for i, u := range utf16 {
-		binary.LittleEndian.PutUint16(wideBytes[i*2:], u)
+		binary.LittleEndian.PutUint16(body[4+i*2:], u)
 	}
-	var lb [4]byte
-	binary.LittleEndian.PutUint32(lb[:], uint32(len(wideBytes)))
-	a.buf.Write(lb[:])
-	a.buf.Write(wideBytes)
+	a.append(body)
 }
 
-// AddBytes appends a byte slice with a 4-byte little-endian length prefix.
+// AddBytes appends a byte slice with a 4-byte little-endian length
+// prefix. The data slice is referenced, not copied — callers
+// must keep it stable until Pack runs. Saves a buffer-side copy
+// of multi-MB blobs (e.g. PE bytes packed by runtime/pe).
 func (a *Args) AddBytes(data []byte) {
-	var lb [4]byte
-	binary.LittleEndian.PutUint32(lb[:], uint32(len(data)))
-	a.buf.Write(lb[:])
-	a.buf.Write(data)
+	hdr := make([]byte, 4)
+	binary.LittleEndian.PutUint32(hdr, uint32(len(data)))
+	a.append(hdr)
+	a.append(data)
 }
 
-// Pack returns the serialised argument buffer ready for BOF.Execute.
+// Pack returns the serialised argument buffer ready for
+// BOF.Execute. Each call materialises a fresh slice — callers
+// can safely mutate the returned bytes without affecting
+// subsequent Pack calls, matching the original Args contract.
+//
+// For a payload that carried a multi-MB AddBytes blob, the
+// chunk-list design means peak memory now is
+// `len(blob) (caller) + len(packed) (output) = 2x blob` rather
+// than the previous 3x (caller + bytes.Buffer + Pack output).
 func (a *Args) Pack() []byte {
-	b := a.buf.Bytes()
-	out := make([]byte, len(b))
-	copy(out, b)
+	out := make([]byte, a.size)
+	off := 0
+	for _, c := range a.chunks {
+		copy(out[off:], c)
+		off += len(c)
+	}
 	return out
 }

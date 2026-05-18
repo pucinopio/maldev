@@ -116,6 +116,21 @@ func TestArgsPackBytes(t *testing.T) {
 	require.Equal(t, data, packed[4:])
 }
 
+// TestArgsAddBytes_ReferenceContract pins the no-copy behaviour
+// of AddBytes: the data slice is referenced, not snapshotted, so
+// caller mutations between AddBytes and Pack land in the packed
+// output. Documented behaviour — saves an allocation on multi-MB
+// payloads (runtime/pe PE bytes).
+func TestArgsAddBytes_ReferenceContract(t *testing.T) {
+	data := []byte{0x01, 0x02, 0x03, 0x04}
+	args := NewArgs()
+	args.AddBytes(data)
+	data[0] = 0xFF // mutate AFTER AddBytes, BEFORE Pack
+	packed := args.Pack()
+	require.Equal(t, byte(0xFF), packed[4],
+		"AddBytes must reference (not copy) — caller's mutation should land in Pack output")
+}
+
 func TestArgsPackBytesEmpty(t *testing.T) {
 	args := NewArgs()
 	args.AddBytes([]byte{})
