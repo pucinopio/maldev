@@ -56,6 +56,21 @@ func runCSSABOF(t *testing.T, name string, args []byte) string {
 	return string(out)
 }
 
+// assertContainsAny fails the test when none of `wants` appears in
+// `out`. Most CS-SA tests assert on one of several plausible header
+// strings (locale-independent, version-independent) — collapsing
+// the boolean chain into one helper keeps each test's expectation
+// in a single line.
+func assertContainsAny(t *testing.T, bofName, out string, wants ...string) {
+	t.Helper()
+	for _, w := range wants {
+		if strings.Contains(out, w) {
+			return
+		}
+	}
+	t.Errorf("%s BOF output missing any of %q\noutput:\n%s", bofName, wants, out)
+}
+
 // TestCSSA_Env exercises env.x64.o — the simplest of the suite,
 // no args. The BOF reads the process environment block and prints
 // each KEY=VALUE line. Every Windows process has at least
@@ -92,22 +107,25 @@ func TestCSSA_Dir(t *testing.T) {
 	}
 }
 
-// TestCSSA_Ipconfig is skipped pending investigation of a crash
-// observed in msvcrt during GetAdaptersAddresses → adapter walk.
-// All imports resolve (verified via debug-bof-imports), but the
-// BOF dereferences something inside the returned IP_ADAPTER_
-// ADDRESSES chain that doesn't survive cleanly in our in-process
-// context. env / dir / listmods cover the loader's surface
-// (PEB walk, dollar-form imports, .data section writes, args
-// packing) so this one being skipped doesn't leave a coverage
-// hole — it would just exercise IPHLPAPI specifically.
+// TestCSSA_Ipconfig exercises ipconfig.x64.o — pulls adapter info
+// via IPHLPAPI$GetAdaptersAddresses + IPHLPAPI$GetNetworkParams.
+// The output format mirrors Windows' own ipconfig, so asserting
+// on "Host Name" or "adapter" works locale-independently (the
+// BOF emits English headers regardless of host locale).
 //
-// Picking this up: the read AV addr is small (~0x7a6), looks
-// like a NULL+offset dereference. Likely an IP_ADAPTER_ADDRESSES
-// struct field accessed before validation, or a CS-canonical
-// alignment assumption that we don't preserve.
+// This is the canary for the all-sections relocation fix: the
+// pre-fix loader only applied .text relocations, but ipconfig
+// ships a 239-entry .rdata pointer table (string lookup arrays
+// for adapter type / node type / DUID format) that needs ADDR64
+// rebasing. Without it the BOF dereferences file-relative
+// offsets as pointers and segfaults.
 func TestCSSA_Ipconfig(t *testing.T) {
-	t.Skip("ipconfig BOF crashes in msvcrt during adapter walk — see test comment for triage notes")
+	out := runCSSABOF(t, "ipconfig", nil)
+	// "Host Name" appears in the global section header; "Adapter"
+	// appears once per network interface. Asserting on either
+	// covers minimal-network VMs (Host Name always present) and
+	// loaded boxes alike.
+	assertContainsAny(t, "ipconfig", out, "Host Name", "Adapter")
 }
 
 // TestCSSA_Listmods exercises listmods.x64.o — walks loaded
@@ -122,4 +140,71 @@ func TestCSSA_Listmods(t *testing.T) {
 	if !strings.Contains(strings.ToLower(out), "ntdll.dll") {
 		t.Errorf("listmods BOF output missing 'ntdll.dll'\noutput:\n%s", out)
 	}
+}
+
+// TestCSSA_Arp exercises arp.x64.o — ARP cache dump via
+// IPHLPAPI$GetIpNetTable. Each adapter section starts with the
+// upstream's header line (which carries the typo "Inteface" —
+// preserved upstream, asserting on it is more reliable than
+// hoping for a correction). "Internet Address" appears on the
+// table-column row and is the more durable fallback.
+func TestCSSA_Arp(t *testing.T) {
+	out := runCSSABOF(t, "arp", nil)
+	assertContainsAny(t, "arp", out, "Internet Address", "Inteface")
+}
+
+// TestCSSA_Routeprint exercises routeprint.x64.o — routing table
+// dump via IPHLPAPI$GetIpForwardTable. Every Windows host has at
+// least the loopback route (127.0.0.0/8) and a default route
+// (0.0.0.0); asserting on one of them covers minimal-network VMs.
+func TestCSSA_Routeprint(t *testing.T) {
+	out := runCSSABOF(t, "routeprint", nil)
+	assertContainsAny(t, "routeprint", out, "0.0.0.0", "127.0.0.")
+}
+
+// TestCSSA_Listdns exercises listdns.x64.o — DNS resolver cache
+// dump via DNSAPI$DnsGetCacheDataTable. Two valid outcomes:
+// "Cache record:" lines on a populated host, or "No results
+// found" on a fresh-boot VM whose resolver cache is empty.
+// Both witness that DNSAPI was loaded + invoked successfully —
+// what we care about for loader validation.
+func TestCSSA_Listdns(t *testing.T) {
+	out := runCSSABOF(t, "listdns", nil)
+	assertContainsAny(t, "listdns", out, "Cache record", "No results")
+}
+
+// TestCSSA_Netstat exercises netstat.x64.o — TCP/UDP tables via
+// IPHLPAPI$GetExtendedTcpTable / GetExtendedUdpTable. Asserting on
+// "Proto" because it's the column header the BOF always emits
+// regardless of how many sockets are open.
+func TestCSSA_Netstat(t *testing.T) {
+	a := NewArgs()
+	a.AddInt(0) // 0 selects both TCP and UDP per upstream contract
+	out := runCSSABOF(t, "netstat", a.Pack())
+	assertContainsAny(t, "netstat", out, "Proto")
+}
+
+// TestCSSA_Locale exercises locale.x64.o — system locale dump via
+// KERNEL32$GetLocaleInfoEx. Case-insensitive "locale" substring
+// match keeps the test locale-independent (the BOF prints the
+// English label even on fr-FR / ja-JP hosts).
+func TestCSSA_Locale(t *testing.T) {
+	out := strings.ToLower(runCSSABOF(t, "locale", nil))
+	assertContainsAny(t, "locale", out, "locale")
+}
+
+// TestCSSA_Netuptime exercises netuptime.x64.o — server uptime
+// via NETAPI32$NetStatisticsGet. Takes a wide-string servername
+// (empty = local). The BOF prints "ServerName:" + "Boot time:"
+// lines; asserting on either keeps the test resilient across
+// VM snapshots.
+//
+// Also exercises the AddWideString fix from v0.152.0 (byte-length
+// prefix) — pre-fix the empty wstring would frame as 1 wchar
+// instead of 2 bytes, mis-cursoring the parser.
+func TestCSSA_Netuptime(t *testing.T) {
+	a := NewArgs()
+	a.AddWideString("") // empty = local server
+	out := runCSSABOF(t, "netuptime", a.Pack())
+	assertContainsAny(t, "netuptime", out, "ServerName", "Boot time")
 }

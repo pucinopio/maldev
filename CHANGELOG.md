@@ -7,6 +7,49 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — public CS-SA-BOF E2E suite + all-sections relocation (2026-05-18)
+
+**Loader fix**: `runtime/bof.Load` now applies relocations for
+**every section that carries them**, not just `.text`. The
+original behaviour was a hidden assumption — fine for hand-
+written BOFs whose .rdata holds only string literals
+(reachable via REL32 from .text), but broken for any real-world
+BOF that ships an ADDR64 pointer table in .rdata. ipconfig.x64.o
+from TrustedSec ships 239 ADDR64 relocations in .rdata alone
+(switch jump tables for adapter type / node type / DUID format);
+pre-fix the BOF dereferenced file-relative offsets as in-memory
+pointers and segfaulted. forward-compatible for .pdata SEH
+unwind once we honour the chain.
+
+**E2E suite expanded to 10 CS-SA-BOFs.** `runtime/bof/cs_sa_e2e_
+windows_test.go` loads battle-tested public BOFs from
+TrustedSec's CS-Situational-Awareness-BOF corpus. Each
+exercises a distinct slice of the loader:
+
+| BOF | Surface |
+|---|---|
+| `env` | KERNEL32 env-block walk, no args |
+| `dir` | filesystem + (string, short) args |
+| `ipconfig` | IPHLPAPI + .rdata reloc canary |
+| `listmods` | PEB Ldr walk, int arg |
+| `arp` | IPHLPAPI$GetIpNetTable |
+| `routeprint` | IPHLPAPI$GetIpForwardTable |
+| `listdns` | DNSAPI$DnsGetCacheDataTable |
+| `netstat` | TCP/UDP table + int arg |
+| `locale` | KERNEL32 locale info |
+| `netuptime` | NETAPI32 + wide-string arg (empty=local) |
+
+10/10 PASS on host + Windows10 VM. Together they exercise
+PEB-walk on six modules (kernel32, ntdll, msvcrt, iphlpapi,
+netapi32, dnsapi), export forwarders, all args shapes, and the
+new multi-section relocation path.
+
+**Fetch-not-vendor**: scripts/fetch-cs-sa-bofs.sh pins
+`trustedsec/CS-Situational-Awareness-BOF @ ee9459c` and copies
+the `.o` files into `runtime/bof/testdata/cs-sa/` (git-ignored).
+CS-SA-BOF is GPL-2; maldev is MIT — committing GPL binaries
+would mix licences even for test fixtures.
+
 ### runtime/pe — in-process PE / DLL execution via No-Consolation (2026-05-18)
 
 **New package** `runtime/pe`. Wraps the MIT-licensed Fortra

@@ -90,12 +90,23 @@ The curated subset is:
 
 | BOF | Surface exercised |
 |---|---|
-| `dir.x64.o` | filesystem enum + args parsing + `MSVCRT$strlen/strcat/_strnicmp/strstr` |
+| `dir.x64.o` | filesystem enum + (string, short) args + `MSVCRT$strlen/strcat/_strnicmp/strstr` |
 | `env.x64.o` | `KERNEL32$GetEnvironmentStrings` + `lstrlenA`, no args |
-| `ipconfig.x64.o` | `IPHLPAPI$GetAdaptersInfo`, exercises non-kernel32 PEB-walk + forwarders |
-| `listmods.x64.o` | loaded-module enum, walks PEB Ldr list |
+| `ipconfig.x64.o` | `IPHLPAPI$GetAdaptersAddresses` + .rdata ADDR64 pointer-table relocs (239 entries) |
+| `listmods.x64.o` | loaded-module enum, walks PEB Ldr list, int arg |
+| `arp.x64.o` | `IPHLPAPI$GetIpNetTable` — ARP cache, no args |
+| `routeprint.x64.o` | `IPHLPAPI$GetIpForwardTable` — routing table |
+| `listdns.x64.o` | `DNSAPI$DnsGetCacheDataTable` — DNS resolver cache |
+| `netstat.x64.o` | `IPHLPAPI$GetExtendedTcpTable` / `Udp` — TCP/UDP tables, int arg |
+| `locale.x64.o` | `KERNEL32$GetLocaleInfoEx` — system locale dump |
+| `netuptime.x64.o` | `NETAPI32$NetStatisticsGet` — server uptime, wstring arg |
 
-Tests live in `runtime/bof/cs_sa_e2e_windows_test.go`.
+Tests live in `runtime/bof/cs_sa_e2e_windows_test.go`. Together
+the 10-BOF suite exercises PEB-walk on six modules (kernel32,
+ntdll, msvcrt, iphlpapi, netapi32, dnsapi), export forwarders
+(`HeapAlloc` → `ntdll!RtlAllocateHeap` on Win 8+), all args
+shapes (none/int/short/string/wstring), and the multi-section
+relocation path (`.rdata` pointer tables in `ipconfig`).
 
 ## Test wiring
 
@@ -106,10 +117,18 @@ Each `.o` is committed to `testutil/` next to the existing
 
 ## Status
 
-- [ ] `hello_beacon.c` source written, .o build pending
-- [ ] `parse_args.c` source written, .o build pending
-- [ ] `loadlib.c` source written, .o build pending
-- [ ] Tests authored once .o files land
+- [x] In-tree examples (`hello_beacon.c` / `parse_args.c` /
+  `loadlib.c` / `realworld_calls.c`) — `.o` committed, tests
+  pass on host + VM.
+- [x] CS-SA-BOF subset (10 BOFs) — fetch-on-demand, all 10
+  PASS on host + Windows10 VM as of 2026-05-18.
+
+Pickup ideas (no current owner):
+
+- Add x86 variants (`.x86.o`) to exercise the future
+  `BeaconGetSpawnTo(BOOL bX86)` operator path.
+- Cover the SE-required BOFs (`netuser`, `netshares /asAdmin`)
+  in a separate intrusive suite gated by `MALDEV_INTRUSIVE=1`.
 
 This file unblocks future contributors: once mingw is available,
 running the build commands above produces the missing artefacts

@@ -396,16 +396,27 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 		importSlots[name] = slotAddr
 	}
 
-	// 6. Apply relocations for .text. In-section symbols resolve via
-	//    sectionBase[sym.SectionNumber]; externals consult importSlots.
+	// 6. Apply relocations for every section that has them. Originally
+	//    .text-only; broadened after CS-SA-BOF builds (ipconfig.x64.o
+	//    specifically) shipped large ADDR64 pointer tables in .rdata
+	//    that the BOF dereferences at runtime. Without rebasing those,
+	//    the BOF reads from file-relative offsets interpreted as
+	//    in-memory pointers and segfaults on the first deref. .pdata
+	//    relocations matter once we start honouring SEH unwind chains;
+	//    applying them now is forward-compatible.
 	textBase, ok := sectionBase[textIdx+1]
 	if !ok {
 		return nil, fmt.Errorf(".text section had no raw data")
 	}
-	textInMem := unsafe.Slice((*byte)(unsafe.Pointer(textBase)), int(textSec.SizeOfRawData))
-	if textSec.NumberOfRelocations > 0 {
-		if err := b.applyRelocations(textInMem, textBase, sectionBase, textSec, hdr, importSlots); err != nil {
-			return nil, fmt.Errorf("relocation failed: %w", err)
+	for _, l := range laid {
+		sec := sections[l.idx-1]
+		if sec.NumberOfRelocations == 0 {
+			continue
+		}
+		secBase := sectionBase[l.idx]
+		secMem := unsafe.Slice((*byte)(unsafe.Pointer(secBase)), int(sec.SizeOfRawData))
+		if err := b.applyRelocations(secMem, secBase, sectionBase, sec, hdr, importSlots); err != nil {
+			return nil, fmt.Errorf("relocation (section %d) failed: %w", l.idx, err)
 		}
 	}
 

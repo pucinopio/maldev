@@ -11,17 +11,28 @@
 # the .o files land in a .gitignored directory and never reach
 # the maldev distribution. Tests skip when the fixtures are absent.
 #
-# # Curated subset (4 BOFs)
+# # Curated subset (10 BOFs)
 #
-# - dir       — filesystem enum + args parsing + MSVCRT$strlen/strcat/etc.
-# - env       — KERNEL32$GetEnvironmentStrings, no args
-# - ipconfig  — IPHLPAPI$GetAdaptersInfo network surface
-# - listmods  — loaded-module enum, walks PEB / kernel32 modules
+# Core 4 (initial set):
+# - dir        — filesystem enum + args (string + short)
+# - env        — KERNEL32$GetEnvironmentStrings, no args
+# - ipconfig   — IPHLPAPI$GetAdaptersAddresses + heavy .rdata reloc
+# - listmods   — loaded-module enum, walks PEB Ldr
 #
-# Each exercises a distinct slice of the Beacon API + import
-# resolver, so the four-test suite catches regressions in PEB-walk
-# resolution, MSVCRT/KERNEL32 dollar-form imports, forwarders, and
-# output capture.
+# Network suite (no-args, exercises distinct IPHLPAPI/DNSAPI/etc.):
+# - arp        — ARP cache via IPHLPAPI$GetIpNetTable
+# - routeprint — routing table via IPHLPAPI$GetIpForwardTable
+# - listdns    — DNS cache via DNSAPI$DnsGetCacheDataTable
+# - netstat    — TCP/UDP tables + flag arg
+#
+# System suite:
+# - locale     — system locale info via KERNEL32$GetLocaleInfo*
+# - netuptime  — NetServerGetInfo via NETAPI32, takes wstring (empty=self)
+#
+# Together they exercise: PEB walk on multiple modules
+# (kernel32/ntdll/msvcrt/iphlpapi/netapi32/dnsapi), forwarders
+# (HeapAlloc), .rdata pointer-table relocations, args of every
+# shape (none/int/short/string/wstring), and dollar-form imports.
 
 set -euo pipefail
 
@@ -45,7 +56,7 @@ git -C "${WORK}" fetch --depth=1 origin "${PINNED_COMMIT}" 2>/dev/null || true
 git -C "${WORK}" checkout "${PINNED_COMMIT}" 2>&1 | tail -2
 
 echo "[3/3] Copying curated subset into ${DEST}"
-for bof in dir env ipconfig listmods; do
+for bof in dir env ipconfig listmods arp routeprint listdns netstat locale netuptime; do
     src="${WORK}/SA/${bof}/${bof}.x64.o"
     if [ ! -f "${src}" ]; then
         echo "  ! missing ${src}"
