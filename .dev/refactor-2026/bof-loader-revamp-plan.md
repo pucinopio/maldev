@@ -155,15 +155,22 @@ slices:
               PEB-walk-by-hash primitive.
           - step: 2
             title: Go-side orchestrator
-            status: queued
-            scope: |
-              CreateProcess(SysWOW64\rundll32.exe, CREATE_SUSPENDED)
-              + 3 × VirtualAllocEx (code RX, IO RW, params RW)
-              + WriteProcessMemory + CreateRemoteThread targeting
-              offset 0 of the code region + WaitForSingleObject
-              + ReadProcessMemory of out/err/status +
-              TerminateProcess. Zero disk writes in the BOF
-              execution path.
+            status: closed
+            commits:
+              - HEAD  # this commit
+            deliverable: |
+              *x86BOF Runnable: spawnSuspended +
+              allocRemote × 3 (code, IO, params) +
+              WriteProcessMemory + VirtualProtectEx (code → RX) +
+              CreateRemoteThread + WaitForSingleObject +
+              ReadProcessMemory params/out/err +
+              TerminateProcess. Zero disk writes. Setters for
+              SpawnTo / UserData / Timeout / Output+Error
+              capacities. Marshalling helpers (buildIOBuffer,
+              buildParamsBlock, classifyLoaderStatus) pinned
+              by host-only Go unit tests; the actual cross-
+              process round-trip is a Windows-VM test
+              (TestX86BOF_Execute_SkeletonRoundTrip).
       - phase: C
         title: x86 loader DLL (C, mingw32) — SUPERSEDED by B-bis
         status: superseded-2026-05-18

@@ -7,6 +7,52 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — slice 1.d phase B-bis step 2: cross-process orchestrator (2026-05-18)
+
+# What landed
+
+  *x86BOF                    // Runnable returned by KindCOFFx86 (tagged builds)
+      .Execute(args) ([]byte, error)
+      .Errors() []byte
+      .SetSpawnTo(string)        // override SysWOW64 host
+      .SetUserData([]byte)       // BeaconGetCustomUserData blob
+      .SetTimeout(time.Duration)
+      .SetOutputCapacity(uint32) // default 256 KB
+      .SetErrorCapacity(uint32)  // default 64 KB
+
+# Flow (per Execute, all in child memory — zero disk)
+
+  1. CreateProcess(SysWOW64\rundll32.exe, CREATE_SUSPENDED)
+  2. VirtualAllocEx × 3:
+       a) code region (size = len(shellcode)),
+          RW then VirtualProtectEx → RX
+       b) IO region: [bof | args | user_data | spawn_to | out_buf | err_buf]
+       c) params region (loader_params_t, 116 B)
+  3. WriteProcessMemory each region.
+  4. CreateRemoteThread(child, _, _, lpStart=code, lpParam=params)
+  5. WaitForSingleObject(thread, timeout)
+  6. ReadProcessMemory params → status + lengths
+  7. ReadProcessMemory out + err buffers (length-bounded)
+  8. TerminateProcess + CloseHandle (defer)
+
+# Tests (under -tags=bof_x86_loader)
+
+  TestBuildIOBuffer_LayoutAndCopy          // pins ioOffsets order
+  TestBuildParamsBlock_FieldOffsets        // 16 byte-level field checks
+  TestBuildParamsBlock_NoSpawnTo_ZerosTheField
+  TestClassifyLoaderStatus                 // 8 status → error mappings
+  TestX86BOF_Execute_SkeletonRoundTrip     // Windows-only: spawns rundll32,
+                                            //   asserts status flips PENDING→DONE
+  TestX86BOF_Execute_Timeout               // WaitForSingleObject timeout path
+
+# Still queued
+
+Phase B-bis step 1: replace the loader's banner-only skeleton with
+the real COFF parser + IMAGE_REL_I386_* relocs + Beacon API impl
+inside the same PIC shellcode. Until step 1 lands, x86 BOFs spawn
+the rundll32 helper successfully but the BOF itself is a no-op
+(the loader skeleton just writes status=DONE).
+
 ### runtime/bof — slice 1.d phase B-bis step 0: PIC shellcode loader skeleton (2026-05-18)
 
 # Architecture pivot

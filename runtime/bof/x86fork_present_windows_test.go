@@ -3,8 +3,11 @@
 package bof
 
 import (
+	"context"
 	"encoding/binary"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -79,6 +82,61 @@ func TestABIMagic_LittleEndianMatchesCSide(t *testing.T) {
 	var buf [4]byte
 	binary.LittleEndian.PutUint32(buf[:], loaderABIMagic)
 	assert.Equal(t, []byte{'B', 'C', '8', '6'}, buf[:])
+}
+
+// TestX86BOF_Execute_SkeletonRoundTrip is the cross-process E2E
+// test. Spawns SysWOW64\rundll32.exe suspended, injects the
+// loader shellcode, hands it a minimal fake-BOF param block, and
+// expects the loader to update params.status from PENDING to DONE
+// via ReadProcessMemory.
+//
+// Skipped when SysWOW64\rundll32.exe is missing (non-Windows
+// test host, Windows ARM64 without WoW64, etc.).
+//
+// Until phase B-bis step 1 lands a real COFF parser, the
+// skeleton's contract is exactly "round-trip the params block";
+// out/err lengths stay 0 and status flips to DONE. This test
+// pins that contract — it's the only thing that would catch a
+// regression in the shellcode bytes (offset 0 ↔ loader_entry,
+// PEB walk path, ROR13 export resolution).
+func TestX86BOF_Execute_SkeletonRoundTrip(t *testing.T) {
+	if _, err := os.Stat(defaultX86Host); err != nil {
+		t.Skipf("WoW64 host %s missing: %v", defaultX86Host, err)
+	}
+
+	// Minimal i386 COFF header — 20 bytes, Machine=0x014c, 0
+	// sections. The skeleton doesn't parse the bytes, just
+	// records bof_len; phase B-bis step 1 will need a real .o
+	// fixture.
+	fake := make([]byte, 20)
+	fake[0] = 0x4c
+	fake[1] = 0x01
+
+	res, err := Run(context.Background(), Spec{
+		Bytes: fake,
+		Args:  []byte("ignored-by-skeleton"),
+	})
+	require.NoError(t, err, "expected loader to surface BOF_STATUS_DONE")
+	require.NotNil(t, res)
+	assert.Empty(t, res.Output, "skeleton writes 0 bytes of output")
+	assert.Empty(t, res.Errors, "skeleton writes 0 bytes of errors")
+}
+
+// TestX86BOF_Execute_Timeout exercises the WaitForSingleObject
+// timeout path. A 1ms wait against the real cross-process spawn
+// is essentially guaranteed to fire — the orchestrator must kill
+// the host and surface a "loader timeout" error.
+func TestX86BOF_Execute_Timeout(t *testing.T) {
+	if _, err := os.Stat(defaultX86Host); err != nil {
+		t.Skipf("WoW64 host %s missing: %v", defaultX86Host, err)
+	}
+	r, err := coffX86Loader{}.Load(make([]byte, 20))
+	require.NoError(t, err)
+	x := r.(*x86BOF)
+	x.SetTimeout(1 * time.Millisecond)
+	_, err = x.Execute(nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "loader timeout")
 }
 
 // ror13Hash mirrors win/api.ResolveByHash and the C side's
