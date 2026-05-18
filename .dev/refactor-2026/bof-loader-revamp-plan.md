@@ -57,21 +57,25 @@ slices:
           single concat into a fresh output. Peak memory dropped from
           3x peBytes to 2x. TestArgsAddBytes_ReferenceContract pins
           the new behaviour. Pack-isolation contract preserved.
-      - status: deferred to a dedicated slice
-        item: bof.Run Load/Execute caching
+      - status: closed
+        item: bof.Run Load/Execute caching (Execute split)
+        commit: cc9468e+  # next commit after Args memory fix
         notes: |
-          Investigation showed the reviewer's premise was incomplete.
-          bof.Load only validates the COFF header (5 lines); the real
-          work — parse sections, layout, VirtualAlloc, relocations,
-          VirtualProtect — all lives in Execute, which `defer
-          VirtualFree`s the mapping on every return. Caching *BOF at
-          runtime/pe saves ~nothing; the real win requires splitting
-          Execute into prepare() (alloc + reloc, idempotent) + run()
-          (output reset + entry call) with explicit Close() / finalizer
-          for VirtualFree. Non-trivial semantic decisions involved (BOFs
-          with .data globals like No-Consolation's libs_loaded cache
-          BENEFIT from shared state; stateless BOFs like hello_beacon
-          need .data/.bss zeroed each run). Slice 6 candidate.
+          Execute split into prepare() (parse + alloc + reloc +
+          protect, idempotent, runs once per BOF) and the entry call
+          (cheap, runs per Execute). Mapping is now owned by *BOF
+          and survives across Execute calls; Close() releases it
+          explicitly, runtime.SetFinalizer is the safety net.
+          SetPersistent(bool) knob arbitrates the stateful-vs-stateless
+          dilemma: default false zeroes writable sections between
+          Execute calls (matches hello_beacon / parse_args assumption);
+          true keeps the state (No-Consolation LIBS_LOADED + handle
+          info cache). runtime/pe caches the prepared No-Consolation
+          BOF via sync.Once with SetPersistent(true) — RunExecutable
+          now amortises the .o load across the process lifetime.
+          Verified: 38 default + 5 admin tests on host + VM, plus
+          new lifecycle suite (Close idempotent, post-Close error,
+          ExecuteTwice, SetPersistent default).
     sub_items:
       - 1.c.1 string-obfuscate Beacon import names
       - 1.c.2 bump vararg capture from 6 to 10

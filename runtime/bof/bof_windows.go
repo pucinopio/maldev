@@ -132,6 +132,97 @@ type BOF struct {
 	// the start of Execute so write() pushes chunks to the consumer
 	// in real time. Cleared after Execute returns.
 	pendingStream chan<- []byte
+
+	// — Prepared-state cache (filled by prepare, consumed by Execute) —
+	//
+	// The first Execute call runs prepare() which does the expensive
+	// work: parse, VirtualAlloc, copy sections, resolve imports,
+	// apply relocations, VirtualProtect. Subsequent Execute calls
+	// reuse the cached mapping and only invoke the entry point.
+	// Close() releases the mapping; without Close a runtime
+	// finalizer eventually VirtualFrees as a safety net.
+	execMem     uintptr // VirtualAlloc'd region base (0 when not prepared)
+	execMemSize uintptr // total bytes the prepare() pass allocated
+	entryAddr   uintptr // absolute address of the BOF's entry symbol
+	prepared    bool   // gate against re-running prepare
+	closed      bool   // post-Close guard — Execute returns an error
+
+	// writableSnapshots holds the initial bytes of every non-exec
+	// section in the mapping. When persistent==false, each Execute
+	// restores these bytes so the BOF observes a fresh .data / .bss
+	// every call (matches the implicit "BOFs are stateless" contract
+	// the in-tree corpus relies on). When persistent==true, the
+	// snapshots are taken once and never restored — runs share state,
+	// which is what BOFs like No-Consolation rely on for their own
+	// LIBS_LOADED caches.
+	//
+	// Map key is the COFF section index (1-based) — matches the
+	// sectionBase / laid bookkeeping in prepare().
+	writableSnapshots map[int][]byte
+
+	// writableTargets is the destination side of the same per-section
+	// pairing. Each entry is the in-mapping byte slice that
+	// restoreWritables copies snapshots[idx] into between Executes
+	// when persistent==false. Held separately so the loops don't
+	// re-derive addresses from sectionBase every call.
+	writableTargets map[int][]byte
+
+	// persistent flips the writable-section reset behaviour.
+	// Default (false) preserves the historic contract.
+	persistent bool
+}
+
+// SetPersistent toggles state retention across multiple Execute
+// calls on the same *BOF. Affects only non-executable sections
+// (.data / .bss / .rdata-with-writes); .text relocations are
+// applied once on prepare and never re-touched.
+//
+//   - false (default): each Execute restores .data / .bss /
+//     other writable sections to their initial bytes. Matches
+//     the implicit "BOFs are stateless" assumption of the
+//     in-tree corpus — hello_beacon, parse_args, realworld_calls
+//     all expect fresh memory per call.
+//
+//   - true: writable sections keep whatever the BOF wrote on
+//     the previous Execute. Useful for BOFs like Fortra's
+//     No-Consolation which maintain a LIBS_LOADED cache + a
+//     handle-info struct across operator-chained invocations.
+//
+// Must be called before the first Execute. Toggling between
+// Executes has no effect on the current run.
+func (b *BOF) SetPersistent(p bool) {
+	b.persistent = p
+}
+
+// Close releases the VirtualAlloc'd executable memory + drops
+// the cached mapping. Subsequent Execute calls fail cleanly.
+// Idempotent; concurrent Close vs Execute is serialised through
+// the package-wide bofMu.
+//
+// Callers that Load + Execute once and discard can skip Close —
+// the runtime finalizer wired in Load releases the mapping when
+// the *BOF becomes unreachable. Long-lived BOFs (the
+// runtime/pe.RunExecutable hot path that caches the embedded
+// No-Consolation .o) should Close explicitly at shutdown.
+func (b *BOF) Close() error {
+	bofMu.Lock()
+	defer bofMu.Unlock()
+	if b.closed {
+		return nil
+	}
+	b.closed = true
+	if b.execMem != 0 {
+		err := windows.VirtualFree(b.execMem, 0, windows.MEM_RELEASE)
+		b.execMem = 0
+		b.execMemSize = 0
+		b.entryAddr = 0
+		b.writableSnapshots = nil
+		b.prepared = false
+		if err != nil {
+			return fmt.Errorf("runtime/bof: VirtualFree on Close: %w", err)
+		}
+	}
+	return nil
 }
 
 // SetUserData configures the blob BeaconGetCustomUserData returns to the
@@ -203,10 +294,21 @@ func Load(data []byte) (*BOF, error) {
 		return nil, fmt.Errorf("invalid COFF: truncated section table")
 	}
 
-	return &BOF{
+	b := &BOF{
 		Data:  data,
 		Entry: "go",
-	}, nil
+	}
+	// Safety net: callers that forget Close eventually trip this
+	// finalizer when the *BOF becomes unreachable. The runtime
+	// makes no guarantees on finalizer timing, so long-lived
+	// implants should still call Close explicitly to free the
+	// VirtualAlloc'd executable region in a timely fashion.
+	runtime.SetFinalizer(b, func(b *BOF) {
+		if b.prepared && !b.closed && b.execMem != 0 {
+			_ = windows.VirtualFree(b.execMem, 0, windows.MEM_RELEASE)
+		}
+	})
+	return b, nil
 }
 
 // Execute runs the BOF's entry point with the given arguments.
@@ -249,6 +351,73 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 		runtime.UnlockOSThread()
 	}()
 
+	if b.closed {
+		return nil, fmt.Errorf("runtime/bof: Execute on closed BOF")
+	}
+
+	// Lazy preparation: parse + allocate + relocate + protect happen
+	// once per BOF lifetime. Subsequent Execute calls land directly
+	// at the entry call below, with .data/.bss optionally restored.
+	if !b.prepared {
+		if err := b.prepare(); err != nil {
+			return nil, err
+		}
+	} else if !b.persistent {
+		b.restoreWritables()
+	}
+
+	// 8. Call entry function with BOF convention: go(char *data, int len).
+	//    Wrapped in a defer-recover: a busted BOF (memory fault, illegal
+	//    instruction, stack overflow) would otherwise propagate through
+	//    Go's signal handler and terminate the host process. The recover
+	//    captures the panic value into the per-BOF errors buffer so the
+	//    operator gets a diagnosable failure instead of an implant kill.
+	var argPtr, argLen uintptr
+	if len(args) > 0 {
+		argPtr = uintptr(unsafe.Pointer(&args[0]))
+		argLen = uintptr(len(args))
+	}
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				b.errors.write([]byte(fmt.Sprintf("bof: panic during entry: %v\n", r)))
+			}
+		}()
+		syscallN(b.entryAddr, argPtr, argLen)
+	}()
+
+	return b.output.Bytes(), nil
+}
+
+// restoreWritables resets the non-exec sections to their initial
+// state captured by prepare. Called between Execute invocations
+// when persistent==false. Cheap (only the writable sections, no
+// VirtualAlloc / relocation / VirtualProtect re-run).
+func (b *BOF) restoreWritables() {
+	for _, snap := range b.writableSnapshots {
+		if len(snap) == 0 {
+			continue
+		}
+		// We stored snap as a copy of the in-memory bytes RIGHT AFTER
+		// initial load + relocations. The destination is the same
+		// region; the snapshot pointer is shared by struct field, so
+		// we look up the destination from the corresponding sectionBase
+		// recorded on the BOF via writableTargets.
+	}
+	for idx, dst := range b.writableTargets {
+		snap := b.writableSnapshots[idx]
+		copy(dst, snap)
+	}
+}
+
+// prepare runs the expensive once-per-BOF loader work: parse the
+// COFF, lay out the sections, VirtualAlloc, copy + resolve imports
+// + apply relocations + flip exec pages to RX. After prepare,
+// b.execMem points at the mapping, b.entryAddr at the entry
+// symbol, and b.writableSnapshots holds the initial bytes of
+// every non-exec section for the stateless-reset path. Called
+// from Execute under bofMu.
+func (b *BOF) prepare() error {
 	hdr := parseCOFFHeader(b.Data)
 
 	// 1. Parse sections.
@@ -269,7 +438,7 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 		}
 	}
 	if textIdx < 0 {
-		return nil, fmt.Errorf(".text section not found")
+		return fmt.Errorf(".text section not found")
 	}
 
 	textSec := sections[textIdx]
@@ -306,7 +475,7 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 		}
 		end := int(sec.PointerToRawData) + int(sec.SizeOfRawData)
 		if end > len(b.Data) {
-			return nil, fmt.Errorf("invalid COFF: section %d data out of bounds", i+1)
+			return fmt.Errorf("invalid COFF: section %d data out of bounds", i+1)
 		}
 		laid = append(laid, loaded{
 			idx:    i + 1,
@@ -331,7 +500,7 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 		}
 		end := int(sec.PointerToRawData) + int(sec.SizeOfRawData)
 		if end > len(b.Data) {
-			return nil, fmt.Errorf("invalid COFF: section %d data out of bounds", i+1)
+			return fmt.Errorf("invalid COFF: section %d data out of bounds", i+1)
 		}
 		laid = append(laid, loaded{
 			idx:    i + 1,
@@ -347,14 +516,14 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 	//    section so REL32 displacements always reach.
 	imports, err := b.collectImports(textSec, hdr)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	loadedLen := cursor
 	importTableLen := len(imports) * 8
 	totalLen := loadedLen + importTableLen
 	if totalLen == 0 {
-		return nil, fmt.Errorf("BOF has no loadable sections")
+		return fmt.Errorf("BOF has no loadable sections")
 	}
 
 	execMem, err := windows.VirtualAlloc(
@@ -373,9 +542,13 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 		windows.PAGE_READWRITE,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("executable memory allocation failed: %w", err)
+		return fmt.Errorf("executable memory allocation failed: %w", err)
 	}
-	defer windows.VirtualFree(execMem, 0, windows.MEM_RELEASE)
+	// NOTE: no defer VirtualFree here — the mapping is now owned by
+	// the *BOF and lives until Close() (or the runtime finalizer
+	// installed in Load() if Close was missed). The cached mapping
+	// is what makes a single Load → many Execute cheap for callers
+	// like runtime/pe that reuse the same .o repeatedly.
 
 	dst := unsafe.Slice((*byte)(unsafe.Pointer(execMem)), totalLen)
 	for _, l := range laid {
@@ -389,7 +562,8 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 	for i, name := range imports {
 		addr, ok := resolveBeaconImport(name)
 		if !ok {
-			return nil, fmt.Errorf("unresolved external symbol %q", name)
+			_ = windows.VirtualFree(execMem, 0, windows.MEM_RELEASE)
+			return fmt.Errorf("unresolved external symbol %q", name)
 		}
 		slotAddr := execMem + uintptr(loadedLen+i*8)
 		*(*uintptr)(unsafe.Pointer(slotAddr)) = addr
@@ -406,7 +580,8 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 	//    applying them now is forward-compatible.
 	textBase, ok := sectionBase[textIdx+1]
 	if !ok {
-		return nil, fmt.Errorf(".text section had no raw data")
+		_ = windows.VirtualFree(execMem, 0, windows.MEM_RELEASE)
+		return fmt.Errorf(".text section had no raw data")
 	}
 	for _, l := range laid {
 		sec := sections[l.idx-1]
@@ -416,7 +591,8 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 		secBase := sectionBase[l.idx]
 		secMem := unsafe.Slice((*byte)(unsafe.Pointer(secBase)), int(sec.SizeOfRawData))
 		if err := b.applyRelocations(secMem, secBase, sectionBase, sec, hdr, importSlots); err != nil {
-			return nil, fmt.Errorf("relocation (section %d) failed: %w", l.idx, err)
+			_ = windows.VirtualFree(execMem, 0, windows.MEM_RELEASE)
+			return fmt.Errorf("relocation (section %d) failed: %w", l.idx, err)
 		}
 	}
 
@@ -445,38 +621,44 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 			windows.PAGE_EXECUTE_READ,
 			&oldProtect,
 		); err != nil {
-			return nil, fmt.Errorf("VirtualProtect on section %d failed: %w", i, err)
+			_ = windows.VirtualFree(execMem, 0, windows.MEM_RELEASE)
+			return fmt.Errorf("VirtualProtect on section %d failed: %w", i, err)
 		}
 	}
 
 	// 7. Find entry point symbol within .text.
 	entryOffset, err := b.findSymbolOffset(hdr, textIdx)
 	if err != nil {
-		return nil, err
+		_ = windows.VirtualFree(execMem, 0, windows.MEM_RELEASE)
+		return err
 	}
 
-	// 8. Call entry function with BOF convention: go(char *data, int len).
-	//    Wrapped in a defer-recover: a busted BOF (memory fault, illegal
-	//    instruction, stack overflow) would otherwise propagate through
-	//    Go's signal handler and terminate the host process. The recover
-	//    captures the panic value into the per-BOF errors buffer so the
-	//    operator gets a diagnosable failure instead of an implant kill.
-	entryAddr := textBase + uintptr(entryOffset)
-	var argPtr, argLen uintptr
-	if len(args) > 0 {
-		argPtr = uintptr(unsafe.Pointer(&args[0]))
-		argLen = uintptr(len(args))
+	// 8. Snapshot writable sections so subsequent Execute calls in
+	//    !persistent mode can restore the initial state cheaply.
+	//    We index into `dst` (the byte view of the mapping) using
+	//    each laid entry's offset + length. Sections we copy:
+	//    everything that's NOT in an exec page. .text is excluded
+	//    because it's RX after step 6.5 (and immutable by design).
+	b.writableSnapshots = make(map[int][]byte, len(laid))
+	b.writableTargets = make(map[int][]byte, len(laid))
+	for _, l := range laid {
+		sec := sections[l.idx-1]
+		if sec.Characteristics&imageScnMemExecute != 0 {
+			continue
+		}
+		snap := make([]byte, len(l.data))
+		copy(snap, dst[l.offset:l.offset+len(l.data)])
+		b.writableSnapshots[l.idx] = snap
+		b.writableTargets[l.idx] = dst[l.offset : l.offset+len(l.data)]
 	}
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				b.errors.write([]byte(fmt.Sprintf("bof: panic during entry: %v\n", r)))
-			}
-		}()
-		syscallN(entryAddr, argPtr, argLen)
-	}()
 
-	return b.output.Bytes(), nil
+	// Publish the prepared state on the BOF. From here on Execute
+	// can call entryAddr directly any number of times.
+	b.execMem = execMem
+	b.execMemSize = uintptr(totalLen)
+	b.entryAddr = textBase + uintptr(entryOffset)
+	b.prepared = true
+	return nil
 }
 
 // ExecuteStream runs the BOF and emits each output chunk to `out` as

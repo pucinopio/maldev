@@ -7,6 +7,47 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — Execute split: prepare/Close/Persistent (2026-05-18)
+
+The expensive loader work (parse + VirtualAlloc + relocations +
+VirtualProtect) is now a **once-per-BOF** prepare() pass. The
+public Execute method becomes: "lazy-prepare + reset writable
+sections (if not persistent) + call entry". Subsequent Execute
+calls on the same *BOF amortise the prep cost.
+
+# New public surface
+
+- `(*BOF).Close() error` — releases the VirtualAlloc'd mapping.
+  Idempotent. Runtime.SetFinalizer wired in Load() as a
+  safety-net for callers who forget Close.
+- `(*BOF).SetPersistent(bool)` — toggles writable-section
+  reset between Execute calls. Default false (stateless BOFs
+  like hello_beacon see fresh memory); true keeps state
+  (No-Consolation's LIBS_LOADED cache survives across calls).
+
+# runtime/pe is the first beneficiary
+
+`RunExecutable` now caches the prepared No-Consolation BOF via
+`sync.Once` with `SetPersistent(true)`. Per-call work shrinks
+from "parse + alloc + reloc + execute" to just "execute" —
+the .o is loaded exactly once per process.
+
+# Backwards compatibility
+
+Existing Load + Execute callers see no change in behaviour or
+signature. The default (non-persistent) mode preserves the
+implicit "BOFs are stateless" contract every in-tree fixture
+assumes. The lifecycle test suite
+(`bof_lifecycle_windows_test.go`) pins the new contracts:
+
+- TestBOF_Close_Idempotent
+- TestBOF_ExecuteAfterClose (returns error, no use-after-free)
+- TestBOF_ExecuteTwice_Default (matching outputs)
+- TestBOF_SetPersistent_StatelessByDefault
+
+All 38 default + 5 admin existing tests + 7 runtime/pe E2E
+still PASS on host + Windows10 VM.
+
 ### runtime/bof — Args memory-efficiency fix (2026-05-18)
 
 `runtime/bof.Args` refactored from `bytes.Buffer` to an
