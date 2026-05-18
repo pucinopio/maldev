@@ -210,6 +210,6 @@ intent.
 
 - [`runtime/bof`](bof-loader.md) — the underlying COFF loader
 - [`runtime/clr`](clr.md) — sibling reflective runtime for .NET
-- [`pe/srdi`](../pe/srdi.md) — file-format counterpart (PE → shellcode)
+- [`pe/srdi`](../pe/pe-to-shellcode.md) — file-format counterpart (PE → shellcode)
 - Upstream: <https://github.com/fortra/No-Consolation>
 - Plan: `.dev/refactor-2026/bof-loader-revamp-plan.md` slice 1.c.9
