@@ -7,6 +7,80 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — sacrificial-thread crash isolation (2026-05-18)
+
+# New public surface
+
+  (*BOF).SetSacrificialThread(time.Duration) error
+
+Enabling sacrificial mode runs the BOF entry on a dedicated
+OS thread. A process-wide Vectored Exception Handler (lazy-
+installed once) catches access violations / illegal
+instructions / stack overflows whose ExceptionAddress lies
+inside the BOF's own mapping, redirects the faulting thread
+to an ExitThread(1) stub, and the host Execute call returns
+a clean Go error like:
+
+  runtime/bof: BOF crashed with exception 0xc0000005 at PC 0x...
+
+In default (inline) mode an in-mapping AV terminates the
+implant via Go's runtime exception handler → TerminateProcess.
+Sacrificial mode keeps the implant alive.
+
+# Documented limitations
+
+  - Token impersonation done by the BOF affects only the
+    sacrificial thread; the host goroutine keeps its original
+    token. BOFs that chain token state across calls are not
+    compatible with sacrificial mode.
+  - The VEH only catches faults whose ExceptionAddress lies
+    inside the BOF mapping. A BOF that passes a NULL pointer
+    to kernel32!HeapAlloc takes the fault inside kernel32 —
+    outside the BOF range — and still terminates the implant.
+  - TerminateThread (used on timeout) and the per-call thunk
+    page (on timeout only) leak — Windows offers no
+    synchronous way to confirm a terminated thread has fully
+    stopped executing in our code. Set timeouts generously.
+  - The VEH is registered once per process and never removed
+    — small perma-cost in the exception chain for any
+    implant that has used sacrificial mode at least once.
+
+# How to use
+
+  b, _ := bof.Load(coffBytes)
+  defer b.Close()
+  if err := b.SetSacrificialThread(5 * time.Second); err != nil {
+      log.Fatal(err) // ErrAlreadyPrepared if after first Execute
+  }
+  out, err := b.Execute(args)
+  // err == nil  → BOF returned normally
+  // err mentions "BOF crashed with exception" → caught fault
+  // err mentions "BOF timeout"                → wall-clock hit
+
+# Implementation summary
+
+  - sacrificial_windows.go: VEH callback + per-call thunk +
+    aligned exit-stub. Uses win/api.ProcCreateThread /
+    ProcResumeThread / ProcTerminateThread / ProcGetThreadId
+    / ProcAddVectoredExceptionHandler — added to dll_windows.go
+    for the missing three.
+  - bof_windows.go: Execute now calls b.callEntry() which
+    branches inline vs sacrificial based on sacrificialTimeout.
+    Close() refuses while a sacrificial thread is still in
+    flight (sacrificialBOFActive walks the registry).
+
+# Tests
+
+  - TestBOF_SetSacrificialThread_Default — default zero, set + toggle
+  - TestBOF_SetSacrificialThread_AfterPrepareErrors — ErrAlreadyPrepared
+  - TestBOF_SacrificialThread_HappyPath — inline-vs-sacrificial output parity
+  - TestBOF_SacrificialThread_CrashIsolated (MALDEV_INTRUSIVE) —
+    fixture crasher.o NULL-derefs inside its own mapping;
+    Execute returns the crash error, implant continues, os.Hostname()
+    still works.
+
+  Verified host + Windows10 VM, exit 0.
+
 ### runtime/bof — Execute split: prepare/Close/Persistent (2026-05-18)
 
 The expensive loader work (parse + VirtualAlloc + relocations +

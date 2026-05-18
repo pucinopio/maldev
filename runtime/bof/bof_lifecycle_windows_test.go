@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/oioio-space/maldev/testutil"
 )
 
 // loadLifecycleBOF reads a testdata .o by basename, skipping the
@@ -120,12 +123,176 @@ func TestBOF_SetPersistent_StatelessByDefault(t *testing.T) {
 	if b.persistent {
 		t.Error("BOF.persistent default should be false")
 	}
-	b.SetPersistent(true)
+	if err := b.SetPersistent(true); err != nil {
+		t.Fatalf("SetPersistent(true) before Execute should succeed: %v", err)
+	}
 	if !b.persistent {
 		t.Error("SetPersistent(true) must flip the flag")
 	}
-	b.SetPersistent(false)
+	if err := b.SetPersistent(false); err != nil {
+		t.Fatalf("SetPersistent(false) before Execute should succeed: %v", err)
+	}
 	if b.persistent {
 		t.Error("SetPersistent(false) must clear the flag")
+	}
+}
+
+// TestBOF_SetPersistent_AfterPrepareErrors pins the
+// ErrAlreadyPrepared contract: once prepare() ran (via the first
+// Execute), the writable-section snapshots are fixed and toggling
+// persistence would only affect future restores. Returning an
+// error rather than silently no-op'ing makes the caller's
+// mistake loud.
+func TestBOF_SetPersistent_AfterPrepareErrors(t *testing.T) {
+	b, err := Load(loadLifecycleBOF(t, "hello_beacon.o"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	defer b.Close()
+	if _, err := b.Execute(nil); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if err := b.SetPersistent(true); err != ErrAlreadyPrepared {
+		t.Errorf("SetPersistent after Execute: want ErrAlreadyPrepared, got %v", err)
+	}
+}
+
+// TestBOF_SetSacrificialThread_Default exercises the same
+// before-/after-prepare contract for the sacrificial-thread
+// knob. Default value must be zero (inline mode); the setter
+// must accept a duration before Execute and reject after.
+func TestBOF_SetSacrificialThread_Default(t *testing.T) {
+	b, err := Load(loadLifecycleBOF(t, "hello_beacon.o"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	defer b.Close()
+	if b.sacrificialTimeout != 0 {
+		t.Error("BOF.sacrificialTimeout default should be 0 (inline mode)")
+	}
+	if err := b.SetSacrificialThread(2 * time.Second); err != nil {
+		t.Fatalf("SetSacrificialThread before Execute should succeed: %v", err)
+	}
+	if b.sacrificialTimeout != 2*time.Second {
+		t.Errorf("set timeout not stored: got %v", b.sacrificialTimeout)
+	}
+	// Zero re-disables.
+	if err := b.SetSacrificialThread(0); err != nil {
+		t.Fatalf("SetSacrificialThread(0) should succeed: %v", err)
+	}
+	if b.sacrificialTimeout != 0 {
+		t.Errorf("zero should disable, got %v", b.sacrificialTimeout)
+	}
+}
+
+// TestBOF_SetSacrificialThread_AfterPrepareErrors mirrors the
+// SetPersistent post-prepare guard: changing isolation mode
+// after the BOF has been Execute'd at least once would leave
+// the mapping in an inconsistent half-prepared state.
+func TestBOF_SetSacrificialThread_AfterPrepareErrors(t *testing.T) {
+	b, err := Load(loadLifecycleBOF(t, "hello_beacon.o"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	defer b.Close()
+	if _, err := b.Execute(nil); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if err := b.SetSacrificialThread(time.Second); err != ErrAlreadyPrepared {
+		t.Errorf("SetSacrificialThread after Execute: want ErrAlreadyPrepared, got %v", err)
+	}
+}
+
+// TestBOF_SacrificialThread_CrashIsolated is the headline
+// witness: a BOF that deliberately dereferences NULL inside
+// its own mapping must NOT terminate the implant when
+// sacrificial mode is on. The VEH installed by
+// installSacrificialVEH intercepts the AV, rewrites the
+// faulting thread's RIP to the ExitThread(1) stub, and the
+// host Execute call returns a clean error documenting the
+// exception code + PC.
+//
+// Gated MALDEV_INTRUSIVE because:
+//   - it installs a process-wide VEH (well-behaved, but a side
+//     effect we don't want in casual `go test ./...`)
+//   - the crasher fixture deliberately writes to 0x0 — a flag
+//     for AV inspection if a curious EDR is watching test runs.
+func TestBOF_SacrificialThread_CrashIsolated(t *testing.T) {
+	testutil.RequireIntrusive(t)
+
+	b, err := Load(loadLifecycleBOF(t, "crasher.o"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	defer b.Close()
+	if err := b.SetSacrificialThread(5 * time.Second); err != nil {
+		t.Fatalf("SetSacrificialThread: %v", err)
+	}
+	out, err := b.Execute(nil)
+	if err == nil {
+		t.Fatalf("Execute should return a crash error, got nil (out=%q)", out)
+	}
+	if !strings.Contains(err.Error(), "BOF crashed") {
+		t.Errorf("error message should mention 'BOF crashed', got %q", err)
+	}
+	// The exception code 0xC0000005 is ACCESS_VIOLATION — the
+	// only one a NULL write can produce on x64 Windows.
+	if !strings.Contains(err.Error(), "0xc0000005") {
+		t.Errorf("error message should mention exception 0xc0000005, got %q", err)
+	}
+	// The "about to crash" line ran before the AV — the BOF
+	// reached BeaconPrintf at least once. Witness that output
+	// capture survived the crash + the thread teardown.
+	if !strings.Contains(string(out), "about to crash") {
+		t.Errorf("output should contain the pre-crash BeaconPrintf line, got %q", out)
+	}
+	if strings.Contains(string(out), "should never reach here") {
+		t.Errorf("post-crash line leaked into output: %q", out)
+	}
+
+	// Implant is alive: any further Go work succeeds.
+	if _, err := os.Hostname(); err != nil {
+		t.Errorf("host Go runtime alive after BOF crash? got %v", err)
+	}
+}
+
+// TestBOF_SacrificialThread_HappyPath verifies that a normal
+// BOF run produces the same observable output when executed via
+// the sacrificial-thread path. Uses hello_beacon.o which prints
+// a fixed greeting via BeaconPrintf — output must match the
+// inline-mode reference exactly.
+//
+// Pinning the hello-path under sacrificial mode protects us
+// against the surface drift that a broken thread / wait /
+// thunk routine would cause (e.g. silent thread death before
+// reaching BeaconPrintf).
+func TestBOF_SacrificialThread_HappyPath(t *testing.T) {
+	// Inline reference.
+	bRef, err := Load(loadLifecycleBOF(t, "hello_beacon.o"))
+	if err != nil {
+		t.Fatalf("ref Load: %v", err)
+	}
+	defer bRef.Close()
+	refOut, err := bRef.Execute(nil)
+	if err != nil {
+		t.Fatalf("ref Execute: %v", err)
+	}
+
+	// Sacrificial.
+	b, err := Load(loadLifecycleBOF(t, "hello_beacon.o"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	defer b.Close()
+	if err := b.SetSacrificialThread(5 * time.Second); err != nil {
+		t.Fatalf("SetSacrificialThread: %v", err)
+	}
+	out, err := b.Execute(nil)
+	if err != nil {
+		t.Fatalf("sacrificial Execute: %v", err)
+	}
+	if string(out) != string(refOut) {
+		t.Errorf("sacrificial output differs from inline\ninline:       %q\nsacrificial:  %q",
+			refOut, out)
 	}
 }

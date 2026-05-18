@@ -155,6 +155,237 @@ Execute pins the goroutine to its OS thread for the entire call, so the
 impersonation in step 1 is honoured by the syscalls the BOF issues in
 later steps.
 
+### Reuse — prepare once, run many (v0.153.0+)
+
+A single `*BOF` can be `Execute`'d any number of times. The
+expensive load work runs lazily on the first call and is cached
+on the BOF; subsequent calls skip straight to the entry point.
+
+**Cost breakdown per call:**
+
+| Phase | First Execute | Subsequent Execute |
+|---|---|---|
+| Parse sections | ✓ | — |
+| VirtualAlloc + section copy | ✓ | — |
+| Resolve imports (PEB walk × N) | ✓ | — |
+| Apply relocations | ✓ | — |
+| VirtualProtect RW→RX | ✓ | — |
+| Reset writable sections (if not persistent) | — | ✓ (cheap) |
+| Call entry | ✓ | ✓ |
+
+```go
+import "github.com/oioio-space/maldev/runtime/bof"
+
+bytes, _ := os.ReadFile("whoami.o")
+b, _ := bof.Load(bytes)
+defer b.Close() // releases the cached VirtualAlloc mapping
+
+// First call: full parse + alloc + reloc + execute.
+out1, _ := b.Execute(nil)
+fmt.Println(string(out1))
+
+// Second call: reuses the mapping, just re-runs the entry.
+out2, _ := b.Execute(nil)
+fmt.Println(string(out2))
+```
+
+#### `Close()` — release the cached mapping
+
+```go
+b, _ := bof.Load(bytes)
+out, _ := b.Execute(nil)
+if err := b.Close(); err != nil {
+    log.Printf("Close: %v", err)
+}
+
+// After Close, Execute returns an error rather than crashing.
+_, err := b.Execute(nil)
+if err != nil {
+    // "runtime/bof: Execute on closed BOF"
+}
+```
+
+`Close` is **idempotent** — multiple calls are safe. A
+`runtime.SetFinalizer` in `Load` is a safety net for callers
+who forget Close, but Go finalizer timing isn't guaranteed:
+long-lived implants should Close explicitly to free the
+VirtualAlloc'd RWX region in a timely fashion.
+
+### `SetPersistent` — stateful vs stateless BOFs (v0.153.0+)
+
+`SetPersistent` arbitrates whether writable sections (`.data`,
+`.bss`, `.rdata-with-writes`) are restored between Execute
+calls.
+
+| Mode | Behaviour | Suits |
+|---|---|---|
+| `false` (default) | Each Execute restores writable sections to their initial bytes | Stateless BOFs — `hello_beacon`, `parse_args`, `realworld_calls`, most CS-SA-BOF corpus |
+| `true` | Writable sections retain whatever the BOF wrote on the previous Execute | Stateful BOFs that intentionally cache cross-call state in `.data` — Fortra No-Consolation's `LIBS_LOADED` cache + handle-info struct |
+
+**Must be called before the first Execute** — see
+`ErrAlreadyPrepared`.
+
+#### Stateless (default) — every call sees fresh memory
+
+```go
+b, _ := bof.Load(parseArgsBytes)
+defer b.Close()
+
+// .data globals zero'd before each Execute. The BOF observes
+// the same initial state on every call regardless of what
+// previous calls wrote.
+for _, arg := range []string{"alice", "bob", "carol"} {
+    a := bof.NewArgs(); a.AddString(arg)
+    out, _ := b.Execute(a.Pack())
+    fmt.Printf("%s → %s\n", arg, out)
+}
+```
+
+#### Persistent — share state across Execute calls
+
+```go
+b, _ := bof.Load(noConsolationBytes)
+defer b.Close()
+
+if err := b.SetPersistent(true); err != nil {
+    // SetPersistent before Execute always succeeds — error
+    // means the caller flipped it AFTER the first Execute,
+    // which is a contract violation (ErrAlreadyPrepared).
+    log.Fatal(err)
+}
+
+// Iteration 1: No-Consolation cold-loads all DLL dependencies,
+// stores their handles in LIBS_LOADED (a .data global) via
+// BeaconAddValue.
+b.Execute(packArgs(pe1))
+
+// Iteration 2: LIBS_LOADED is still warm — the BOF skips the
+// LoadLibrary chain entirely.
+b.Execute(packArgs(pe2))
+```
+
+#### `SetPersistent` after Execute → `ErrAlreadyPrepared`
+
+```go
+b, _ := bof.Load(bytes)
+defer b.Close()
+b.Execute(nil) // runs prepare() — locks the persistence mode
+
+if err := b.SetPersistent(true); errors.Is(err, bof.ErrAlreadyPrepared) {
+    // Expected: flipping the mode after prepare would leave
+    // the writable-section snapshots inconsistent. Decide at
+    // Load time which mode you want.
+}
+```
+
+### `SetSacrificialThread` — crash isolation (v0.154.0+)
+
+By default a BOF runs on the **same OS thread** as the implant.
+A wild pointer deref, stack overflow, or busted relocation
+inside the BOF triggers a Windows SEH exception that
+propagates through Go's runtime handler and ends in
+`TerminateProcess` — **the implant dies with the BOF**.
+
+`SetSacrificialThread(timeout)` enables crash isolation: the
+BOF runs on a dedicated thread, a process-wide Vectored
+Exception Handler intercepts faults whose address lies inside
+the BOF mapping, redirects the faulting thread to an
+`ExitThread(1)` stub, and the host `Execute` call returns a
+clean Go error. The implant keeps running.
+
+| Mode | When BOF AVs | Host process |
+|---|---|---|
+| Inline (default, current) | SEH → Go runtime → TerminateProcess | dies with the BOF |
+| Sacrificial (`SetSacrificialThread > 0`) | VEH catches in-mapping fault → ExitThread → host gets `error` | survives |
+
+#### Honest limitations
+
+1. **Token impersonation does not cross threads.** `BeaconUseToken`
+   impersonates on the BOF's sacrificial thread; the host
+   goroutine keeps its original token. BOFs that rely on
+   chained token state across calls are not compatible with
+   sacrificial mode.
+2. **Only faults inside the BOF mapping are caught.** A BOF
+   that passes a NULL pointer to `kernel32!HeapAlloc` takes
+   the fault inside kernel32 — outside the BOF range — and
+   still terminates the implant. The VEH range check is on
+   `ExceptionAddress`, not on the calling BOF.
+3. **`TerminateThread` (used on timeout) leaks** the thread's
+   stack + any kernel objects it held. Windows-design
+   limitation. Set timeouts generously; this is a last-resort
+   kill, not a routine cancellation primitive.
+
+#### Inline (default) — same thread, fastest
+
+```go
+b, _ := bof.Load(coffBytes)
+defer b.Close()
+
+// SetSacrificialThread NOT called → inline path.
+// If this BOF AVs, the implant dies.
+out, _ := b.Execute(args)
+```
+
+#### Sacrificial — implant survives BOF crashes
+
+```go
+b, _ := bof.Load(coffBytes)
+defer b.Close()
+
+// 5-second wall-clock cap. Zero would disable.
+if err := b.SetSacrificialThread(5 * time.Second); err != nil {
+    log.Fatal(err) // ErrAlreadyPrepared if called after Execute
+}
+
+out, err := b.Execute(args)
+switch {
+case err == nil:
+    // Happy path — BOF returned normally.
+    fmt.Println(string(out))
+case strings.Contains(err.Error(), "BOF crashed with exception"):
+    // BOF AVed / stack-overflowed / executed an illegal
+    // instruction inside its own mapping. Implant is still
+    // alive; err carries the exception code + faulting PC.
+    log.Printf("BOF crash isolated: %v", err)
+case strings.Contains(err.Error(), "BOF timeout"):
+    // BOF ran longer than the timeout; the sacrificial
+    // thread was terminated. Output captured up to the
+    // timeout is in `out`.
+    log.Printf("BOF timeout, partial output: %s", out)
+default:
+    // Other Execute error — usually a Load/prepare problem
+    // surfaced lazily on the first call.
+    log.Fatal(err)
+}
+```
+
+#### Mixing knobs
+
+The three knobs are independent — pick what fits your
+threat model:
+
+```go
+b, _ := bof.Load(realworldCallsBytes)
+defer b.Close()
+
+b.SetSpawnTo(`C:\Windows\System32\notepad.exe`)
+b.SetUserData(payload)            // surfaced via BeaconGetCustomUserData
+b.SetPersistent(false)            // default — fresh .data per call
+b.SetSacrificialThread(30 * time.Second) // implant survives crashes
+
+for _, target := range targets {
+    out, err := b.Execute(packArgs(target))
+    if err != nil {
+        // Whatever the BOF does inside, this `err` is
+        // recoverable: bad BOF code, bad target, timeout.
+        // The implant doesn't die.
+        log.Printf("%s: %v", target, err)
+        continue
+    }
+    process(out)
+}
+```
+
 ## OPSEC & Detection
 
 | Artefact | Where defenders look |
@@ -186,7 +417,21 @@ later steps.
 
 ## Limitations
 
-- **Beacon-API surface — full 27-symbol set (slice 1, v0.151+).**
+- **Execute is amortised, not free (v0.153+).** The first call
+  on a `*BOF` runs the full loader pass (parse + `VirtualAlloc` +
+  relocations + RX flip). Subsequent calls reuse the mapping —
+  ideal for callers like `runtime/pe` that load one `.o` and
+  run it many times. **Caller responsibility:** call `Close()`
+  explicitly when done. The `runtime.SetFinalizer` safety net
+  in `Load` will eventually `VirtualFree`, but Go finalizer
+  timing isn't guaranteed; long-lived implants leaking mapped
+  RWX is a real liability.
+- **Default Execute is stateless.** Writable sections (`.data`,
+  `.bss`, `.rdata-with-writes`) are restored to their initial
+  bytes between Execute calls. BOFs that intentionally cache
+  state in their `.data` (No-Consolation's `LIBS_LOADED` cache)
+  need `SetPersistent(true)` before the first Execute.
+- **Beacon-API surface — full 28-symbol set (slice 1, v0.151+).**
   All `beacon.h` groups are wired:
   - **Data parsing**: `BeaconDataParse` / `DataInt` / `DataShort` /
     `DataLength` / `DataExtract`.

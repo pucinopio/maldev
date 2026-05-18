@@ -56,7 +56,14 @@ func loadCachedNoConsolation() (*bof.BOF, error) {
 			noConsolationErr = fmt.Errorf("runtime/pe: bof.Load: %w", err)
 			return
 		}
-		b.SetPersistent(true)
+		// SetPersistent runs before any Execute — must succeed
+		// (ErrAlreadyPrepared can only fire post-Execute). Surface
+		// the error anyway so a future refactor that re-orders this
+		// init step trips the test, not a silent operator footgun.
+		if err := b.SetPersistent(true); err != nil {
+			noConsolationErr = fmt.Errorf("runtime/pe: SetPersistent: %w", err)
+			return
+		}
 		noConsolationBOF = b
 	})
 	return noConsolationBOF, noConsolationErr

@@ -69,6 +69,9 @@ var (
 	ProcWaitForSingleObjectEx      = Kernel32.NewProc("WaitForSingleObjectEx")
 	ProcReadDirectoryChangesW      = Kernel32.NewProc("ReadDirectoryChangesW")
 	ProcFlushInstructionCache      = Kernel32.NewProc("FlushInstructionCache")
+	ProcResumeThread               = Kernel32.NewProc("ResumeThread")
+	ProcGetThreadId                = Kernel32.NewProc("GetThreadId")
+	ProcAddVectoredExceptionHandler = Kernel32.NewProc("AddVectoredExceptionHandler")
 )
 
 // ntdll.dll procs
