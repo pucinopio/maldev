@@ -11,28 +11,37 @@
 # the .o files land in a .gitignored directory and never reach
 # the maldev distribution. Tests skip when the fixtures are absent.
 #
-# # Curated subset (10 BOFs)
+# # Curated subset (18 BOFs)
 #
-# Core 4 (initial set):
-# - dir        — filesystem enum + args (string + short)
+# Core 4:
+# - dir        — filesystem enum + (string, short) args
 # - env        — KERNEL32$GetEnvironmentStrings, no args
 # - ipconfig   — IPHLPAPI$GetAdaptersAddresses + heavy .rdata reloc
-# - listmods   — loaded-module enum, walks PEB Ldr
+# - listmods   — PEB Ldr walk, int arg
 #
-# Network suite (no-args, exercises distinct IPHLPAPI/DNSAPI/etc.):
-# - arp        — ARP cache via IPHLPAPI$GetIpNetTable
-# - routeprint — routing table via IPHLPAPI$GetIpForwardTable
-# - listdns    — DNS cache via DNSAPI$DnsGetCacheDataTable
-# - netstat    — TCP/UDP tables + flag arg
+# Network suite:
+# - arp        — IPHLPAPI$GetIpNetTable
+# - routeprint — IPHLPAPI$GetIpForwardTable
+# - listdns    — DNSAPI$DnsGetCacheDataTable (resolver cache)
+# - netstat    — IPHLPAPI$GetExtendedTcpTable + int arg
+# - nslookup   — DNSAPI$DnsQuery_A (active resolution, not cache)
 #
-# System suite:
-# - locale     — system locale info via KERNEL32$GetLocaleInfo*
-# - netuptime  — NetServerGetInfo via NETAPI32, takes wstring (empty=self)
+# System / service / security:
+# - locale            — KERNEL32$GetLocaleInfoEx
+# - netuptime         — NETAPI32$NetStatisticsGet, wstring arg
+# - netlocalgroup     — NETAPI32$NetLocalGroupEnum, short + wstring
+# - netloggedon       — NETAPI32$NetWkstaUserEnum, wstring arg
+# - enumlocalsessions — WTSAPI32$WTSEnumerateSessions
+# - sc_enum           — ADVAPI32$EnumServicesStatus, wstring arg
+# - list_firewall_rules — HNetCfg COM (firewall policy)
+# - driversigs        — SETUPAPI$SetupDiGetDeviceRegistryProperty (drivers)
+# - md5               — MSVCRT file I/O + ADVAPI32 CryptCreateHash, string
 #
-# Together they exercise: PEB walk on multiple modules
-# (kernel32/ntdll/msvcrt/iphlpapi/netapi32/dnsapi), forwarders
-# (HeapAlloc), .rdata pointer-table relocations, args of every
-# shape (none/int/short/string/wstring), and dollar-form imports.
+# Together they exercise: PEB walk on a dozen modules
+# (kernel32/ntdll/msvcrt/iphlpapi/netapi32/dnsapi/advapi32/wtsapi32/
+# setupapi/shlwapi/ole32), export forwarders (HeapAlloc),
+# .rdata pointer-table relocations, args of every shape
+# (none/int/short/string/wstring), and COM-via-BOF init paths.
 
 set -euo pipefail
 
@@ -56,7 +65,11 @@ git -C "${WORK}" fetch --depth=1 origin "${PINNED_COMMIT}" 2>/dev/null || true
 git -C "${WORK}" checkout "${PINNED_COMMIT}" 2>&1 | tail -2
 
 echo "[3/3] Copying curated subset into ${DEST}"
-for bof in dir env ipconfig listmods arp routeprint listdns netstat locale netuptime; do
+for bof in \
+    dir env ipconfig listmods \
+    arp routeprint listdns netstat nslookup \
+    locale netuptime netlocalgroup netloggedon enumlocalsessions \
+    sc_enum list_firewall_rules driversigs md5; do
     src="${WORK}/SA/${bof}/${bof}.x64.o"
     if [ ! -f "${src}" ]; then
         echo "  ! missing ${src}"

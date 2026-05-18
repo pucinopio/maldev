@@ -7,6 +7,39 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — CS-SA E2E expansion 10 → 18 BOFs (2026-05-18)
+
+Eight more public BOFs added to the fetch script + E2E suite,
+covering new module surfaces and exercising COM-via-BOF init.
+All 18 pass on host + Windows10 VM with zero skips.
+
+New BOFs:
+
+| BOF | Module surface |
+|---|---|
+| `nslookup` | DNSAPI$DnsQuery_A (active resolution, distinct from listdns's cache) |
+| `netlocalgroup` | NETAPI32$NetLocalGroupEnum (short + wstring args) |
+| `netloggedon` | NETAPI32$NetWkstaUserEnum |
+| `enumlocalsessions` | WTSAPI32$WTSEnumerateSessionsExA (new module) |
+| `sc_enum` | ADVAPI32$EnumServicesStatusEx (SCM) |
+| `list_firewall_rules` | HNetCfg COM (INetFwPolicy2) — exercises CoInitialize + CoCreateInstance via BOF |
+| `driversigs` | ADVAPI32$EnumServicesStatusExW (driver filter) |
+| `md5` | ADVAPI32 CryptCreateHash/HashData + MSVCRT file I/O |
+
+Notes carried in test docstrings:
+
+- The French Windows10 VM forced an interesting locale finding:
+  most BOFs print their **own** English headers via internal_printf,
+  so asserting on "Name:" / "Comment:" stays portable even when
+  the underlying Windows resource is localised. Group names like
+  "Administrators" → "Administrateurs" don't survive.
+- Two BOFs have upstream bugs we observed but don't own: driversigs
+  doesn't handle ERROR_MORE_DATA on first EnumServicesStatusExW
+  call (visible on French VM with >default services); nslookup's
+  DnsQuery_A bypasses hosts file (NXDOMAIN even for localhost on
+  sandboxed VMs). Test docstrings document the failure paths so
+  the assertions stay correct without papering over the issue.
+
 ### runtime/bof — public CS-SA-BOF E2E suite + all-sections relocation (2026-05-18)
 
 **Loader fix**: `runtime/bof.Load` now applies relocations for

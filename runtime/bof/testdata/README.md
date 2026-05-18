@@ -86,27 +86,35 @@ Populate with:
 bash scripts/fetch-cs-sa-bofs.sh
 ```
 
-The curated subset is:
+The curated subset (18 BOFs):
 
 | BOF | Surface exercised |
 |---|---|
 | `dir.x64.o` | filesystem enum + (string, short) args + `MSVCRT$strlen/strcat/_strnicmp/strstr` |
 | `env.x64.o` | `KERNEL32$GetEnvironmentStrings` + `lstrlenA`, no args |
-| `ipconfig.x64.o` | `IPHLPAPI$GetAdaptersAddresses` + .rdata ADDR64 pointer-table relocs (239 entries) |
-| `listmods.x64.o` | loaded-module enum, walks PEB Ldr list, int arg |
-| `arp.x64.o` | `IPHLPAPI$GetIpNetTable` — ARP cache, no args |
+| `ipconfig.x64.o` | `IPHLPAPI$GetAdaptersAddresses` + 239-entry .rdata ADDR64 pointer-table relocs |
+| `listmods.x64.o` | PEB Ldr walk, int arg |
+| `arp.x64.o` | `IPHLPAPI$GetIpNetTable` — ARP cache |
 | `routeprint.x64.o` | `IPHLPAPI$GetIpForwardTable` — routing table |
 | `listdns.x64.o` | `DNSAPI$DnsGetCacheDataTable` — DNS resolver cache |
-| `netstat.x64.o` | `IPHLPAPI$GetExtendedTcpTable` / `Udp` — TCP/UDP tables, int arg |
-| `locale.x64.o` | `KERNEL32$GetLocaleInfoEx` — system locale dump |
+| `netstat.x64.o` | `IPHLPAPI$GetExtendedTcpTable` / `Udp` — TCP/UDP, int arg |
+| `nslookup.x64.o` | `DNSAPI$DnsQuery_A` — active DNS query (distinct from cache) |
+| `locale.x64.o` | `KERNEL32$GetLocaleInfoEx` — locale dump |
 | `netuptime.x64.o` | `NETAPI32$NetStatisticsGet` — server uptime, wstring arg |
+| `netlocalgroup.x64.o` | `NETAPI32$NetLocalGroupEnum` — local groups, (short, wstring, wstring) |
+| `netloggedon.x64.o` | `NETAPI32$NetWkstaUserEnum` — logged-on users, wstring arg |
+| `enumlocalsessions.x64.o` | `WTSAPI32$WTSEnumerateSessionsExA` — new module surface |
+| `sc_enum.x64.o` | `ADVAPI32$EnumServicesStatusEx` — service enum, wstring arg |
+| `list_firewall_rules.x64.o` | HNetCfg COM (INetFwPolicy2) — CoInitialize + CoCreateInstance |
+| `driversigs.x64.o` | `ADVAPI32$EnumServicesStatusExW` (driver filter) |
+| `md5.x64.o` | `ADVAPI32` CryptCreateHash + MSVCRT file I/O, string arg |
 
-Tests live in `runtime/bof/cs_sa_e2e_windows_test.go`. Together
-the 10-BOF suite exercises PEB-walk on six modules (kernel32,
-ntdll, msvcrt, iphlpapi, netapi32, dnsapi), export forwarders
-(`HeapAlloc` → `ntdll!RtlAllocateHeap` on Win 8+), all args
-shapes (none/int/short/string/wstring), and the multi-section
-relocation path (`.rdata` pointer tables in `ipconfig`).
+Tests live in `runtime/bof/cs_sa_e2e_windows_test.go`. The
+18-BOF suite exercises PEB-walk on a dozen modules (kernel32,
+ntdll, msvcrt, iphlpapi, netapi32, dnsapi, advapi32, wtsapi32,
+setupapi, shlwapi, ole32, hnetcfg), export forwarders, all args
+shapes, the multi-section relocation path, and COM init from
+within a BOF.
 
 ## Test wiring
 

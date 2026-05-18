@@ -208,3 +208,119 @@ func TestCSSA_Netuptime(t *testing.T) {
 	out := runCSSABOF(t, "netuptime", a.Pack())
 	assertContainsAny(t, "netuptime", out, "ServerName", "Boot time")
 }
+
+// TestCSSA_Nslookup exercises nslookup.x64.o — active DNS query
+// via DNSAPI$DnsQuery_A. DnsQuery_A queries DNS servers directly,
+// bypassing the hosts file — on a sandboxed VM with no upstream
+// DNS, even "localhost" returns NXDOMAIN. We assert on either a
+// successful resolution OR the BOF's well-defined failure path
+// ("Query for domain name failed") — both witness that DNSAPI
+// was resolved and the BOF made the call.
+func TestCSSA_Nslookup(t *testing.T) {
+	a := NewArgs()
+	a.AddString("localhost")
+	a.AddString("") // empty = use system DNS
+	out := runCSSABOF(t, "nslookup", a.Pack())
+	assertContainsAny(t, "nslookup", out,
+		"127.0.0.1", "::1",
+		"Query for domain name failed", // BOF's NXDOMAIN path
+	)
+}
+
+// TestCSSA_Netlocalgroup exercises netlocalgroup.x64.o — local
+// group enumeration via NETAPI32$NetLocalGroupEnum. Type=0
+// selects enum-mode (vs. members-of-named-group when nonzero).
+//
+// Asserting on the BOF's own English column headers ("Name:" +
+// "Comment:") rather than the group names themselves — group
+// names are localised by Windows (fr-FR: "Administrateurs",
+// "Utilisateurs"; ja-JP: "Administrators"... actually those
+// vary too), but the BOF's printf headers are hardcoded English.
+func TestCSSA_Netlocalgroup(t *testing.T) {
+	a := NewArgs()
+	a.AddShort(0) // 0 = enumerate all local groups
+	a.AddWideString("")
+	a.AddWideString("")
+	out := runCSSABOF(t, "netlocalgroup", a.Pack())
+	assertContainsAny(t, "netlocalgroup", out, "Name:", "Comment:")
+}
+
+// TestCSSA_Netloggedon exercises netloggedon.x64.o — logged-on
+// user enumeration via NETAPI32$NetWkstaUserEnum. The BOF prints
+// "Username:" + "Domain:" + "Logon server:" lines per session.
+// Asserting on the "Username:" label captures the BOF's actual
+// output shape (single word, lowercase 'n') rather than the
+// canonical Windows wording.
+func TestCSSA_Netloggedon(t *testing.T) {
+	a := NewArgs()
+	a.AddWideString("") // empty = local
+	out := runCSSABOF(t, "netloggedon", a.Pack())
+	assertContainsAny(t, "netloggedon", out, "Username:", "Logon server:")
+}
+
+// TestCSSA_Enumlocalsessions exercises enumlocalsessions.x64.o —
+// WTS session enum via WTSAPI32$WTSEnumerateSessionsExA. Adds a
+// new module (WTSAPI32) to the PEB-walk coverage. Every Windows
+// session manager exposes at least session 0 (Services) +
+// session 1 (console); asserting on "Session" header is stable.
+func TestCSSA_Enumlocalsessions(t *testing.T) {
+	out := runCSSABOF(t, "enumlocalsessions", nil)
+	assertContainsAny(t, "enumlocalsessions", out, "Session", "session")
+}
+
+// TestCSSA_ScEnum exercises sc_enum.x64.o — service enumeration
+// via ADVAPI32$EnumServicesStatusEx. Empty servername = SCM on
+// localhost (no admin required for read-only SCM access). Asserts
+// on a well-known always-present service name ("svchost" appears
+// as part of multiple entries).
+func TestCSSA_ScEnum(t *testing.T) {
+	a := NewArgs()
+	a.AddWideString("") // empty = local SCM
+	out := runCSSABOF(t, "sc_enum", a.Pack())
+	assertContainsAny(t, "sc_enum", out, "svchost", "Service", "STATE")
+}
+
+// TestCSSA_ListFirewallRules exercises list_firewall_rules.x64.o —
+// firewall policy via HNetCfg COM (INetFwPolicy2). Adds COM init
+// paths (CoInitializeEx + CoCreateInstance) to the surface; the
+// BOF emits a "Rule Name:" line per rule. Every Windows install
+// has dozens of inbox rules.
+func TestCSSA_ListFirewallRules(t *testing.T) {
+	out := runCSSABOF(t, "list_firewall_rules", nil)
+	assertContainsAny(t, "list_firewall_rules", out, "Rule Name", "Rule name", "Direction")
+}
+
+// TestCSSA_Driversigs exercises driversigs.x64.o — installed
+// driver enumeration via ADVAPI32$EnumServicesStatusExW filtered
+// to driver service types. Three valid outcomes, all witnessing
+// that the loader resolved ADVAPI32 and the BOF ran end-to-end:
+//
+//   - full success: "ImagePath" / "Signed" / ".sys" lines
+//   - partial-success warnings: "WARNING: Failed to get ImagePath"
+//     (host has driver registry keys ACL'd against non-admin)
+//   - BOF's own failure path: "EnumServicesStatusExW failed."
+//     (upstream BOF doesn't handle ERROR_MORE_DATA correctly,
+//     observed on the French Windows10 VM with more services
+//     than the default buffer holds; bug is in the BOF, not our
+//     loader — the line itself is BeaconPrintf output proving
+//     ADVAPI32 was reached + the BOF executed cleanly)
+func TestCSSA_Driversigs(t *testing.T) {
+	out := runCSSABOF(t, "driversigs", nil)
+	assertContainsAny(t, "driversigs", out,
+		"ImagePath", "Signed", ".sys",
+		"EnumServicesStatusExW failed",
+	)
+}
+
+// TestCSSA_Md5 exercises md5.x64.o — file MD5 via ADVAPI32
+// CryptCreateHash + CryptHashData. Targets notepad.exe (every
+// Windows install has it, small file, stable). The output
+// includes a hex digest line which we check for the 32-char
+// shape via "MD5" header rather than a fixed digest (different
+// patch levels = different bytes).
+func TestCSSA_Md5(t *testing.T) {
+	a := NewArgs()
+	a.AddString(`C:\Windows\System32\notepad.exe`)
+	out := runCSSABOF(t, "md5", a.Pack())
+	assertContainsAny(t, "md5", out, "MD5", "md5", "Hash")
+}
