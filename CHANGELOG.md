@@ -7,6 +7,36 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — slice 1.d step 1.f: Token + IsAdmin via advapi32 (2026-05-18)
+
+# 3 new Beacon API symbols
+
+  BeaconIsAdmin         // OpenProcessToken + GetTokenInformation(TokenElevation)
+  BeaconUseToken        // ImpersonateLoggedOnUser
+  BeaconRevertToken     // RevertToSelf
+
+# advapi32 resolved lazily
+
+advapi32 is loaded on demand via kernel32!LoadLibraryA on the
+first call to one of the three Token APIs. The loader DLL has
+zero static imports on advapi32, so a BOF that never touches
+Token/IsAdmin never pays the LoadLibraryA cost.
+
+# Tests on Windows 10 VM (8/8 PASS)
+
+  TestX86Loader_Embedded_NotEmpty
+  TestX86Loader_IsPE32DLL
+  TestX86BOF_Execute_NoopFixture
+  TestX86BOF_Execute_HelloBeacon
+  TestX86BOF_Execute_ParseArgs
+  TestX86BOF_Execute_HelpersKV
+  TestX86BOF_Execute_TokenAdmin       // step 1.f
+  TestX86BOF_Execute_BadHost_FailsSpawn
+
+# Fixture
+
+  testdata/token_admin.x86.{c,o}      // BeaconIsAdmin + BeaconRevertToken round-trip
+
 ### runtime/bof — slice 1.d step 1.e: Helpers + KV (toWideChar / UserData / SpawnTo / Add/Get/Remove) (2026-05-18)
 
 # 6 new Beacon API symbols

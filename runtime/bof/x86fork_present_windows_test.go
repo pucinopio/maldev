@@ -272,6 +272,35 @@ func TestX86BOF_Execute_HelpersKV(t *testing.T) {
 		"toWideChar must produce UTF-16LE with low bytes preserved")
 }
 
+// TestX86BOF_Execute_TokenAdmin exercises BeaconIsAdmin +
+// BeaconRevertToken end-to-end. The fixture calls IsAdmin
+// (which triggers ensure_advapi → LoadLibraryA("advapi32.dll")
+// → OpenProcessToken → GetTokenInformation) and emits the
+// result; then BeaconRevertToken as a safe no-op.
+//
+// The Windows VM test user (`test`) is in BUILTIN\Administrators
+// but rundll32 doesn't elevate by default, so isadmin=0 is the
+// expected value when the user is not elevated. We just assert
+// that a value (either 0 or 1) was emitted — the contract is
+// "BeaconIsAdmin returned, didn't crash". A dedicated elevated
+// run would assert isadmin=1.
+func TestX86BOF_Execute_TokenAdmin(t *testing.T) {
+	if _, err := os.Stat(defaultX86Host); err != nil {
+		t.Skipf("WoW64 host %s missing: %v", defaultX86Host, err)
+	}
+	bof, err := os.ReadFile("testdata/token_admin.x86.o")
+	require.NoError(t, err, "token_admin.x86.o fixture missing")
+
+	res, err := Run(context.Background(), Spec{Bytes: bof})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	out := string(res.Output)
+	assert.Regexp(t, `isadmin=[01]`, out,
+		"BeaconIsAdmin must surface 0 or 1, not crash")
+	assert.Contains(t, out, "revert=done",
+		"BeaconRevertToken must complete cleanly with no impersonation active")
+}
+
 // TestX86BOF_Execute_BadHost_FailsSpawn exercises the
 // CreateProcess failure path. A bogus SpawnTo must surface a
 // "spawn rundll32" error rather than crash. Deterministic — no
