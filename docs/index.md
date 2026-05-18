@@ -73,7 +73,7 @@ OPSEC / MITRE / Limitations / See also).
 | [T1055.015](https://attack.mitre.org/techniques/T1055/015/) | [`inject`](https://pkg.go.dev/github.com/oioio-space/maldev/inject) |
 | [T1056.001](https://attack.mitre.org/techniques/T1056/001/) | [`collection`](https://pkg.go.dev/github.com/oioio-space/maldev/collection) · [`collection/keylog`](https://pkg.go.dev/github.com/oioio-space/maldev/collection/keylog) |
 | [T1057](https://attack.mitre.org/techniques/T1057/) | [`process`](https://pkg.go.dev/github.com/oioio-space/maldev/process) · [`process/enum`](https://pkg.go.dev/github.com/oioio-space/maldev/process/enum) |
-| [T1059](https://attack.mitre.org/techniques/T1059/) | [`c2`](https://pkg.go.dev/github.com/oioio-space/maldev/c2) · [`c2/meterpreter`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/meterpreter) · [`c2/shell`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/shell) · [`runtime/bof`](https://pkg.go.dev/github.com/oioio-space/maldev/runtime/bof) · [`runtime/clr`](https://pkg.go.dev/github.com/oioio-space/maldev/runtime/clr) |
+| [T1059](https://attack.mitre.org/techniques/T1059/) | [`c2`](https://pkg.go.dev/github.com/oioio-space/maldev/c2) · [`c2/meterpreter`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/meterpreter) · [`c2/shell`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/shell) · [`runtime/bof`](https://pkg.go.dev/github.com/oioio-space/maldev/runtime/bof) · [`runtime/clr`](https://pkg.go.dev/github.com/oioio-space/maldev/runtime/clr) · [`runtime/pe`](https://pkg.go.dev/github.com/oioio-space/maldev/runtime/pe) |
 | [T1059.001](https://attack.mitre.org/techniques/T1059/001/) | [`c2/shell`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/shell) |
 | [T1059.003](https://attack.mitre.org/techniques/T1059/003/) | [`c2/shell`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/shell) |
 | [T1059.004](https://attack.mitre.org/techniques/T1059/004/) | [`c2/shell`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/shell) |
@@ -123,7 +123,7 @@ OPSEC / MITRE / Limitations / See also).
 | [T1574.001](https://attack.mitre.org/techniques/T1574/001/) | [`pe/dllproxy`](https://pkg.go.dev/github.com/oioio-space/maldev/pe/dllproxy) · [`recon/dllhijack`](https://pkg.go.dev/github.com/oioio-space/maldev/recon/dllhijack) |
 | [T1574.002](https://attack.mitre.org/techniques/T1574/002/) | [`pe/dllproxy`](https://pkg.go.dev/github.com/oioio-space/maldev/pe/dllproxy) |
 | [T1574.012](https://attack.mitre.org/techniques/T1574/012/) | [`evasion`](https://pkg.go.dev/github.com/oioio-space/maldev/evasion) · [`evasion/hook`](https://pkg.go.dev/github.com/oioio-space/maldev/evasion/hook) · [`evasion/hook/bridge`](https://pkg.go.dev/github.com/oioio-space/maldev/evasion/hook/bridge) · [`evasion/hook/shellcode`](https://pkg.go.dev/github.com/oioio-space/maldev/evasion/hook/shellcode) |
-| [T1620](https://attack.mitre.org/techniques/T1620/) | [`pe/packer`](https://pkg.go.dev/github.com/oioio-space/maldev/pe/packer) · [`pe/packer/runtime`](https://pkg.go.dev/github.com/oioio-space/maldev/pe/packer/runtime) · [`pe/srdi`](https://pkg.go.dev/github.com/oioio-space/maldev/pe/srdi) · [`runtime/bof`](https://pkg.go.dev/github.com/oioio-space/maldev/runtime/bof) · [`runtime/clr`](https://pkg.go.dev/github.com/oioio-space/maldev/runtime/clr) |
+| [T1620](https://attack.mitre.org/techniques/T1620/) | [`pe/packer`](https://pkg.go.dev/github.com/oioio-space/maldev/pe/packer) · [`pe/packer/runtime`](https://pkg.go.dev/github.com/oioio-space/maldev/pe/packer/runtime) · [`pe/srdi`](https://pkg.go.dev/github.com/oioio-space/maldev/pe/srdi) · [`runtime/bof`](https://pkg.go.dev/github.com/oioio-space/maldev/runtime/bof) · [`runtime/clr`](https://pkg.go.dev/github.com/oioio-space/maldev/runtime/clr) · [`runtime/pe`](https://pkg.go.dev/github.com/oioio-space/maldev/runtime/pe) |
 | [T1622](https://attack.mitre.org/techniques/T1622/) | [`evasion`](https://pkg.go.dev/github.com/oioio-space/maldev/evasion) · [`recon/antidebug`](https://pkg.go.dev/github.com/oioio-space/maldev/recon/antidebug) · [`recon/hwbp`](https://pkg.go.dev/github.com/oioio-space/maldev/recon/hwbp) |
 
 <!-- END AUTOGEN: mitre-index -->
@@ -233,12 +233,13 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 
 </details>
 
-<details><summary><strong>Runtime loaders — `runtime/*`</strong> — 2 packages</summary>
+<details><summary><strong>Runtime loaders — `runtime/*`</strong> — 3 packages</summary>
 
 | Package | Detection | Summary |
 |---|---|---|
 | [`runtime/bof`](https://pkg.go.dev/github.com/oioio-space/maldev/runtime/bof) | moderate | loads and executes Beacon Object Files (BOFs) — compiled COFF object files (`.o`) — entirely in process memory |
 | [`runtime/clr`](https://pkg.go.dev/github.com/oioio-space/maldev/runtime/clr) | moderate | hosts the .NET Common Language Runtime in process via the `ICLRMetaHost` / `ICorRuntimeHost` COM interfaces and executes managed assemblies from memory without writing them to disk |
+| [`runtime/pe`](https://pkg.go.dev/github.com/oioio-space/maldev/runtime/pe) | moderate | runs full Portable Executable binaries (EXE / DLL) in-process by dispatching them through an embedded Fortra No-Consolation BOF on top of [runtime/bof] |
 
 </details>
 

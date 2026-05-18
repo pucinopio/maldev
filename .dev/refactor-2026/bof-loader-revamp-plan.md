@@ -26,11 +26,12 @@ slices:
     vm_e2e: pass (Win10 INIT, 76 tests incl. 13 new, 0.297s)
   - id: 1.c
     title: goffloader-parity-and-then-some (see goffloader-comparison.md)
-    status: closed (10/11 items; 1.c.9 runtime/pe deferred to a dedicated slice)
+    status: closed (11/11 items — 1.c.9 runtime/pe landed 2026-05-18)
     commits:
       - ca32d94  # batch A-D — 1.c.1/2/3/4/5/6/8/10 + realworld_calls fixture
       - 9a4e381  # batch E — 1.c.7 ExecuteStream + token-mask fix + AddWideString
-    vm_e2e: pass (Win10 INIT, full runtime/bof suite + TestRealWorldBOF + 2 stream tests)
+      - HEAD     # 1.c.9 runtime/pe — No-Consolation wrapper + 27-field packer + tests
+    vm_e2e: pass (Win10 INIT, full runtime/bof + new runtime/pe suite)
     items_closed:
       - 1.c.1 string-obfuscate Beacon import names (rune-array trick + verified hidden via `strings | grep` returning 0)
       - 1.c.2 vararg capture bumped 6 → 10 (goffloader parity)
@@ -40,10 +41,18 @@ slices:
       - 1.c.6 panic recover around BOF entry call
       - 1.c.7 (*BOF).ExecuteStream async channel API
       - 1.c.8 BeaconGetOutputData symbol (both packages were missing it)
+      - 1.c.9 runtime/pe — RunExecutable wraps No-Consolation BOF (MIT, build-tag-gated via `pe_noconsolation`); 27-field bofdata packer; build script at scripts/build-no-consolation.sh; tech md at docs/techniques/runtime/pe-loader.md
       - 1.c.10 cmd/bof-runner -arg type-prefixed CLI (i/s/z/Z/b)
       - 1.c.11 garble -literals already wired in make release
-    items_deferred:
-      - 1.c.9 runtime/pe — RunExecutable via No-Consolation wrapper. Deserves its own slice; embedding a 63 KB MIT-licensed BOF + arg-marshalling shim + PE-output capture is non-trivial.
+    items_deferred: []
+    followups_runtime_bof:
+      # Surfaced by the simplify/efficiency review of 1.c.9 — these are
+      # upstream improvements that benefit every BOF consumer, not just pe.
+      - bof.Args.Pack does a defensive copy of bytes.Buffer.Bytes() that
+        doubles peak memory of the packed payload (pe_bytes can be MB-scale)
+      - bof.Run is Load → Execute coupled; runtime/pe re-parses the
+        No-Consolation COFF on every call. Consider a bof.Loaded cache
+        keyed on &bytes[0] so Execute(args) can run alone
     sub_items:
       - 1.c.1 string-obfuscate Beacon import names
       - 1.c.2 bump vararg capture from 6 to 10

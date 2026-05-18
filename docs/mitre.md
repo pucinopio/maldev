@@ -34,7 +34,7 @@ reflects_commit: a705c32
 | T1078 | Valid Accounts | `win/privilege` (alt-creds spawn via Secondary Logon), `win/impersonate` (alt-creds → thread context swap) | D3-UAP (User Account Profiling) |
 | T1056.001 | Input Capture: Keylogging | `collection/keylog` | D3-KBIM (Keyboard Input Monitoring) |
 | T1057 | Process Discovery | `process/enum` | D3-PLA (Process Listing Analysis) |
-| T1059 | Command and Scripting Interpreter | `c2/shell`, `c2/meterpreter`, `runtime/bof` | D3-EFA (Executable File Analysis) |
+| T1059 | Command and Scripting Interpreter | `c2/shell`, `c2/meterpreter`, `runtime/bof`, `runtime/pe` (in-process EXE / DLL) | D3-EFA (Executable File Analysis) |
 | T1070 | Indicator Removal on Host | `cleanup/memory` | D3-SMRA |
 | T1070.004 | File Deletion | `cleanup/selfdelete`, `cleanup/wipe` | D3-FRA (File Removal Analysis) |
 | T1070.006 | Timestomp | `cleanup/timestomp` | D3-FHA (File Hash Analysis) |
@@ -68,7 +68,7 @@ reflects_commit: a705c32
 | T1564 | Hide Artifacts | `cleanup/service` | D3-FRA |
 | T1564.001 | Hide Artifacts: Hidden Process | `process/tamper/hideprocess` | D3-PLA (Process Listing Analysis) |
 | T1564.004 | Hide Artifacts: NTFS File Attributes | `cleanup/ads` | D3-FRA (File Removal Analysis) |
-| T1620 | Reflective Code Loading | `runtime/clr`, `pe/packer/runtime` (Windows x64 PE reflective loader) | D3-AIPA (Application Integrity Analysis) |
+| T1620 | Reflective Code Loading | `runtime/clr`, `runtime/pe` (No-Consolation BOF wrapper), `pe/packer/runtime` (Windows x64 PE reflective loader) | D3-AIPA (Application Integrity Analysis) |
 | T1571 | Non-Standard Port | `c2/multicat` (operator-side multi-session listener) | D3-NTA (Network Traffic Analysis) |
 | T1573.002 | Asymmetric Cryptography | `c2/transport` (TLS, uTLS) | D3-DNSTA (DNS Traffic Analysis) |
 | T1622 | Debugger Evasion | `recon/antidebug`, `recon/hwbp` | D3-DICA (Debug Instruction Analysis) |
