@@ -183,6 +183,13 @@ static int resolve_kapi(uint32_t k32, kernel32_api_t *k)
 #define HASH_BEACON_FORMAT_PRINTF     0x5CED6D47u
 #define HASH_BEACON_FORMAT_INT        0xA688AEF7u
 #define HASH_BEACON_FORMAT_TO_STRING  0x3ABFB373u
+/* Helpers + KV (step 1.e) */
+#define HASH_BEACON_GET_CUSTOM_USER_DATA 0x6918DD6Cu
+#define HASH_BEACON_GET_SPAWN_TO         0x48540CFCu
+#define HASH_TOWIDECHAR                  0xF9B61584u
+#define HASH_BEACON_ADD_VALUE            0x17030221u
+#define HASH_BEACON_GET_VALUE            0x170702E9u
+#define HASH_BEACON_REMOVE_VALUE         0x07283C8Au
 
 static uint32_t cstr_len(const char *s)
 {
@@ -434,6 +441,122 @@ __declspec(dllexport) char * __cdecl BeaconFormatToString(bof_formatp *fp, int *
     return fp->original;
 }
 
+/* — Helpers (step 1.e) ------------------------------------------- */
+
+__declspec(dllexport) void __cdecl BeaconGetCustomUserData(char **buf, int *len)
+{
+    if (!g_params) {
+        if (buf) *buf = 0;
+        if (len) *len = 0;
+        return;
+    }
+    if (buf) *buf = (char *)g_params->user_data_addr;
+    if (len) *len = (int)g_params->user_data_len;
+}
+
+/* BeaconGetSpawnTo writes the configured spawn-to path into buf
+ * (NUL-terminated, truncated to len-1 chars). x86 bool toggles
+ * between x64 / x86 hosts in the canonical CS API, but the parent
+ * orchestrator only tracks one path per BOF invocation
+ * (params->spawn_to_addr) — we ignore the x86 flag and always
+ * return the configured path, matching the in-process loader's
+ * SetSpawnToX86 convention for the x86 case. */
+__declspec(dllexport) void __cdecl BeaconGetSpawnTo(int x86, char *buf, int len)
+{
+    (void)x86;
+    if (!buf || len <= 0) return;
+    if (!g_params || !g_params->spawn_to_addr) {
+        buf[0] = 0;
+        return;
+    }
+    const char *src = (const char *)g_params->spawn_to_addr;
+    int i = 0;
+    while (i < len - 1 && src[i] != '\0') { buf[i] = src[i]; i++; }
+    buf[i] = 0;
+}
+
+/* toWideChar — single-byte → UTF-16LE pass-through. The canonical
+ * CS variant decodes UTF-8 multi-byte sequences; we only honour
+ * the ASCII subset because every public BOF we've sampled passes
+ * literal ASCII paths/names through toWideChar. `max` is the wide
+ * char capacity of `dst`. Returns 1 on success, 0 on bad args. */
+__declspec(dllexport) int __cdecl toWideChar(const char *src, unsigned short *dst, int max)
+{
+    if (!src || !dst || max <= 0) return 0;
+    int i = 0;
+    while (i < max - 1 && src[i] != '\0') {
+        dst[i] = (unsigned short)(unsigned char)src[i];
+        i++;
+    }
+    dst[i] = 0;
+    return 1;
+}
+
+/* — KV store (step 1.e) ------------------------------------------
+ *
+ * Fixed-pool 32 entries — ample for BOFs we've sampled (most use
+ * 1-3 stash slots). Keyed on ROR13(key); 0 hash collides with the
+ * "empty" sentinel and gets bumped to 1 (cheap and stable).
+ *
+ * Scope is the BOF invocation (the rundll32 helper exits after
+ * each Execute), so no inter-call leakage — matches the x64
+ * loader's documented "cross-Run state goes through the implant"
+ * contract. */
+
+#define KV_MAX 32
+
+typedef struct {
+    uint32_t key_hash;   /* 0 = empty slot */
+    void    *value;
+} kv_entry_t;
+
+static kv_entry_t g_kv[KV_MAX];
+
+static uint32_t kv_hash(const char *key)
+{
+    uint32_t h = ror13_hash((const uint8_t *)key);
+    return h == 0 ? 1u : h;
+}
+
+__declspec(dllexport) void __cdecl BeaconAddValue(const char *key, void *val)
+{
+    if (!key) return;
+    uint32_t h = kv_hash(key);
+    /* First pass: update existing. */
+    for (int i = 0; i < KV_MAX; i++) {
+        if (g_kv[i].key_hash == h) { g_kv[i].value = val; return; }
+    }
+    /* Second pass: claim first empty slot. */
+    for (int i = 0; i < KV_MAX; i++) {
+        if (g_kv[i].key_hash == 0) { g_kv[i].key_hash = h; g_kv[i].value = val; return; }
+    }
+    /* Pool full — silently drop, matching CS's no-op-on-error
+     * convention for non-critical helpers. */
+}
+
+__declspec(dllexport) void * __cdecl BeaconGetValue(const char *key)
+{
+    if (!key) return 0;
+    uint32_t h = kv_hash(key);
+    for (int i = 0; i < KV_MAX; i++) {
+        if (g_kv[i].key_hash == h) return g_kv[i].value;
+    }
+    return 0;
+}
+
+__declspec(dllexport) void __cdecl BeaconRemoveValue(const char *key)
+{
+    if (!key) return;
+    uint32_t h = kv_hash(key);
+    for (int i = 0; i < KV_MAX; i++) {
+        if (g_kv[i].key_hash == h) {
+            g_kv[i].key_hash = 0;
+            g_kv[i].value    = 0;
+            return;
+        }
+    }
+}
+
 static uint32_t beacon_resolve(uint32_t hash)
 {
     /* Output / errors */
@@ -456,6 +579,14 @@ static uint32_t beacon_resolve(uint32_t hash)
     if (hash == HASH_BEACON_FORMAT_PRINTF)    return (uint32_t)&BeaconFormatPrintf;
     if (hash == HASH_BEACON_FORMAT_INT)       return (uint32_t)&BeaconFormatInt;
     if (hash == HASH_BEACON_FORMAT_TO_STRING) return (uint32_t)&BeaconFormatToString;
+    /* Helpers */
+    if (hash == HASH_BEACON_GET_CUSTOM_USER_DATA) return (uint32_t)&BeaconGetCustomUserData;
+    if (hash == HASH_BEACON_GET_SPAWN_TO)         return (uint32_t)&BeaconGetSpawnTo;
+    if (hash == HASH_TOWIDECHAR)                  return (uint32_t)&toWideChar;
+    /* KV */
+    if (hash == HASH_BEACON_ADD_VALUE)            return (uint32_t)&BeaconAddValue;
+    if (hash == HASH_BEACON_GET_VALUE)            return (uint32_t)&BeaconGetValue;
+    if (hash == HASH_BEACON_REMOVE_VALUE)         return (uint32_t)&BeaconRemoveValue;
     return 0;
 }
 

@@ -7,6 +7,39 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — slice 1.d step 1.e: Helpers + KV (toWideChar / UserData / SpawnTo / Add/Get/Remove) (2026-05-18)
+
+# 6 new Beacon API symbols
+
+  BeaconGetCustomUserData    // hands back params->user_data_{addr,len}
+  BeaconGetSpawnTo           // hands back params->spawn_to_addr (NUL-terminated)
+  toWideChar                 // ASCII → UTF-16LE pass-through
+  BeaconAddValue             // 32-slot fixed pool, ROR13-keyed
+  BeaconGetValue             // linear scan, cheap (≤32 entries)
+  BeaconRemoveValue          // clears the matched slot
+
+# Scope semantics
+
+KV scope is the BOF invocation — matches the x64 loader's
+documented "cross-Run state goes through the implant" contract.
+The rundll32 helper exits after each Execute so g_kv resets
+automatically.
+
+# Fixture + test
+
+  testdata/helpers_kv.x86.{c,o}   // exercises all 6 symbols in one BOF
+  TestX86BOF_Execute_HelpersKV    // VM PASS — asserts every contract
+
+# All TestX86 on Windows 10 VM (7/7)
+
+  TestX86Loader_Embedded_NotEmpty
+  TestX86Loader_IsPE32DLL
+  TestX86BOF_Execute_NoopFixture
+  TestX86BOF_Execute_HelloBeacon
+  TestX86BOF_Execute_ParseArgs
+  TestX86BOF_Execute_HelpersKV     // step 1.e
+  TestX86BOF_Execute_BadHost_FailsSpawn
+
 ### runtime/bof — slice 1.d step 1.c.1: Beacon Data + Format families on the WoW64 path (2026-05-18)
 
 # Beacon API surface (12 new symbols, full Group 1 + 2 minus printf%)

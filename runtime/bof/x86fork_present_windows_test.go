@@ -241,6 +241,37 @@ func TestX86BOF_Execute_ParseArgs(t *testing.T) {
 		"BeaconDataExtract → BeaconFormatAppend → BeaconOutput must surface the parsed string")
 }
 
+// TestX86BOF_Execute_HelpersKV exercises BeaconGetCustomUserData,
+// BeaconGetSpawnTo, toWideChar, and the BeaconAddValue / Get /
+// Remove KV trio. The fixture emits semicolon-separated
+// assertions; we grep for each.
+func TestX86BOF_Execute_HelpersKV(t *testing.T) {
+	if _, err := os.Stat(defaultX86Host); err != nil {
+		t.Skipf("WoW64 host %s missing: %v", defaultX86Host, err)
+	}
+	bof, err := os.ReadFile("testdata/helpers_kv.x86.o")
+	require.NoError(t, err, "helpers_kv.x86.o fixture missing")
+
+	res, err := Run(context.Background(), Spec{
+		Bytes:    bof,
+		UserData: []byte("user-data-bytes-go-here"),
+		SpawnTo:  `C:\Windows\SysWOW64\notepad.exe`,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	out := string(res.Output)
+	assert.Contains(t, out, "userdata=user-data-bytes-go-here",
+		"BeaconGetCustomUserData must surface the configured blob")
+	assert.Contains(t, out, `spawnto=C:\Windows\SysWOW64\notepad.exe`,
+		"BeaconGetSpawnTo must surface the configured path")
+	assert.Contains(t, out, "kv-after-add=ok",
+		"BeaconAddValue+GetValue round-trip must succeed")
+	assert.Contains(t, out, "kv-after-remove=missing",
+		"BeaconRemoveValue must purge the entry")
+	assert.Contains(t, out, "wide=H,e,l",
+		"toWideChar must produce UTF-16LE with low bytes preserved")
+}
+
 // TestX86BOF_Execute_BadHost_FailsSpawn exercises the
 // CreateProcess failure path. A bogus SpawnTo must surface a
 // "spawn rundll32" error rather than crash. Deterministic — no
