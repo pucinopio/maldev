@@ -124,7 +124,6 @@ func TestRor13_KnownAnswers(t *testing.T) {
 		{"GetProcessHeap", 0xA80EECAE},
 		{"HeapAlloc", 0x2500383C},
 		{"HeapFree", 0x10C32616},
-		{"RtlMoveMemory", 0xCF14E85B},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
