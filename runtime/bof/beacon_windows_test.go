@@ -79,10 +79,12 @@ func TestArgsPackWideString(t *testing.T) {
 	args := NewArgs()
 	args.AddWideString("hi")
 	packed := args.Pack()
-	// 4-byte length (in wide units, includes NUL = 3) + 3 × 2 bytes
-	// of UTF-16LE = 4 + 6 = 10 bytes total.
+	// 4-byte length (in BYTES, includes NUL = 6) + 6 bytes of UTF-16LE
+	// payload = 10 bytes total. Length is byte-count, not wchar-count,
+	// because BeaconDataExtract reads exactly chunkLen bytes from the
+	// buffer (consumer side has no notion of wide vs ASCII).
 	require.Len(t, packed, 4+6)
-	require.Equal(t, uint32(3), binary.LittleEndian.Uint32(packed[:4]))
+	require.Equal(t, uint32(6), binary.LittleEndian.Uint32(packed[:4]))
 	// First wide unit 'h' = 0x0068 LE → 0x68 0x00.
 	require.Equal(t, byte('h'), packed[4])
 	require.Equal(t, byte(0), packed[5])

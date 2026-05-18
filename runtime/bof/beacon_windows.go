@@ -109,10 +109,12 @@ func (a *Args) AddString(s string) {
 }
 
 // AddWideString appends a UTF-16LE-encoded NUL-terminated string with a
-// 4-byte little-endian length prefix in WIDE units (matching goffloader's
-// PackString convention). BOFs that take wchar_t* args via
-// BeaconDataExtract on the unpacked buffer get a directly-castable
-// UTF-16LE blob.
+// 4-byte little-endian byte-length prefix. The length is the count of
+// raw bytes (= 2 × number of wide chars including the trailing NUL),
+// matching the BeaconDataExtract consumer contract: every Extract
+// reads `chunkLen` BYTES regardless of whether the payload is ASCII
+// or UTF-16. BOFs receiving a wchar_t* via the unpacked buffer get a
+// directly-castable UTF-16LE blob.
 func (a *Args) AddWideString(s string) {
 	utf16 := windows.StringToUTF16(s) // includes trailing NUL
 	bytes := make([]byte, len(utf16)*2)
@@ -120,7 +122,7 @@ func (a *Args) AddWideString(s string) {
 		binary.LittleEndian.PutUint16(bytes[i*2:], u)
 	}
 	var lb [4]byte
-	binary.LittleEndian.PutUint32(lb[:], uint32(len(utf16)))
+	binary.LittleEndian.PutUint32(lb[:], uint32(len(bytes)))
 	a.buf.Write(lb[:])
 	a.buf.Write(bytes)
 }

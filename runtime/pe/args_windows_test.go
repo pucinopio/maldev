@@ -4,7 +4,6 @@ package pe
 
 import (
 	"encoding/binary"
-	"errors"
 	"testing"
 	"time"
 )
@@ -35,22 +34,27 @@ func readString(t *testing.T, buf []byte) (string, []byte) {
 	return string(rest[:n-1]), rest[n:]
 }
 
-// readWideString consumes a wide-string field: length prefix in
-// UTF-16 units, then raw UTF-16LE bytes. Decodes back to UTF-8
-// for comparison convenience.
+// readWideString consumes a wide-string field: byte-length prefix
+// then raw UTF-16LE bytes. Decodes back to UTF-8 for comparison
+// convenience. Byte length matches the producer contract in
+// bof.Args.AddWideString — every Extract reads chunkLen BYTES.
 func readWideString(t *testing.T, buf []byte) (string, []byte) {
 	t.Helper()
-	n, rest := readUint32LE(t, buf)
-	byteLen := int(n) * 2
+	byteLen32, rest := readUint32LE(t, buf)
+	byteLen := int(byteLen32)
 	if len(rest) < byteLen {
 		t.Fatalf("short wstring payload: want %d, have %d", byteLen, len(rest))
 	}
-	u16 := make([]uint16, n)
-	for i := uint32(0); i < n; i++ {
+	if byteLen%2 != 0 {
+		t.Fatalf("wstring byte length not even: %d", byteLen)
+	}
+	nUnits := byteLen / 2
+	u16 := make([]uint16, nUnits)
+	for i := 0; i < nUnits; i++ {
 		u16[i] = binary.LittleEndian.Uint16(rest[i*2 : i*2+2])
 	}
-	if n > 0 && u16[n-1] == 0 {
-		u16 = u16[:n-1]
+	if nUnits > 0 && u16[nUnits-1] == 0 {
+		u16 = u16[:nUnits-1]
 	}
 	runes := make([]rune, len(u16))
 	for i, c := range u16 {
@@ -79,7 +83,7 @@ func readBytes(t *testing.T, buf []byte) ([]byte, []byte) {
 }
 
 // TestPackArgs_FieldOrder is the canonical wire-format witness:
-// it walks the packed buffer in the exact 27-field order
+// it walks the packed buffer in the exact 28-field order
 // No-Consolation's go() reads and verifies every value lands in
 // its expected slot. Reordering packArgs without updating
 // No-Consolation breaks this test loudly.
@@ -102,6 +106,7 @@ func TestPackArgs_FieldOrder(t *testing.T) {
 		Local:          false,
 		Name:           "hello.exe",
 		Path:           `C:\Temp\hello.exe`,
+		UnloadLibs:     "advapi32.dll",
 		UnloadPE:       "old.exe",
 		Username:       "alice",
 		LoadTime:       "2026-05-18T00:00:00Z",
@@ -161,7 +166,7 @@ func TestPackArgs_FieldOrder(t *testing.T) {
 		t.Errorf("method: got %q", gotMethod)
 	}
 
-	flags := []struct {
+	flagsBeforeUnloadLibs := []struct {
 		name string
 		want int32
 	}{
@@ -169,10 +174,28 @@ func TestPackArgs_FieldOrder(t *testing.T) {
 		{"nooutput", 0},
 		{"alloc_console", 1},
 		{"close_handles", 0},
+	}
+	for _, f := range flagsBeforeUnloadLibs {
+		var got int32
+		got, buf = readInt(t, buf)
+		if got != f.want {
+			t.Errorf("%s: got %d, want %d", f.name, got, f.want)
+		}
+	}
+
+	gotUnloadLibs, buf := readString(t, buf)
+	if gotUnloadLibs != "advapi32.dll" {
+		t.Errorf("unload_libs: got %q", gotUnloadLibs)
+	}
+
+	flagsAfterUnloadLibs := []struct {
+		name string
+		want int32
+	}{
 		{"dont_save", 1},
 		{"list_pes", 0},
 	}
-	for _, f := range flags {
+	for _, f := range flagsAfterUnloadLibs {
 		var got int32
 		got, buf = readInt(t, buf)
 		if got != f.want {
@@ -322,16 +345,7 @@ func TestBoolInt(t *testing.T) {
 	}
 }
 
-// TestRunExecutable_LoaderMissing — under the default build (no
-// pe_noconsolation tag), RunExecutable should return
-// ErrLoaderMissing and propagate it cleanly, not panic on the nil
-// blob.
-func TestRunExecutable_LoaderMissing(t *testing.T) {
-	_, err := RunExecutable([]byte{0x4d, 0x5a}, Options{})
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if !errors.Is(err, ErrLoaderMissing) {
-		t.Errorf("want ErrLoaderMissing, got %v", err)
-	}
-}
+// TestRunExecutable_LoaderMissing lives in
+// pe_default_windows_test.go — it only makes sense under the
+// default (no-pe_noconsolation) build where the embedded loader
+// is absent.

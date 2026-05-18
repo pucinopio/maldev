@@ -27,6 +27,7 @@ type Options struct {
 	DontUnload      bool
 	AllocConsole    bool
 	CloseHandles    bool
+	UnloadLibs      string
 	DontSave        bool
 	ListPEs         bool
 	LoadAllDeps     bool

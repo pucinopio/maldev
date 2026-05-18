@@ -1,26 +1,28 @@
 # No-Consolation embedded object
 
-This directory holds the compiled No-Consolation BOF object file
-(`NoConsolation.x64.o`) that `runtime/pe` embeds via `//go:embed`
-when built with the `pe_noconsolation` build tag.
+This directory holds the compiled
+[Fortra No-Consolation](https://github.com/fortra/No-Consolation)
+BOF object file (`NoConsolation.x64.o`, MIT-licensed) that
+`runtime/pe` embeds via `//go:embed` when built with the
+`pe_noconsolation` build tag.
 
-The `.o` is **not** vendored upstream — fortra/No-Consolation
-publishes no release artefacts. Produce it locally with:
+The `.o` is **committed to the repo** so operators don't need
+mingw at run time — same pattern as
+`kernel/driver/rtcore64/RTCore64.sys`. The embed stays behind a
+build tag because the binary is a public BOF and AV/EDR
+signatures will likely flag the resulting implant unless
+operators opt in explicitly.
+
+## Rebuilding
+
+Pinned commit: see `scripts/build-no-consolation.sh` (currently
+`fortra/No-Consolation @ dbdb16b`). Rebuild from clean source
+with:
 
 ```bash
-bash tools/no-consolation-build.sh
+bash scripts/build-no-consolation.sh
 ```
 
-The script clones the upstream repo at a pinned commit, compiles
-with `x86_64-w64-mingw32-gcc`, and drops `NoConsolation.x64.o`
-plus `LICENSE` (MIT) into this directory. Both files are
-git-ignored by default — operators choose whether to commit
-them per-implant.
-
-## Why a build tag
-
-The default `go build` stays reproducible on machines that
-don't have mingw installed and doesn't pull a third-party
-binary into the implant unless the operator opted in. Mirrors
-the discipline used by `kernel/driver/rtcore64` for the BYOVD
-driver embed.
+The script clones the upstream repo, compiles with
+`x86_64-w64-mingw32-gcc`, and drops the artefact alongside this
+README plus the upstream `LICENSE`.

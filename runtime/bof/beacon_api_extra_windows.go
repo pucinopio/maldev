@@ -142,7 +142,12 @@ func beaconGetOutputDataImpl(sizePtr uintptr) uintptr {
 }
 
 // beaconAddValueImpl maps key (C string) → ptr in the per-BOF KV store.
-// Existing values are overwritten silently; CS contract is best-effort.
+// Existing values are overwritten silently.
+//
+// Returns BOOL (1 = success / 0 = failure) — matching the No-Consolation
+// extended signature (`BOOL BeaconAddValue(const char *, void *)`).
+// The CS-canonical contract is `void`, but No-Consolation and other
+// BOFs check the return; treating it as void makes them silently fail.
 func beaconAddValueImpl(keyPtr, valPtr uintptr) uintptr {
 	if currentBOF == nil || keyPtr == 0 {
 		return 0
@@ -151,7 +156,7 @@ func beaconAddValueImpl(keyPtr, valPtr uintptr) uintptr {
 		currentBOF.kv = newKVStore()
 	}
 	currentBOF.kv.set(cStringFromPtr(keyPtr, 4096), valPtr)
-	return 0
+	return 1
 }
 
 // beaconGetValueImpl looks up key in the KV store; returns 0 when absent.
@@ -163,12 +168,19 @@ func beaconGetValueImpl(keyPtr uintptr) uintptr {
 }
 
 // beaconRemoveValueImpl drops key from the KV store; no-op when absent.
+// Returns BOOL — matching No-Consolation's
+// `BOOL BeaconRemoveValue(const char *)` extension. Callers that test
+// the return interpret 0 as failure, so we report 1 on success and on
+// the no-op-when-absent path (the operation post-condition holds).
 func beaconRemoveValueImpl(keyPtr uintptr) uintptr {
-	if currentBOF == nil || keyPtr == 0 || currentBOF.kv == nil {
+	if currentBOF == nil || keyPtr == 0 {
 		return 0
 	}
+	if currentBOF.kv == nil {
+		return 1
+	}
 	currentBOF.kv.remove(cStringFromPtr(keyPtr, 4096))
-	return 0
+	return 1
 }
 
 // processInfo mirrors PROCESS_INFORMATION (24 bytes on x64).

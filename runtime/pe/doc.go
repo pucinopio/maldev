@@ -13,17 +13,18 @@
 //
 // # Build tag
 //
-// The No-Consolation object file is gated behind the
+// The No-Consolation object file is committed to the repo under
+// runtime/pe/internal/noconsolation/ but embedding stays behind the
 // `pe_noconsolation` build tag — same discipline as the BYOVD
 // drivers under kernel/driver/rtcore64. The default build returns
 // ErrLoaderMissing; build the implant with
 //
 //	go build -tags=pe_noconsolation ./...
 //
-// after producing the .o via tools/no-consolation-build.sh (which
-// compiles fortra/No-Consolation @ pinned commit with
-// x86_64-w64-mingw32-gcc and drops the artefact into
-// runtime/pe/internal/noconsolation/).
+// to embed the loader. Operators who want to refresh the upstream
+// version run scripts/build-no-consolation.sh to rebuild the .o
+// from the pinned fortra/No-Consolation commit via
+// x86_64-w64-mingw32-gcc.
 //
 // # MITRE ATT&CK
 //

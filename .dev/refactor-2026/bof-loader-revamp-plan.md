@@ -41,7 +41,7 @@ slices:
       - 1.c.6 panic recover around BOF entry call
       - 1.c.7 (*BOF).ExecuteStream async channel API
       - 1.c.8 BeaconGetOutputData symbol (both packages were missing it)
-      - 1.c.9 runtime/pe — RunExecutable wraps No-Consolation BOF (MIT, build-tag-gated via `pe_noconsolation`); 27-field bofdata packer; build script at scripts/build-no-consolation.sh; tech md at docs/techniques/runtime/pe-loader.md
+      - 1.c.9 runtime/pe — RunExecutable wraps No-Consolation BOF (MIT, embed gated via `pe_noconsolation`); 28-field bofdata packer (verified by witness test against fortra/No-Consolation @ dbdb16b); build script at scripts/build-no-consolation.sh; .o committed to repo (rtcore64 model); 7 E2E tests passing on Windows10 VM via hello.x64.dll fixture. Surfaced + fixed three upstream bugs in the slice: bof.Args.AddWideString wrote length in wide-units instead of bytes (consumer reads bytes); BeaconAddValue/RemoveValue returned 0 (No-Consolation extension expects BOOL); win/api.ExportByHash didn't resolve forwarders (HeapAlloc → ntdll!RtlAllocateHeap on Win 8+). Tech md at docs/techniques/runtime/pe-loader.md
       - 1.c.10 cmd/bof-runner -arg type-prefixed CLI (i/s/z/Z/b)
       - 1.c.11 garble -literals already wired in make release
     items_deferred: []

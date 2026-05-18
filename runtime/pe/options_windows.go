@@ -59,6 +59,12 @@ type Options struct {
 	// the PE itself fails to call ExitProcess.
 	CloseHandles bool
 
+	// UnloadLibs is a comma-separated list of DLL names the BOF
+	// should unload after the PE returns. Useful when a transient
+	// dependency was LoadLibrary'd into the host and should not
+	// linger. Empty ⇒ no extra unloads.
+	UnloadLibs string
+
 	// DontSave skips the No-Consolation internal cache (the
 	// "PE registry" used by ListPEs).
 	DontSave bool

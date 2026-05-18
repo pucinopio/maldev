@@ -15,11 +15,10 @@ import (
 // go()) reads from its bofdata buffer.
 //
 // Field order — DO NOT REORDER — must match the BeaconData* call
-// sequence on the C side. Documented in
-// .dev/refactor-2026/goffloader-comparison.md (1.c.9 followup)
-// and verified against fortra/No-Consolation @ main.
+// sequence on the C side. Verified line-by-line against
+// fortra/No-Consolation source/entry.c at commit dbdb16b.
 //
-// The 26-field sequence (in order):
+// The 28-field sequence (in order):
 //
 //	 1. pe_wname        wide string
 //	 2. pe_name         string
@@ -36,18 +35,19 @@ import (
 //	13. nooutput        int
 //	14. alloc_console   int
 //	15. close_handles   int
-//	16. dont_save       int
-//	17. list_pes        int
-//	18. unload_pe       string
-//	19. username        string
-//	20. loadtime        string
-//	21. link_to_peb     int
-//	22. dont_unload     int
-//	23. load_all_deps   int
-//	24. load_all_deps_but   string
-//	25. load_deps       string
-//	26. search_paths    string
-//	27. inthread        int
+//	16. unload_libs     string
+//	17. dont_save       int
+//	18. list_pes        int
+//	19. unload_pe       string
+//	20. username        string
+//	21. loadtime        string
+//	22. link_to_peb     int
+//	23. dont_unload     int
+//	24. load_all_deps   int
+//	25. load_all_deps_but   string
+//	26. load_deps       string
+//	27. search_paths    string
+//	28. inthread        int
 func packArgs(peBytes []byte, opt Options) []byte {
 	a := bof.NewArgs()
 
@@ -70,6 +70,7 @@ func packArgs(peBytes []byte, opt Options) []byte {
 	a.AddInt(boolInt(opt.NoOutput))
 	a.AddInt(boolInt(opt.AllocConsole))
 	a.AddInt(boolInt(opt.CloseHandles))
+	a.AddString(opt.UnloadLibs)
 	a.AddInt(boolInt(opt.DontSave))
 	a.AddInt(boolInt(opt.ListPEs))
 

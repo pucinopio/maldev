@@ -85,6 +85,14 @@ func ModuleByHash(hash uint32) (uintptr, error) {
 
 // ExportByHash finds a function address in a loaded PE module by walking
 // its export directory and comparing ROR13 hashes of export names.
+//
+// Forwarder handling: when an export's RVA falls inside the export
+// directory range, the export is a forwarder (e.g.
+// `kernel32!HeapAlloc` → "NTDLL.RtlAllocateHeap" on Windows 8+).
+// The function resolves the forwarder target string recursively via
+// ResolveByHash so the caller gets the real code address, not the
+// non-executable forwarder string. Without this step calling the
+// returned pointer triggers a DEP/NX violation.
 func ExportByHash(moduleBase uintptr, funcHash uint32) (uintptr, error) {
 	// Parse PE headers from loaded image (in-memory layout, RVA-based).
 	dosHeader := moduleBase
@@ -97,7 +105,9 @@ func ExportByHash(moduleBase uintptr, funcHash uint32) (uintptr, error) {
 	// PE signature (4) + COFF header (20) + optional header starts at +24
 	// Export directory is DataDirectory[0] in the optional header.
 	// On x64: optional header starts at peHeader+24, DataDirectory at +112 (0x70).
+	// The matching Size field is at +116 — needed for forwarder detection.
 	exportDirRVA := *(*uint32)(unsafe.Pointer(peHeader + 24 + 112))
+	exportDirSize := *(*uint32)(unsafe.Pointer(peHeader + 24 + 116))
 	if exportDirRVA == 0 {
 		return 0, fmt.Errorf("no export directory at module 0x%X", moduleBase)
 	}
@@ -115,21 +125,83 @@ func ExportByHash(moduleBase uintptr, funcHash uint32) (uintptr, error) {
 	addrOrdinals := moduleBase + uintptr(*(*uint32)(unsafe.Pointer(exportDir + 0x24)))
 
 	for i := uint32(0); i < numNames; i++ {
-		// Read name RVA and resolve to pointer
 		nameRVA := *(*uint32)(unsafe.Pointer(addrNames + uintptr(i)*4))
 		namePtr := moduleBase + uintptr(nameRVA)
 
-		// Hash the ASCII export name using ROR13 (no null terminator).
 		h := ror13Ascii(namePtr)
-		if h == funcHash {
-			// Get ordinal index and function RVA
-			ordinal := *(*uint16)(unsafe.Pointer(addrOrdinals + uintptr(i)*2))
-			funcRVA := *(*uint32)(unsafe.Pointer(addrFunctions + uintptr(ordinal)*4))
-			return moduleBase + uintptr(funcRVA), nil
+		if h != funcHash {
+			continue
 		}
+		ordinal := *(*uint16)(unsafe.Pointer(addrOrdinals + uintptr(i)*2))
+		funcRVA := *(*uint32)(unsafe.Pointer(addrFunctions + uintptr(ordinal)*4))
+		if funcRVA >= exportDirRVA && funcRVA < exportDirRVA+exportDirSize {
+			return resolveForwarder(moduleBase + uintptr(funcRVA))
+		}
+		return moduleBase + uintptr(funcRVA), nil
 	}
 
 	return 0, fmt.Errorf("export hash 0x%08X not found in module 0x%X", funcHash, moduleBase)
+}
+
+// resolveForwarder parses a "TargetDLL.TargetFunc" forwarder string at
+// the given address and recursively resolves it through ResolveByHash.
+// The string is NUL-terminated ASCII; the separator is the first '.'
+// character (the target DLL name never contains a dot — Windows uses
+// the base name without extension, "NTDLL" rather than "ntdll.dll").
+//
+// The lookup appends ".DLL" so the module-name hashing matches the
+// PEB's BaseDllName (.DLL-suffixed, uppercase per Windows convention).
+// Callers see the real export address, ready to call.
+func resolveForwarder(strPtr uintptr) (uintptr, error) {
+	// Read the forwarder string out of process memory (NUL-terminated).
+	var b []byte
+	for off := uintptr(0); off < 256; off++ {
+		c := *(*byte)(unsafe.Pointer(strPtr + off))
+		if c == 0 {
+			break
+		}
+		b = append(b, c)
+	}
+	if len(b) == 0 {
+		return 0, fmt.Errorf("forwarder string at 0x%X is empty", strPtr)
+	}
+	dot := -1
+	for i, c := range b {
+		if c == '.' {
+			dot = i
+			break
+		}
+	}
+	if dot <= 0 || dot == len(b)-1 {
+		return 0, fmt.Errorf("malformed forwarder %q", string(b))
+	}
+	dllName := string(b[:dot]) + ".DLL" // uppercase already in forwarder
+	funcName := string(b[dot+1:])
+	return ResolveByHash(ror13Module(dllName), ror13Asciiz(funcName))
+}
+
+// ror13Module hashes a Go string the same way `hash.ROR13Module` does:
+// each byte of the dll name plus a trailing NUL, with the underlying
+// ROR13 mixing. Mirrored here to keep the api package
+// import-independent (avoids a cycle with hash/).
+func ror13Module(dll string) uint32 {
+	var h uint32
+	for i := 0; i < len(dll); i++ {
+		h = (h>>13 | h<<19) + uint32(dll[i])
+	}
+	h = (h>>13 | h<<19) + 0
+	return h
+}
+
+// ror13Asciiz hashes a Go string the same way `hash.ROR13` does
+// (no trailing NUL). Used for forwarder function names — the real
+// export name lookup expects ROR13 without the terminator.
+func ror13Asciiz(s string) uint32 {
+	var h uint32
+	for i := 0; i < len(s); i++ {
+		h = (h>>13 | h<<19) + uint32(s[i])
+	}
+	return h
 }
 
 // ror13Wide computes ROR13 hash of a UTF-16LE buffer (hashing low byte of

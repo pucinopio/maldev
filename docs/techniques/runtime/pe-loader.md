@@ -81,7 +81,7 @@ the godoc is the *specification*.
 
 ## Examples
 
-### Simple — run an EXE, capture stdout
+### Recommended shape — DLL with exported entry
 
 ```go
 import (
@@ -90,9 +90,10 @@ import (
     "github.com/oioio-space/maldev/runtime/pe"
 )
 
-bytes, _ := os.ReadFile("hello.exe")
+bytes, _ := os.ReadFile("hello.x64.dll")
 out, err := pe.RunExecutable(bytes, pe.Options{
-    Args: []string{"--name", "world"},
+    Method: "hello_main",
+    Args:   []string{"--name", "world"},
 })
 if err != nil {
     return err
@@ -100,12 +101,22 @@ if err != nil {
 fmt.Println(out)
 ```
 
-### DLL export — call a specific function
+The export receives the cmdline as its single argument:
+
+```c
+__declspec(dllexport) int hello_main(const char *cmdline) {
+    printf("hello: %s\n", cmdline);
+    return 0;
+}
+```
+
+### EXE — works but risks tearing down the host
 
 ```go
-out, _ := pe.RunExecutable(dllBytes, pe.Options{
-    Method: "ReflectiveLoader",
-    Args:   []string{"--quiet"},
+// fragile: hello.exe's CRT eventually calls ExitProcess.
+// Prefer the DLL shape unless you have a sacrificial process.
+out, _ := pe.RunExecutable(exeBytes, pe.Options{
+    Args: []string{"--name", "world"},
 })
 ```
 
@@ -169,8 +180,18 @@ intent.
 
 ## Limitations
 
-- **No loader by default** — gated behind the `pe_noconsolation`
-  build tag. Run `scripts/build-no-consolation.sh` first.
+- **EXE in-process is unstable.** Real Windows EXEs reach
+  ExitProcess at the end of `main()` and tear the host down
+  before output can be returned. No-Consolation tries to hook
+  ExitProcess but the in-process model with the Go runtime
+  sharing the host makes it unreliable. The supported shape is
+  **DLLs with an explicit exported function** — call via
+  `Options.Method`. The exported function receives the cmdline
+  as its first arg (NOT `(argc, argv)`).
+- **No loader embedded by default** — gated behind the
+  `pe_noconsolation` build tag. The `.o` is committed to the
+  repo under `runtime/pe/internal/noconsolation/`; rebuild with
+  `scripts/build-no-consolation.sh` to refresh from upstream.
 - **No x86 path yet** — `.x86.o` build is supported but the
   Go-side wiring only embeds `.x64.o`. A future
   `pe_noconsolation_x86` tag would parallel the x64 one.
