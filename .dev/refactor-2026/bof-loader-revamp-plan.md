@@ -94,6 +94,43 @@ slices:
     commits:
       - 3edaeda  # loader_windows.go + Run/Spec/Kind/DetectKind + 7 tests
     vm_e2e: pass (Win10 INIT, 7 tests incl. table-driven, 0.453s)
+  - id: 1.d
+    title: x86 (.x86.o) BOF support
+    status: in-progress
+    phases:
+      - phase: A
+        title: detection layer + clean cross-arch error path
+        status: closed
+        commits:
+          - HEAD  # this commit
+        deliverable: |
+          KindCOFFx86 constant + magic-byte detection (0x014c).
+          coffX86Loader registered as the dispatch target; today it
+          surfaces ErrCrossArchX86Unsupported. bof.Load on an x86 .o
+          wraps the same sentinel instead of leaking the raw machine
+          hex code. Tests pin both Run() and Load() paths.
+      - phase: B
+        title: fork-and-run orchestrator (Go side)
+        status: queued
+        scope: |
+          Spawn BeaconGetSpawnTo(TRUE) host (default
+          C:\Windows\SysWOW64\rundll32.exe) suspended, VirtualAllocEx
+          + WriteProcessMemory three regions (x86 loader DLL, the
+          BOF .o + args, the shared control block + output buffer),
+          launch via CreateRemoteThread, WaitForSingleObject, then
+          ReadProcessMemory the captured output. TerminateProcess +
+          CloseHandle on teardown.
+      - phase: C
+        title: x86 loader DLL (C, mingw32)
+        status: queued
+        scope: |
+          runtime/bof/internal/x86loader/loader.c — exports
+          RunBOF(bofBytes, bofLen, args, argsLen, ctrl). Implements
+          the Beacon API in-child against a shared control block.
+          Build script (scripts/build-bof-x86-loader.sh), .dll
+          committed to the repo, embed gated behind
+          //go:build bof_x86_loader (same pattern as
+          pe_noconsolation in runtime/pe).
   - id: 3
     title: goloader integration
     status: queued

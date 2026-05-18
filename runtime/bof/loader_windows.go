@@ -20,6 +20,12 @@ const (
 	// KindCOFF is the Cobalt-Strike-style x64 COFF object file. Magic
 	// is the IMAGE_FILE_HEADER.Machine field (0x8664, little-endian).
 	KindCOFF
+	// KindCOFFx86 is the 32-bit (i386) variant of the CS COFF format.
+	// Machine field is 0x014c. The in-process loader for slice 1/2 is
+	// x64-only; KindCOFFx86 is detected for routing to the fork-and-run
+	// path (slice 1.d.2) so a 32-bit BOF can run inside a spawned WoW64
+	// helper instead of being rejected as "unknown".
+	KindCOFFx86
 	// KindGoModule will cover .o produced by go tool compile for the
 	// goloader path (slice 3).
 	KindGoModule
@@ -31,6 +37,8 @@ func (k Kind) String() string {
 	switch k {
 	case KindCOFF:
 		return "coff"
+	case KindCOFFx86:
+		return "coff-x86"
 	case KindGoModule:
 		return "gomod"
 	case KindGOF:
@@ -107,12 +115,24 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 }
 
 // DetectKind sniffs the magic bytes. The COFF check reads the
-// IMAGE_FILE_HEADER.Machine field at offset 0 (little-endian 0x8664).
+// IMAGE_FILE_HEADER.Machine field at offset 0 (little-endian).
+//   - 0x8664 → KindCOFF (AMD64 — the in-process loader path)
+//   - 0x014c → KindCOFFx86 (i386 — routed to the fork-and-run path,
+//     see x86fork_windows.go; today returns ErrCrossArchX86Unsupported
+//     when no x86 loader DLL is embedded)
+//
 // Future formats add cases here; the .gof loader will look for "GOF1"
 // at offset 0, the Go-module loader for the Go .o header.
 func DetectKind(b []byte) Kind {
-	if len(b) >= 2 && b[0] == 0x64 && b[1] == 0x86 {
+	if len(b) < 2 {
+		return KindUnknown
+	}
+	machine := uint16(b[0]) | uint16(b[1])<<8
+	switch machine {
+	case 0x8664:
 		return KindCOFF
+	case 0x014c:
+		return KindCOFFx86
 	}
 	return KindUnknown
 }

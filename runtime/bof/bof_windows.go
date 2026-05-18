@@ -334,6 +334,13 @@ func Load(data []byte) (*BOF, error) {
 
 	hdr := parseCOFFHeader(data)
 	if hdr.Machine != machineAMD64 {
+		// 0x014c is i386 — route to the fork-and-run path via
+		// bof.Run instead of the in-process Load. Surface the
+		// specific cross-arch error so operators don't have to
+		// decode a raw machine code.
+		if hdr.Machine == 0x014c {
+			return nil, fmt.Errorf("%w (machine=0x014c, use bof.Run for routing)", ErrCrossArchX86Unsupported)
+		}
 		return nil, fmt.Errorf("unsupported COFF machine type: 0x%X", hdr.Machine)
 	}
 

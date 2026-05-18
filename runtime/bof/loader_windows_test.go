@@ -25,7 +25,7 @@ func TestDetectKind(t *testing.T) {
 		{"empty", []byte{}, KindUnknown},
 		{"single byte", []byte{0x64}, KindUnknown},
 		{"coff machine x64", []byte{0x64, 0x86, 0, 0}, KindCOFF},
-		{"coff machine x86 (unsupported)", []byte{0x4c, 0x01, 0, 0}, KindUnknown},
+		{"coff machine x86 (i386)", []byte{0x4c, 0x01, 0, 0}, KindCOFFx86},
 		{"random gibberish", []byte("hello bytes!"), KindUnknown},
 	}
 	for _, c := range cases {
@@ -39,6 +39,7 @@ func TestDetectKind(t *testing.T) {
 // strings so the doc + log output stay stable.
 func TestKind_String(t *testing.T) {
 	assert.Equal(t, "coff", KindCOFF.String())
+	assert.Equal(t, "coff-x86", KindCOFFx86.String())
 	assert.Equal(t, "gomod", KindGoModule.String())
 	assert.Equal(t, "gof", KindGOF.String())
 	assert.Equal(t, "unknown", KindUnknown.String())

@@ -132,6 +132,43 @@ little-endian load. Use `AddInt` / `AddShort` for fixed-width
 ints, `AddString` for length-prefixed NUL-terminated strings,
 `AddBytes` for raw blobs.
 
+### Architecture routing — detect x86 vs x64 cleanly (slice 1.d phase A, v0.155+)
+
+`bof.Run` sniffs the COFF `Machine` field and dispatches: x64
+runs in-process, x86 returns the sentinel
+`bof.ErrCrossArchX86Unsupported` so callers can branch on
+architecture without parsing the file themselves.
+
+```go
+import (
+    "context"
+    "errors"
+    "os"
+
+    "github.com/oioio-space/maldev/runtime/bof"
+)
+
+data, _ := os.ReadFile(bofPath)
+res, err := bof.Run(context.Background(), bof.Spec{Bytes: data})
+switch {
+case err == nil:
+    fmt.Println(string(res.Output))
+case errors.Is(err, bof.ErrCrossArchX86Unsupported):
+    // 32-bit .o detected. In a v0.155-era implant, this means
+    // the fork-and-run orchestrator (slice 1.d phase B/C)
+    // hasn't shipped yet. Skip the BOF, log it, or fall back
+    // to a separate 32-bit implant. The detection at least
+    // never silently no-ops.
+    log.Printf("skip %s: x86 BOF not yet supported", bofPath)
+default:
+    log.Printf("bof.Run failed: %v", err)
+}
+```
+
+`bof.DetectKind(data)` is also exported if a caller wants to
+classify the bytes without running them — handy for triage
+tools that enumerate a public corpus before execution.
+
 ### Token impersonation + spawn-and-inject
 
 The slice-1 surface lets a CS BOF impersonate, spawn a sacrificial
@@ -515,7 +552,17 @@ for _, target := range targets {
   This matches the CS-compatible loader convention (BOF
   execution is fundamentally single-threaded) but is worth
   knowing if a host program runs many BOFs in parallel.
-- **x64 only.** `Machine == 0x8664` required.
+- **x64 only — x86 detected, rejected cleanly (slice 1.d phase
+  A, v0.155+).** The in-process loader handles `Machine == 0x8664`
+  exclusively. An x86 `.o` (`Machine == 0x014c`) is detected as
+  `KindCOFFx86` by `DetectKind` and routed through the
+  `coffX86Loader` stub, which returns the sentinel
+  `bof.ErrCrossArchX86Unsupported`. Operators can `errors.Is`
+  against it and pick a path: build a 32-bit implant, or wait
+  for the fork-and-run orchestrator (slice 1.d phase B/C) which
+  will spawn a SysWOW64 helper, inject an embedded x86 loader
+  DLL, and marshal output back. Until then x86 BOFs cannot
+  execute from a 64-bit implant.
 - **Relocation coverage.** `IMAGE_REL_AMD64_ABSOLUTE` (no-op),
   `_ADDR64`, `_ADDR32` (errors out cleanly when target exceeds
   32-bit range), `_ADDR32NB`, `_REL32`, and the `_REL32_1`

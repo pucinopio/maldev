@@ -7,6 +7,40 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — slice 1.d phase A: x86 COFF detection + clean error path (2026-05-18)
+
+# New public surface
+
+  ErrCrossArchX86Unsupported    // sentinel
+  KindCOFFx86                   // new dispatch value, String() = "coff-x86"
+
+# What changed
+
+DetectKind now reads the IMAGE_FILE_HEADER.Machine field as a
+little-endian uint16 and recognises 0x014c (i386) in addition to
+0x8664 (AMD64). x86 .o bytes route through the registered
+coffX86Loader, which surfaces ErrCrossArchX86Unsupported via both
+bof.Run and the in-process bof.Load entry — instead of leaking
+the raw "unsupported COFF machine type: 0x14C" message.
+
+# Why
+
+Operators who pull a public-ecosystem BOF corpus (TrustedSec
+CS-SA, Outflank, CS-community) routinely encounter x86 .o files.
+Today they get a generic error; they need an actionable sentinel
+they can errors.Is against and a roadmap pointer in the message.
+Phase A is the detection layer; phase B/C will add the fork-and-
+run orchestrator + the embedded x86 loader DLL. See
+.dev/refactor-2026/bof-loader-revamp-plan.md slice 1.d.
+
+# Tests
+
+  TestDetectKind                          // 0x014c → KindCOFFx86
+  TestKind_String                         // "coff-x86" round-trip
+  TestRun_X86COFF_RoutesToCrossArchError  // sentinel via Run()
+  TestRun_X86COFF_ExplicitMethod_RoutesSameWay
+  TestLoad_X86COFF_ReturnsCrossArchSentinel
+
 ### runtime/bof — sacrificial-thread crash isolation (2026-05-18)
 
 # New public surface
