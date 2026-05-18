@@ -7,6 +7,72 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — slice 1.d step 1.c: reflective-DLL pivot + Beacon API (2026-05-18)
+
+# Architecture pivot
+
+Phase B-bis steps 0–1.b shipped a flat PIC shellcode. Adding the
+Beacon API surface (BeaconPrintf / Output / Error*) required
+storing function pointers in lookup tables, which the compiler
+emits as absolute references — broken in flat PIC because
+`.reloc` was discarded.
+
+The clean fix, matching maldev's existing patterns (runtime/pe,
+inject/*): treat the loader as a regular i386 DLL, keep
+`.reloc`, and have the parent Go orchestrator perform a manual
+reflective load (parse + place + relocate + WriteProcessMemory
++ VirtualProtectEx per section). Still no disk, no LoadLibrary,
+no rundll32 argv.
+
+# C side
+
+- loader.c rewritten as a regular DLL: globals OK, function
+  pointer tables OK (the parent applies relocations).
+- Exports BOFExec + BeaconPrintf / BeaconOutput / BeaconErrorD
+  / BeaconErrorDD / BeaconErrorNA.
+- COFF parser unchanged from step 1.b; now consumes external
+  imports via a hash table → in-DLL Beacon functions. Each
+  __imp__BeaconXxx slot is patched with the in-DLL function
+  address; DIR32 relocs in the BOF point to the slot, so the
+  BOF's `call dword ptr [__imp__BeaconPrintf]` dereferences to
+  our implementation with zero trampolines and zero stack leak.
+
+# Go side
+
+- runtime/bof/x86_reflect_windows.go: hand-rolled PE32 parser +
+  reflective loader. parsePEAndPlace returns a ready-to-write
+  image with sections placed at RVAs + `.reloc` applied against
+  the target base + a name→RVA export map. reflectiveLoadIntoChild
+  ties it together: VirtualAllocEx, WriteProcessMemory,
+  VirtualProtectEx per section.
+- x86fork_windows.go: Execute replaces the flat-bytes write with
+  reflectiveLoadIntoChild; CreateRemoteThread now targets the
+  exported BOFExec address rather than offset 0 of the alloc.
+
+# Tests (under -tags=bof_x86_loader)
+
+  TestX86Loader_Embedded_NotEmpty                // bytes are linked
+  TestX86Loader_IsPE32DLL                        // MZ + PE\0\0 magic
+  TestParsePEAndPlace_FindsBOFExec               // export discovery
+  TestParsePEAndPlace_BadDOSMagic                // refusal path
+  TestSectionProtect_NeverRWX                    // protection downgrade
+  TestRor13_KnownAnswers                         // 7 kernel32 hashes
+  TestABIMagic_LittleEndianMatchesCSide
+  TestBuildIOBuffer_LayoutAndCopy
+  TestBuildParamsBlock_FieldOffsets
+  TestBuildParamsBlock_NoSpawnTo_ZerosTheField
+  TestClassifyLoaderStatus
+  TestX86BOF_Execute_NoopFixture                 // Windows-VM E2E
+  TestX86BOF_Execute_Timeout                     // VM E2E
+
+# Drops
+
+- bof_x86_loader.x86.bin (flat shellcode) → replaced by
+  bof_x86_loader.x86.dll (5.5 KB i386 PE).
+- runtime/bof/internal/x86loader/loader.ld (custom linker
+  script for flat .text extraction) → not needed; default
+  mingw32 -shared linker produces the DLL.
+
 ### runtime/bof — slice 1.d step 1.b: i386 COFF parser + relocations in shellcode (2026-05-18)
 
 # What the loader now does inside the WoW64 host

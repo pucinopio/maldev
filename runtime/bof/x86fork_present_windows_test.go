@@ -29,22 +29,82 @@ func TestX86Loader_Embedded_NotEmpty(t *testing.T) {
 		"shellcode should be at least 64 bytes — got %d", len(sc))
 }
 
-// TestX86Loader_Entry_PrologueLooksReasonable sniffs the first few
-// bytes of the shellcode for a plausible x86 function prologue.
-// loader_entry's __attribute__((force_align_arg_pointer)) makes
-// the compiler emit a `lea ecx, [esp+0x4]` (8d 4c 24 04) before
-// the `and esp, -16` alignment trick. Pinning this catches the
-// regression where the linker drops .text.entry first and
-// CreateRemoteThread jumps into a different function (or into
-// .rodata data interpreted as code).
-func TestX86Loader_Entry_PrologueLooksReasonable(t *testing.T) {
+// TestX86Loader_IsPE32DLL sniffs the magic + PE signature.
+// Phase B-bis switched to the reflective-DLL model: the bytes
+// are now a regular i386 PE32 DLL (parsed at runtime by the
+// reflective loader) rather than a flat shellcode blob. A
+// regression that ships shellcode bytes here would crash
+// parsePEAndPlace with "bad DOS magic" — this test pins the
+// expected shape at unit-test time.
+func TestX86Loader_IsPE32DLL(t *testing.T) {
 	sc, err := loadX86LoaderShellcode()
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(sc), 4)
+	require.GreaterOrEqual(t, len(sc), 0x40)
+	assert.Equal(t, byte('M'), sc[0])
+	assert.Equal(t, byte('Z'), sc[1])
 
-	want := []byte{0x8d, 0x4c, 0x24, 0x04} // lea ecx, [esp+0x4]
-	assert.Equal(t, want, sc[:4],
-		"expected force_align_arg_pointer prologue at offset 0, got % x", sc[:4])
+	// e_lfanew lives at 0x3C; the PE signature follows.
+	peOff := uint32(sc[0x3C]) | uint32(sc[0x3D])<<8 |
+		uint32(sc[0x3E])<<16 | uint32(sc[0x3F])<<24
+	require.GreaterOrEqual(t, int(peOff)+4, 4)
+	require.Less(t, int(peOff)+4, len(sc))
+	assert.Equal(t, "PE\x00\x00", string(sc[peOff:peOff+4]))
+}
+
+// TestParsePEAndPlace_FindsBOFExec pins the reflective loader's
+// PE parser against the actual embedded DLL: parse, lay, relocate
+// against a synthetic base address, then assert the BOFExec
+// export and the per-section metadata look sane. No cross-process
+// activity — entirely in-process unit test.
+func TestParsePEAndPlace_FindsBOFExec(t *testing.T) {
+	dll, err := loadX86LoaderShellcode()
+	require.NoError(t, err)
+	const target uint32 = 0x10000000
+	img, err := parsePEAndPlace(dll, target)
+	require.NoError(t, err)
+	require.NotNil(t, img)
+	assert.Greater(t, int(img.sizeOfImage), 0)
+	assert.Len(t, img.image, int(img.sizeOfImage))
+	rva, ok := img.exportRVAs["BOFExec"]
+	require.True(t, ok, "BOFExec export must be discoverable")
+	assert.Greater(t, int(rva), 0)
+	// At least one section must be marked executable — the
+	// loader's code lives in .text.
+	hasExec := false
+	for _, s := range img.sections {
+		if s.characteristics&0x20000000 != 0 {
+			hasExec = true
+			break
+		}
+	}
+	assert.True(t, hasExec, "at least one section must carry IMAGE_SCN_MEM_EXECUTE")
+}
+
+// TestParsePEAndPlace_BadDOSMagic guards against shipping
+// shellcode bytes by mistake. parsePEAndPlace must reject any
+// input that doesn't start with MZ — would be a hard-to-trace
+// crash inside the child if it slipped through.
+func TestParsePEAndPlace_BadDOSMagic(t *testing.T) {
+	junk := make([]byte, 256)
+	junk[0] = 0xFF
+	junk[1] = 0xEE
+	_, err := parsePEAndPlace(junk, 0x10000000)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "DOS magic")
+}
+
+// TestSectionProtect_NeverRWX pins the protection downgrade — a
+// PE section flagged EXECUTE+WRITE must lower to PAGE_EXECUTE_READ
+// (0x20), never RWX (0x40), to match the loader's "no RWX after
+// load" posture.
+func TestSectionProtect_NeverRWX(t *testing.T) {
+	rwx := imageScnMemExecute | imageScnMemWrite
+	got := sectionProtect(rwx)
+	assert.Equal(t, uint32(0x20), got, "RWX section must downgrade to PAGE_EXECUTE_READ")
+	// Spot-check the other corners.
+	assert.Equal(t, uint32(0x20), sectionProtect(imageScnMemExecute))
+	assert.Equal(t, uint32(0x04), sectionProtect(imageScnMemWrite))
+	assert.Equal(t, uint32(0x02), sectionProtect(0))
 }
 
 // TestRor13_KnownAnswers locks the Go-side ROR13 implementation

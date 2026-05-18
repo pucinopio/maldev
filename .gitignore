@@ -25,10 +25,10 @@ examples/privesc-dll-hijack/fakelib/fakelib.h
 !pe/packer/testdata/testlib_msvc.dll
 !examples/privesc-dll-hijack/fakelib/fakelib.dll
 !examples/privesc-dll-hijack/probe/probe.exe
-# x86 BOF loader shellcode — flat .text blob (PIC, no PE wrapper)
-# committed so `go build` works without mingw32. Rebuild via
+# x86 BOF loader DLL — i386 PE with relocations preserved, embedded
+# via go:embed so `go build` works without mingw32. Rebuild via
 # scripts/build-bof-x86-loader.sh (host i686-w64-mingw32 or Podman).
-!runtime/bof/internal/x86loader/bof_x86_loader.x86.bin
+!runtime/bof/internal/x86loader/bof_x86_loader.x86.dll
 # Bundled donor cert blobs — research artefacts, intentionally shipped.
 !pe/masquerade/donors/blobs/*.bin
 *.iml

