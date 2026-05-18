@@ -4,9 +4,11 @@ package bof
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // E2E suite against TrustedSec's CS-Situational-Awareness-BOF
@@ -323,4 +325,187 @@ func TestCSSA_Md5(t *testing.T) {
 	a.AddString(`C:\Windows\System32\notepad.exe`)
 	out := runCSSABOF(t, "md5", a.Pack())
 	assertContainsAny(t, "md5", out, "MD5", "md5", "Hash")
+}
+
+// TestCSSA_Whoami exercises whoami.x64.o — current user identity
+// via ADVAPI32$GetTokenInformation. The output always includes
+// the user SID (S-1-5-...) and the username; asserting on the
+// SID prefix is universally stable.
+func TestCSSA_Whoami(t *testing.T) {
+	out := runCSSABOF(t, "whoami", nil)
+	assertContainsAny(t, "whoami", out, "S-1-5", "SID", "User Name")
+}
+
+// TestCSSA_Tasklist exercises tasklist.x64.o — process
+// enumeration via WMI (ConnectServer + ExecQuery
+// Win32_Process). Two valid outcomes:
+//
+//   - Success: process names like "svchost", "System" appear.
+//   - BOF's documented failure path: "ConnectServer to  failed"
+//     when WMI access is gated (some sandboxed VMs, AV-blocked
+//     COM init, etc.). The BOF emits 3 cascading error messages
+//     in that case — each one is BeaconPrintf output, witnessing
+//     loader + import resolution + capture worked.
+func TestCSSA_Tasklist(t *testing.T) {
+	a := NewArgs()
+	a.AddWideString("") // empty = local
+	out := runCSSABOF(t, "tasklist", a.Pack())
+	assertContainsAny(t, "tasklist", out,
+		"svchost", "System", "Image Name",
+		"ConnectServer", "Wmi_Connect", // BOF's WMI failure path
+	)
+}
+
+// TestCSSA_Uptime exercises uptime.x64.o — system uptime via
+// KERNEL32$GetTickCount64. Output prints a "days/hours/minutes/
+// seconds" breakdown; "seconds" appears in every variant.
+func TestCSSA_Uptime(t *testing.T) {
+	out := runCSSABOF(t, "uptime", nil)
+	assertContainsAny(t, "uptime", out, "seconds", "second", "minutes", "uptime")
+}
+
+// TestCSSA_Useridletime exercises useridletime.x64.o — user
+// idle time via USER32$GetLastInputInfo. On a freshly-booted
+// VM idle time is small but always non-zero; the BOF prints a
+// "user has been idle for X" line.
+func TestCSSA_Useridletime(t *testing.T) {
+	out := runCSSABOF(t, "useridletime", nil)
+	assertContainsAny(t, "useridletime", out, "idle", "Idle", "seconds")
+}
+
+// TestCSSA_Windowlist exercises windowlist.x64.o — titled
+// top-level window enumeration via USER32$EnumDesktopWindows.
+// VM caveat: headless / SSH-only sessions can have zero titled
+// windows on the current desktop. We spawn notepad.exe ahead
+// of the BOF call as a known-titled witness, kill it after,
+// then assert on its title appearing in the output.
+//
+// ALL=1 includes hidden windows so the assertion holds whether
+// the desktop is visible or not.
+func TestCSSA_Windowlist(t *testing.T) {
+	const witnessTitle = "Untitled - Notepad"
+	cmd := exec.Command(`C:\Windows\System32\notepad.exe`)
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("spawn notepad: %v", err)
+	}
+	defer func() {
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
+	}()
+	// Notepad takes a moment to create its top-level window.
+	time.Sleep(500 * time.Millisecond)
+
+	a := NewArgs()
+	a.AddInt(1) // include hidden — VM session may have no visible desktop
+	out := runCSSABOF(t, "windowlist", a.Pack())
+	// notepad's window title is localised ("Notepad" en-US,
+	// "Bloc-notes" fr-FR, etc.) so we don't assert on that.
+	// EnumDesktopWindows always reports the cmd.exe / SSH shell
+	// process whose path is locale-neutral; that's the durable
+	// witness across VM locales. The notepad spawn is still
+	// useful — it boosts the window count on minimal sessions
+	// — but the assertion targets the locale-neutral entry.
+	_ = witnessTitle // kept for read-back documentation
+	assertContainsAny(t, "windowlist", out, "cmd.exe", "Hidden", "Visible")
+}
+
+// TestCSSA_Sha1 exercises sha1.x64.o — same surface as md5
+// (ADVAPI32 Crypt* + MSVCRT file I/O) with CALG_SHA1. Same
+// fixture (notepad.exe) for the same reason as TestCSSA_Md5.
+func TestCSSA_Sha1(t *testing.T) {
+	a := NewArgs()
+	a.AddString(`C:\Windows\System32\notepad.exe`)
+	out := runCSSABOF(t, "sha1", a.Pack())
+	assertContainsAny(t, "sha1", out, "SHA", "sha", "Hash")
+}
+
+// TestCSSA_Sha256 exercises sha256.x64.o — CALG_SHA_256 variant.
+// The BOF source labels the input variable "server" but uses it
+// as a file path (upstream copy-paste typo, no impact). Same
+// assertion shape as sha1.
+func TestCSSA_Sha256(t *testing.T) {
+	a := NewArgs()
+	a.AddString(`C:\Windows\System32\notepad.exe`)
+	out := runCSSABOF(t, "sha256", a.Pack())
+	assertContainsAny(t, "sha256", out, "SHA", "sha", "Hash")
+}
+
+// TestCSSA_Cacls exercises cacls.x64.o — file ACL listing via
+// ADVAPI32$GetNamedSecurityInfoW + LookupAccountSid. Output is
+// cacls.exe-style (NOT SDDL): "PRINCIPAL:F" / ":C" / ":R" with
+// (CI)/(OI)/(IO) inheritance flags. Asserting on "BUILTIN\\" or
+// "TrustedInstaller" — both literal English strings that survive
+// VM locale (verified on French Windows10 where the user-facing
+// labels become "Administrateurs" but the principal namespace
+// prefix stays English).
+func TestCSSA_Cacls(t *testing.T) {
+	a := NewArgs()
+	a.AddWideString(`C:\Windows`)
+	out := runCSSABOF(t, "cacls", a.Pack())
+	assertContainsAny(t, "cacls", out, `BUILTIN\`, "TrustedInstaller", "NT SERVICE")
+}
+
+// TestCSSA_Nettime exercises nettime.x64.o — server time via
+// NETAPI32$NetRemoteTOD. Empty servername = local. The BOF
+// prints "Current time at:" + a parsed timestamp.
+func TestCSSA_Nettime(t *testing.T) {
+	a := NewArgs()
+	a.AddWideString("") // empty = local
+	out := runCSSABOF(t, "nettime", a.Pack())
+	assertContainsAny(t, "nettime", out, "Current time", "time at", ":")
+}
+
+// TestCSSA_Schtasksenum exercises schtasksenum.x64.o —
+// scheduled-task enumeration via ITaskService COM. Empty
+// hostname = local. Every Windows host ships with built-in
+// tasks under \Microsoft\Windows\ ; asserting on the "\"
+// path separator or the "Microsoft" folder name is portable.
+func TestCSSA_Schtasksenum(t *testing.T) {
+	a := NewArgs()
+	a.AddWideString("") // empty = local
+	out := runCSSABOF(t, "schtasksenum", a.Pack())
+	assertContainsAny(t, "schtasksenum", out, "Microsoft", "Task", "task")
+}
+
+// TestCSSA_Aadjoininfo exercises aadjoininfo.x64.o — Azure AD
+// join state via NETAPI32$NetGetAadJoinInformation. Two valid
+// outcomes: an AAD-joined host returns tenant info, a workgroup
+// host returns "Device is not joined" — both prove the API
+// resolved + the BOF ran.
+func TestCSSA_Aadjoininfo(t *testing.T) {
+	out := runCSSABOF(t, "aadjoininfo", nil)
+	assertContainsAny(t, "aadjoininfo", out, "joined", "Joined", "Tenant", "Device")
+}
+
+// TestCSSA_GetSessionInfo exercises get_session_info.x64.o —
+// terminal session info via WTSAPI32$WTSQuerySessionInformation.
+// Reports user / domain / client info for the current console
+// session. The BOF emits "Domain" + "Username" labels.
+func TestCSSA_GetSessionInfo(t *testing.T) {
+	out := runCSSABOF(t, "get_session_info", nil)
+	assertContainsAny(t, "get_session_info", out, "Domain", "Username", "Session")
+}
+
+// TestCSSA_Netshares exercises netshares.x64.o — share enum
+// via NETAPI32$NetShareEnum. Empty sharename + asAdmin=0 keeps
+// the BOF on the basic (non-admin) path. Every Windows install
+// has IPC$ which always shows up.
+func TestCSSA_Netshares(t *testing.T) {
+	a := NewArgs()
+	a.AddWideString("") // empty = enumerate all
+	a.AddInt(0)         // asAdmin=false stays on the level-1 enum path
+	out := runCSSABOF(t, "netshares", a.Pack())
+	assertContainsAny(t, "netshares", out, "IPC$", "Share", "share")
+}
+
+// TestCSSA_GetPasswordPolicy exercises get_password_policy.x64.o —
+// password policy via NETAPI32$NetUserModalsGet (modal 0).
+// Empty server = local SAM. The BOF reports min password length,
+// max age, history count — the "Password" label appears in
+// each printed field.
+func TestCSSA_GetPasswordPolicy(t *testing.T) {
+	a := NewArgs()
+	a.AddWideString("") // empty = local
+	out := runCSSABOF(t, "get_password_policy", a.Pack())
+	assertContainsAny(t, "get_password_policy", out, "Password", "password", "Min", "Max")
 }

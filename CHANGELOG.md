@@ -7,6 +7,49 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — CS-SA E2E expansion 18 → 32 BOFs (2026-05-18)
+
+Fourteen more public BOFs added — total now 32, zero skips.
+Coverage matrix:
+
+  Core (4): env, dir, ipconfig, listmods
+  Network (5): arp, routeprint, listdns, netstat, nslookup
+  Identity (8): netuptime, netlocalgroup, netloggedon,
+    enumlocalsessions, whoami, get_session_info,
+    get_password_policy, netshares
+  Service / Policy (3): sc_enum, list_firewall_rules, driversigs
+  Crypto / Hash (3): md5, sha1, sha256
+  System (5): locale, uptime, useridletime, aadjoininfo, cacls
+  Process / UI / Scheduling (4): tasklist, windowlist,
+    schtasksenum, nettime
+
+New module surfaces: USER32 (window enum), WTSAPI32 session
+info variant, ITaskService COM (schedule), netapi32 password
+modal.
+
+# Test-pattern findings carried in docstrings
+
+The French Windows10 VM keeps surfacing locale-portability
+issues that make the suite robust:
+
+- windowlist: notepad's window title is localised
+  ("Notepad" / "Bloc-notes"). Assert on the cmd.exe / SSH
+  shell entry instead — universally enumerated, locale-neutral.
+- tasklist: WMI ConnectServer may fail on minimal VMs; the
+  BOF's "ConnectServer to failed" path is accepted as a valid
+  witness (proves WMI was reached, BOF printed via BeaconPrintf).
+- cacls: output is cacls.exe-style ACL text, NOT SDDL — assert
+  on "BUILTIN\\" / "TrustedInstaller" / "NT SERVICE" which
+  stay English across locales.
+
+# Spawn-and-cleanup test pattern
+
+TestCSSA_Windowlist spawns notepad.exe via os/exec, waits
+500 ms for the top-level window to appear, runs the BOF, then
+kills + waits. First test in the suite to need a pre-state;
+the pattern can be reused for future BOFs that read live UI
+or process state.
+
 ### runtime/bof — CS-SA E2E expansion 10 → 18 BOFs (2026-05-18)
 
 Eight more public BOFs added to the fetch script + E2E suite,

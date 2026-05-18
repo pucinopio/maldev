@@ -86,7 +86,7 @@ Populate with:
 bash scripts/fetch-cs-sa-bofs.sh
 ```
 
-The curated subset (18 BOFs):
+The curated subset (32 BOFs):
 
 | BOF | Surface exercised |
 |---|---|
@@ -108,13 +108,29 @@ The curated subset (18 BOFs):
 | `list_firewall_rules.x64.o` | HNetCfg COM (INetFwPolicy2) — CoInitialize + CoCreateInstance |
 | `driversigs.x64.o` | `ADVAPI32$EnumServicesStatusExW` (driver filter) |
 | `md5.x64.o` | `ADVAPI32` CryptCreateHash + MSVCRT file I/O, string arg |
+| `whoami.x64.o` | `ADVAPI32$GetTokenInformation` — user identity / SID |
+| `tasklist.x64.o` | WMI (`Win32_Process`) via OLE32 + WBEMCLI |
+| `uptime.x64.o` | `KERNEL32$GetTickCount64` — formatted uptime |
+| `useridletime.x64.o` | `USER32$GetLastInputInfo` — input idle ms |
+| `windowlist.x64.o` | `USER32$EnumDesktopWindows` — titled-window enum |
+| `sha1.x64.o` | `ADVAPI32` Crypt CALG_SHA1, file string arg |
+| `sha256.x64.o` | `ADVAPI32` Crypt CALG_SHA_256, file string arg |
+| `cacls.x64.o` | `ADVAPI32$GetNamedSecurityInfoW` — file ACLs, wstring arg |
+| `nettime.x64.o` | `NETAPI32$NetRemoteTOD` — server time, wstring arg |
+| `schtasksenum.x64.o` | `ITaskService` COM — scheduled-task enum, wstring arg |
+| `aadjoininfo.x64.o` | `NETAPI32$NetGetAadJoinInformation` — Azure AD state |
+| `get_session_info.x64.o` | `WTSAPI32$WTSQuerySessionInformation` |
+| `netshares.x64.o` | `NETAPI32$NetShareEnum` — share enum, (wstring, int) |
+| `get_password_policy.x64.o` | `NETAPI32$NetUserModalsGet` — pw policy, wstring arg |
 
 Tests live in `runtime/bof/cs_sa_e2e_windows_test.go`. The
-18-BOF suite exercises PEB-walk on a dozen modules (kernel32,
+32-BOF suite exercises PEB-walk on ~14 modules (kernel32,
 ntdll, msvcrt, iphlpapi, netapi32, dnsapi, advapi32, wtsapi32,
-setupapi, shlwapi, ole32, hnetcfg), export forwarders, all args
-shapes, the multi-section relocation path, and COM init from
-within a BOF.
+setupapi, shlwapi, ole32, hnetcfg, user32, oleaut32), export
+forwarders, every args shape, the multi-section relocation
+path, COM init from a BOF, WMI dispatch, and the
+spawn-witness pattern (TestCSSA_Windowlist creates a notepad
+window before the call).
 
 ## Test wiring
 

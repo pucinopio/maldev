@@ -11,7 +11,7 @@
 # the .o files land in a .gitignored directory and never reach
 # the maldev distribution. Tests skip when the fixtures are absent.
 #
-# # Curated subset (18 BOFs)
+# # Curated subset (32 BOFs)
 #
 # Core 4:
 # - dir        — filesystem enum + (string, short) args
@@ -69,7 +69,10 @@ for bof in \
     dir env ipconfig listmods \
     arp routeprint listdns netstat nslookup \
     locale netuptime netlocalgroup netloggedon enumlocalsessions \
-    sc_enum list_firewall_rules driversigs md5; do
+    sc_enum list_firewall_rules driversigs md5 \
+    whoami tasklist uptime useridletime windowlist \
+    sha1 sha256 cacls nettime schtasksenum aadjoininfo \
+    get_session_info netshares get_password_policy; do
     src="${WORK}/SA/${bof}/${bof}.x64.o"
     if [ ! -f "${src}" ]; then
         echo "  ! missing ${src}"
