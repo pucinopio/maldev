@@ -230,7 +230,7 @@ func (x *x86BOF) Execute(args []byte) ([]byte, error) {
 	x.errOut = errBytes
 
 	if e := classifyLoaderStatus(status, errCode); e != nil {
-		return output, e
+		return output, fmt.Errorf("%w (raw status=0x%X errCode=0x%X)", e, status, errCode)
 	}
 	return output, nil
 }

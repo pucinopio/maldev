@@ -64,9 +64,7 @@ static loader_params_t *g_params = 0;
 typedef void  __stdcall (*pfn_ExitThread)(uint32_t code);
 typedef void *__stdcall (*pfn_VirtualAlloc)(void *addr, uint32_t size, uint32_t allocType, uint32_t protect);
 typedef int   __stdcall (*pfn_VirtualProtect)(void *addr, uint32_t size, uint32_t newProtect, uint32_t *oldProtect);
-typedef void *__stdcall (*pfn_GetProcessHeap)(void);
-typedef void *__stdcall (*pfn_HeapAlloc)(void *heap, uint32_t flags, uint32_t bytes);
-typedef int   __stdcall (*pfn_HeapFree)(void *heap, uint32_t flags, void *mem);
+typedef int   __stdcall (*pfn_VirtualFree)(void *addr, uint32_t size, uint32_t freeType);
 
 /* Note: RtlMoveMemory is intentionally NOT resolved through
  * kernel32. On Windows 7+ kernel32 exports RtlMoveMemory as a
@@ -81,9 +79,7 @@ typedef struct {
     pfn_ExitThread      ExitThread;
     pfn_VirtualAlloc    VirtualAlloc;
     pfn_VirtualProtect  VirtualProtect;
-    pfn_GetProcessHeap  GetProcessHeap;
-    pfn_HeapAlloc       HeapAlloc;
-    pfn_HeapFree        HeapFree;
+    pfn_VirtualFree     VirtualFree;
 } kernel32_api_t;
 
 /* loader_memcpy — byte-wise copy used for COFF section data and
@@ -102,9 +98,7 @@ static kernel32_api_t g_kapi;
 #define HASH_EXIT_THREAD          0x60E0CEEFu
 #define HASH_VIRTUAL_ALLOC        0x91AFCA54u
 #define HASH_VIRTUAL_PROTECT      0x7946C61Bu
-#define HASH_GET_PROCESS_HEAP     0xA80EECAEu
-#define HASH_HEAP_ALLOC           0x2500383Cu
-#define HASH_HEAP_FREE            0x10C32616u
+#define HASH_VIRTUAL_FREE         0x030633ACu  /* VirtualFree */
 
 static uint32_t ror13_hash(const uint8_t *s)
 {
@@ -160,20 +154,35 @@ static int resolve_kapi(uint32_t k32, kernel32_api_t *k)
     k->ExitThread     = (pfn_ExitThread)    resolve_by_hash(k32, HASH_EXIT_THREAD);
     k->VirtualAlloc   = (pfn_VirtualAlloc)  resolve_by_hash(k32, HASH_VIRTUAL_ALLOC);
     k->VirtualProtect = (pfn_VirtualProtect)resolve_by_hash(k32, HASH_VIRTUAL_PROTECT);
-    k->GetProcessHeap = (pfn_GetProcessHeap)resolve_by_hash(k32, HASH_GET_PROCESS_HEAP);
-    k->HeapAlloc      = (pfn_HeapAlloc)     resolve_by_hash(k32, HASH_HEAP_ALLOC);
-    k->HeapFree       = (pfn_HeapFree)      resolve_by_hash(k32, HASH_HEAP_FREE);
-    return k->ExitThread && k->VirtualAlloc && k->VirtualProtect
-        && k->GetProcessHeap && k->HeapAlloc && k->HeapFree;
+    k->VirtualFree    = (pfn_VirtualFree)   resolve_by_hash(k32, HASH_VIRTUAL_FREE);
+    return k->ExitThread && k->VirtualAlloc && k->VirtualProtect && k->VirtualFree;
 }
 
 /* — Beacon API surface (step 1.c minimal) ------------------------- */
 
-#define HASH_BEACON_PRINTF   0x4D33ED28u
-#define HASH_BEACON_OUTPUT   0xD3F1C32Au
-#define HASH_BEACON_ERROR_D  0xD42BEA52u
-#define HASH_BEACON_ERROR_DD 0x0A1A5E16u
-#define HASH_BEACON_ERROR_NA 0x46DAB1ABu
+/* All values cross-checked against the Go-side ROR13 (see
+ * TestRor13_KnownAnswers_BeaconAPI). The earlier draft of this
+ * file shipped guessed values; do not re-derive without running
+ * the Go test. */
+#define HASH_BEACON_PRINTF            0x7AE65208u
+#define HASH_BEACON_OUTPUT            0x10EE8296u
+#define HASH_BEACON_ERROR_D           0x0CD65221u
+#define HASH_BEACON_ERROR_DD          0x910866F6u
+#define HASH_BEACON_ERROR_NA          0x915866F3u
+/* Data parsing */
+#define HASH_BEACON_DATA_PARSE        0x7EB7A762u
+#define HASH_BEACON_DATA_INT          0xF6547CDDu
+#define HASH_BEACON_DATA_SHORT        0x8CAFD6B1u
+#define HASH_BEACON_DATA_LENGTH       0x338C3323u
+#define HASH_BEACON_DATA_EXTRACT      0x2ED5F81Fu
+/* Format */
+#define HASH_BEACON_FORMAT_ALLOC      0xA1A33C4Cu
+#define HASH_BEACON_FORMAT_RESET      0x93544E1Du
+#define HASH_BEACON_FORMAT_FREE       0x714535AAu
+#define HASH_BEACON_FORMAT_APPEND     0xEABD4AFDu
+#define HASH_BEACON_FORMAT_PRINTF     0x5CED6D47u
+#define HASH_BEACON_FORMAT_INT        0xA688AEF7u
+#define HASH_BEACON_FORMAT_TO_STRING  0x3ABFB373u
 
 static uint32_t cstr_len(const char *s)
 {
@@ -243,13 +252,210 @@ __declspec(dllexport) void __cdecl BeaconErrorNA(int code)
     append_err(&dot, 1);
 }
 
+/* — Data parsing -------------------------------------------------
+ *
+ * datap layout (16 bytes on i386, matches beacon.h):
+ *   0   char *original
+ *   4   char *buffer
+ *   8   int   length    (bytes remaining at buffer)
+ *   12  int   size      (total)
+ *
+ * The reads are length-prefixed for BeaconDataExtract; 4-byte LE
+ * for BeaconDataInt; 2-byte LE for BeaconDataShort. */
+typedef struct {
+    char *original;
+    char *buffer;
+    int   length;
+    int   size;
+} bof_datap;
+
+__declspec(dllexport) void __cdecl BeaconDataParse(bof_datap *p, char *buf, int size)
+{
+    if (!p) return;
+    /* Buffer consumed verbatim — no envelope header. Matches the
+     * x64 runtime/bof beaconDataParseImpl convention; Args.Pack()
+     * produces length-prefixed values back-to-back with no
+     * length-of-buffer prefix. */
+    p->original = buf;
+    p->buffer   = buf;
+    p->size     = size;
+    p->length   = size;
+}
+
+__declspec(dllexport) int __cdecl BeaconDataInt(bof_datap *p)
+{
+    if (!p || p->length < 4) return 0;
+    uint8_t *b = (uint8_t *)p->buffer;
+    int v = (int)((uint32_t)b[0] | ((uint32_t)b[1] << 8) |
+                  ((uint32_t)b[2] << 16) | ((uint32_t)b[3] << 24));
+    p->buffer += 4;
+    p->length -= 4;
+    return v;
+}
+
+__declspec(dllexport) short __cdecl BeaconDataShort(bof_datap *p)
+{
+    if (!p || p->length < 2) return 0;
+    uint8_t *b = (uint8_t *)p->buffer;
+    short v = (short)((uint16_t)b[0] | ((uint16_t)b[1] << 8));
+    p->buffer += 2;
+    p->length -= 2;
+    return v;
+}
+
+__declspec(dllexport) int __cdecl BeaconDataLength(bof_datap *p)
+{
+    if (!p) return 0;
+    return p->length;
+}
+
+__declspec(dllexport) char * __cdecl BeaconDataExtract(bof_datap *p, int *out_size)
+{
+    if (!p || p->length < 4) {
+        if (out_size) *out_size = 0;
+        return 0;
+    }
+    uint8_t *b = (uint8_t *)p->buffer;
+    uint32_t len = (uint32_t)b[0] | ((uint32_t)b[1] << 8) |
+                   ((uint32_t)b[2] << 16) | ((uint32_t)b[3] << 24);
+    p->buffer += 4;
+    p->length -= 4;
+    if ((int)len > p->length) len = (uint32_t)p->length;
+    char *out = p->buffer;
+    p->buffer += len;
+    p->length -= (int)len;
+    if (out_size) *out_size = (int)len;
+    return out;
+}
+
+/* — Format -------------------------------------------------------
+ *
+ * formatp shares datap's struct shape; BeaconFormatAlloc HeapAllocs
+ * a fresh buffer the BOF appends into via Append/Int/Printf, then
+ * ToString returns its contents + length. Free releases the heap
+ * allocation. */
+typedef struct {
+    char *original;
+    char *buffer;
+    int   length;
+    int   size;
+} bof_formatp;
+
+__declspec(dllexport) void __cdecl BeaconFormatAlloc(bof_formatp *fp, int maxsz)
+{
+    if (!fp || maxsz <= 0) return;
+    /* VirtualAlloc instead of HeapAlloc: on some Windows SKUs the
+     * kernel32!HeapAlloc export is a forwarder to ntdll!RtlAllocateHeap
+     * (same trap as kernel32!RtlMoveMemory — our ROR13 walker returns
+     * the forwarder string's address, calling it crashes). VirtualAlloc
+     * is always a real kernel32 function with code. The rundll32 helper
+     * exits after each BOF so the per-call leak is reclaimed. */
+    char *buf = (char *)g_kapi.VirtualAlloc(0, (uint32_t)maxsz,
+        /* MEM_COMMIT|MEM_RESERVE */ 0x3000,
+        /* PAGE_READWRITE */ 0x04);
+    fp->original = buf;
+    fp->buffer   = buf;
+    fp->size     = maxsz;
+    fp->length   = 0;
+}
+
+__declspec(dllexport) void __cdecl BeaconFormatReset(bof_formatp *fp)
+{
+    if (!fp) return;
+    fp->buffer = fp->original;
+    fp->length = 0;
+}
+
+__declspec(dllexport) void __cdecl BeaconFormatFree(bof_formatp *fp)
+{
+    if (!fp || !fp->original) return;
+    /* Matches BeaconFormatAlloc's VirtualAlloc above. dwSize must
+     * be 0 for MEM_RELEASE. */
+    g_kapi.VirtualFree(fp->original, 0, /* MEM_RELEASE */ 0x8000);
+    fp->original = 0;
+    fp->buffer   = 0;
+    fp->size     = 0;
+    fp->length   = 0;
+}
+
+__declspec(dllexport) void __cdecl BeaconFormatAppend(bof_formatp *fp, const char *src, int len)
+{
+    if (!fp || !src || len <= 0) return;
+    int room = fp->size - fp->length;
+    if (room <= 0) return;
+    if (len > room) len = room;
+    loader_memcpy(fp->original + fp->length, src, (uint32_t)len);
+    fp->length += len;
+    fp->buffer = fp->original + fp->length;
+}
+
+/* itoa with fixed base 10. Writes up to 11 chars + sign into `out`,
+ * returns bytes written. Caller provides a buffer big enough. */
+static uint32_t itoa10(int32_t value, char *out)
+{
+    uint32_t n = 0;
+    uint32_t v;
+    int neg = 0;
+    if (value < 0) { neg = 1; v = (uint32_t)(-(int64_t)value); }
+    else           { v = (uint32_t)value; }
+    char tmp[16];
+    uint32_t ti = 0;
+    if (v == 0) tmp[ti++] = '0';
+    else { while (v) { tmp[ti++] = '0' + (char)(v % 10); v /= 10; } }
+    if (neg) out[n++] = '-';
+    while (ti--) out[n++] = tmp[ti];
+    return n;
+}
+
+__declspec(dllexport) void __cdecl BeaconFormatInt(bof_formatp *fp, int value)
+{
+    char buf[16];
+    uint32_t n = itoa10((int32_t)value, buf);
+    BeaconFormatAppend(fp, buf, (int)n);
+}
+
+/* BeaconFormatPrintf — same vararg trade-off as BeaconPrintf: fmt
+ * copied verbatim, no `%` expansion (step 1.c.2 will add a tiny
+ * vsnprintf if a fixture needs it). */
+__declspec(dllexport) void __cdecl BeaconFormatPrintf(bof_formatp *fp, const char *fmt)
+{
+    if (!fmt) return;
+    uint32_t n = cstr_len(fmt);
+    BeaconFormatAppend(fp, fmt, (int)n);
+}
+
+__declspec(dllexport) char * __cdecl BeaconFormatToString(bof_formatp *fp, int *size)
+{
+    if (!fp) {
+        if (size) *size = 0;
+        return 0;
+    }
+    if (size) *size = fp->length;
+    return fp->original;
+}
+
 static uint32_t beacon_resolve(uint32_t hash)
 {
-    if (hash == HASH_BEACON_PRINTF)   return (uint32_t)&BeaconPrintf;
-    if (hash == HASH_BEACON_OUTPUT)   return (uint32_t)&BeaconOutput;
-    if (hash == HASH_BEACON_ERROR_D)  return (uint32_t)&BeaconErrorD;
-    if (hash == HASH_BEACON_ERROR_DD) return (uint32_t)&BeaconErrorDD;
-    if (hash == HASH_BEACON_ERROR_NA) return (uint32_t)&BeaconErrorNA;
+    /* Output / errors */
+    if (hash == HASH_BEACON_PRINTF)         return (uint32_t)&BeaconPrintf;
+    if (hash == HASH_BEACON_OUTPUT)         return (uint32_t)&BeaconOutput;
+    if (hash == HASH_BEACON_ERROR_D)        return (uint32_t)&BeaconErrorD;
+    if (hash == HASH_BEACON_ERROR_DD)       return (uint32_t)&BeaconErrorDD;
+    if (hash == HASH_BEACON_ERROR_NA)       return (uint32_t)&BeaconErrorNA;
+    /* Data parsing */
+    if (hash == HASH_BEACON_DATA_PARSE)     return (uint32_t)&BeaconDataParse;
+    if (hash == HASH_BEACON_DATA_INT)       return (uint32_t)&BeaconDataInt;
+    if (hash == HASH_BEACON_DATA_SHORT)     return (uint32_t)&BeaconDataShort;
+    if (hash == HASH_BEACON_DATA_LENGTH)    return (uint32_t)&BeaconDataLength;
+    if (hash == HASH_BEACON_DATA_EXTRACT)   return (uint32_t)&BeaconDataExtract;
+    /* Format */
+    if (hash == HASH_BEACON_FORMAT_ALLOC)     return (uint32_t)&BeaconFormatAlloc;
+    if (hash == HASH_BEACON_FORMAT_RESET)     return (uint32_t)&BeaconFormatReset;
+    if (hash == HASH_BEACON_FORMAT_FREE)      return (uint32_t)&BeaconFormatFree;
+    if (hash == HASH_BEACON_FORMAT_APPEND)    return (uint32_t)&BeaconFormatAppend;
+    if (hash == HASH_BEACON_FORMAT_PRINTF)    return (uint32_t)&BeaconFormatPrintf;
+    if (hash == HASH_BEACON_FORMAT_INT)       return (uint32_t)&BeaconFormatInt;
+    if (hash == HASH_BEACON_FORMAT_TO_STRING) return (uint32_t)&BeaconFormatToString;
     return 0;
 }
 

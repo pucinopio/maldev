@@ -7,6 +7,56 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — slice 1.d step 1.c.1: Beacon Data + Format families on the WoW64 path (2026-05-18)
+
+# Beacon API surface (12 new symbols, full Group 1 + 2 minus printf%)
+
+  BeaconDataParse / DataInt / DataShort / DataLength / DataExtract
+  BeaconFormatAlloc / Reset / Free / Append / Int / Printf / ToString
+
+Resolution proceeds via ROR13 against the in-DLL Beacon table at
+COFF load time; the BOF's `call [__imp__BeaconXxx]` lands directly
+on the corresponding C function inside the loader DLL. No
+trampolines — the reflective load applies relocations before
+CreateRemoteThread, so address taking works natively.
+
+# Forwarder bypass for the Format buffer allocator
+
+BeaconFormatAlloc/Free use VirtualAlloc/VirtualFree instead of
+HeapAlloc/HeapFree. Empirically, kernel32!HeapAlloc on the WoW64
+helper is a forwarder to ntdll!RtlAllocateHeap on the target SKU
+(same trap that bit kernel32!RtlMoveMemory in the previous
+commit). Cross-process diagnostic via instrumented error_code:
+status=RUNNING errCode=0x1102 narrowed it to the HeapAlloc call
+site. VirtualAlloc is always a real kernel32 function with code;
+the rundll32 helper exits per BOF call so the per-call
+allocation leak is reclaimed by process teardown. HeapAlloc /
+HeapFree dropped from kernel32_api_t entirely so a future
+caller can't accidentally resurrect the bug.
+
+# Tests (all PASS on Windows 10 VM, fr-FR)
+
+  TestX86Loader_Embedded_NotEmpty
+  TestX86Loader_IsPE32DLL
+  TestX86BOF_Execute_NoopFixture
+  TestX86BOF_Execute_HelloBeacon       // BeaconPrintf round-trip
+  TestX86BOF_Execute_ParseArgs         // Data + Format + Output round-trip
+  TestX86BOF_Execute_BadHost_FailsSpawn
+
+# Fixtures
+
+  testdata/hello_beacon.x86.{c,o}      // BeaconPrintf
+  testdata/parse_args.x86.{c,o}        // Data + Format + Output
+
+# Refactor
+
+- BeaconDataParse no longer skips a 4-byte envelope. Matches the
+  x64 loader contract (see runtime/bof/beacon_api_windows.go:253):
+  Args.Pack() produces length-prefixed values back-to-back with
+  no buffer-length header. Old behaviour would skip the BOF's
+  first int and surface garbage at BeaconDataInt.
+- VirtualFree added to kernel32_api_t for BeaconFormatFree.
+
 ### runtime/bof — slice 1.d step 1.c: reflective-DLL pivot + Beacon API (2026-05-18)
 
 # Architecture pivot

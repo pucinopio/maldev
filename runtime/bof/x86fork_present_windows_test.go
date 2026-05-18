@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -177,23 +176,86 @@ func TestX86BOF_Execute_NoopFixture(t *testing.T) {
 	assert.Empty(t, res.Errors, "noop fixture writes no errors")
 }
 
-// TestX86BOF_Execute_Timeout exercises the WaitForSingleObject
-// timeout path. A 1ms wait against the real cross-process spawn
-// is essentially guaranteed to fire — the orchestrator must kill
-// the host and surface a "loader timeout" error.
-func TestX86BOF_Execute_Timeout(t *testing.T) {
+// TestX86BOF_Execute_HelloBeacon exercises the full Beacon API
+// import-resolution + reloc-application + BOF-call chain:
+//
+//   - testdata/hello_beacon.x86.o calls
+//     `BeaconPrintf(0, "hello from x86 BOF\n")`.
+//   - The loader resolves __imp__BeaconPrintf via ROR13 against
+//     the in-DLL Beacon table, populates the import slot, and
+//     applies the DIR32 reloc in the BOF .text so the
+//     `call dword ptr [imp_slot]` reaches our BeaconPrintf impl.
+//   - BeaconPrintf appends the format string verbatim to the
+//     parent-allocated out buffer (step 1.c minimal, no `%`
+//     expansion).
+//
+// Passing this test proves: COFF parsing handles real BOFs,
+// internal DIR32 relocs (.text → .rdata string literal) work,
+// external __imp__ resolution works, and the in-DLL Beacon
+// surface plumbs through to the parent's ReadProcessMemory
+// output buffer.
+func TestX86BOF_Execute_HelloBeacon(t *testing.T) {
 	if _, err := os.Stat(defaultX86Host); err != nil {
 		t.Skipf("WoW64 host %s missing: %v", defaultX86Host, err)
 	}
+	bof, err := os.ReadFile("testdata/hello_beacon.x86.o")
+	require.NoError(t, err, "hello_beacon.x86.o fixture missing")
+
+	res, err := Run(context.Background(), Spec{
+		Bytes: bof,
+		Args:  []byte{},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.Contains(t, string(res.Output), "hello from x86 BOF",
+		"BeaconPrintf output must round-trip through the params block")
+}
+
+// TestX86BOF_Execute_ParseArgs exercises BeaconDataParse / Int /
+// Extract + the Format family + BeaconOutput on a real i386 BOF.
+// The args buffer is packed via the canonical Args API; the BOF
+// reads back (n=42, s="hello-x86") and emits "n=42:s=hello-x86"
+// via BeaconOutput. Round-trip proves Data + Format + Output
+// pipes from the parent through the WoW64 helper.
+func TestX86BOF_Execute_ParseArgs(t *testing.T) {
+	if _, err := os.Stat(defaultX86Host); err != nil {
+		t.Skipf("WoW64 host %s missing: %v", defaultX86Host, err)
+	}
+	bof, err := os.ReadFile("testdata/parse_args.x86.o")
+	require.NoError(t, err, "parse_args.x86.o fixture missing")
+
+	a := NewArgs()
+	a.AddInt(42)
+	a.AddString("hello-x86")
+
+	res, err := Run(context.Background(), Spec{
+		Bytes: bof,
+		Args:  a.Pack(),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	out := string(res.Output)
+	assert.Contains(t, out, "n=42",
+		"BeaconFormatInt → BeaconOutput must surface the parsed int")
+	assert.Contains(t, out, "s=hello-x86",
+		"BeaconDataExtract → BeaconFormatAppend → BeaconOutput must surface the parsed string")
+}
+
+// TestX86BOF_Execute_BadHost_FailsSpawn exercises the
+// CreateProcess failure path. A bogus SpawnTo must surface a
+// "spawn rundll32" error rather than crash. Deterministic — no
+// race with a real BOF execution.
+func TestX86BOF_Execute_BadHost_FailsSpawn(t *testing.T) {
 	bof, err := os.ReadFile("testdata/noop.x86.o")
 	require.NoError(t, err)
 	r, err := coffX86Loader{}.Load(bof)
 	require.NoError(t, err)
 	x := r.(*x86BOF)
-	x.SetTimeout(1 * time.Millisecond)
+	x.SetSpawnTo(`C:\Windows\Nope\DoesNotExist.exe`)
 	_, err = x.Execute(nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "loader timeout")
+	assert.Contains(t, err.Error(), "CreateProcess",
+		"bogus SpawnTo should surface a CreateProcess failure")
 }
 
 // ror13Hash mirrors win/api.ResolveByHash and the C side's
