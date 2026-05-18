@@ -64,6 +64,39 @@ real Win32 import:
   LoadLibrary import in the BOF's COFF symbol table beyond
   the dollar-import name itself).
 
+## `cs-sa/` — TrustedSec CS-Situational-Awareness-BOF subset
+
+A second set of E2E fixtures drawn from the public
+[CS-Situational-Awareness-BOF](https://github.com/trustedsec/CS-Situational-Awareness-BOF)
+project. These are battle-tested public BOFs that exercise a
+broader Beacon API surface than our hand-written examples —
+each `.o` is the real artefact red teams run against Beacon.
+
+**Why fetched, not vendored.** The upstream is GPL-2.0 while
+maldev is MIT. Committing GPL-licensed binaries into the MIT
+tree creates a licensing tangle even when the `.o` is only test
+input. The fetch script pins a known-good upstream commit and
+copies four `.o` files into `cs-sa/` (git-ignored). Tests
+`t.Skip` cleanly when the directory is absent — local dev or CI
+without the fetch step degrades gracefully.
+
+Populate with:
+
+```bash
+bash scripts/fetch-cs-sa-bofs.sh
+```
+
+The curated subset is:
+
+| BOF | Surface exercised |
+|---|---|
+| `dir.x64.o` | filesystem enum + args parsing + `MSVCRT$strlen/strcat/_strnicmp/strstr` |
+| `env.x64.o` | `KERNEL32$GetEnvironmentStrings` + `lstrlenA`, no args |
+| `ipconfig.x64.o` | `IPHLPAPI$GetAdaptersInfo`, exercises non-kernel32 PEB-walk + forwarders |
+| `listmods.x64.o` | loaded-module enum, walks PEB Ldr list |
+
+Tests live in `runtime/bof/cs_sa_e2e_windows_test.go`.
+
 ## Test wiring
 
 Each `.o` is committed to `testutil/` next to the existing

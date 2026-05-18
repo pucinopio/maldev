@@ -286,10 +286,47 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 		offset int
 		data   []byte
 	}
+	// Two-pass layout: executable sections first (contiguous from
+	// offset 0), then a 4 KB page-alignment gap, then non-exec
+	// sections. The split ensures the RW→RX flip in step 6.5 — which
+	// rounds to page boundaries — can never accidentally protect a
+	// .data / .bss page held in common with .text. CS-SA-BOF builds
+	// were the canary: their .data sits immediately after .text in
+	// the COFF and writes to data globals (e.g. base.c's `output`
+	// pointer) triggered DEP write faults under the original layout.
+	const pageSize = 4096
 	var laid []loaded
 	cursor := 0
 	for i, sec := range sections {
 		if sec.SizeOfRawData == 0 || sec.PointerToRawData == 0 {
+			continue
+		}
+		if sec.Characteristics&imageScnMemExecute == 0 {
+			continue
+		}
+		end := int(sec.PointerToRawData) + int(sec.SizeOfRawData)
+		if end > len(b.Data) {
+			return nil, fmt.Errorf("invalid COFF: section %d data out of bounds", i+1)
+		}
+		laid = append(laid, loaded{
+			idx:    i + 1,
+			offset: cursor,
+			data:   b.Data[sec.PointerToRawData:end],
+		})
+		cursor += int(sec.SizeOfRawData)
+	}
+	// Round up to the next page so non-exec sections never share a
+	// page with the last exec section. Avoids the VirtualProtect-
+	// rounds-to-page gotcha at the cost of at most one page (4 KB)
+	// of slack per BOF.
+	if cursor%pageSize != 0 {
+		cursor += pageSize - (cursor % pageSize)
+	}
+	for i, sec := range sections {
+		if sec.SizeOfRawData == 0 || sec.PointerToRawData == 0 {
+			continue
+		}
+		if sec.Characteristics&imageScnMemExecute != 0 {
 			continue
 		}
 		end := int(sec.PointerToRawData) + int(sec.SizeOfRawData)

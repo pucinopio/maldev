@@ -95,3 +95,4 @@ workspace.xml
 .worktrees/
 /asmtrace
 /pe/packer/testdata/testlib.dll
+runtime/bof/testdata/cs-sa/
