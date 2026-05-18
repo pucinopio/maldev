@@ -111,15 +111,28 @@ slices:
           hex code. Tests pin both Run() and Load() paths.
       - phase: B
         title: fork-and-run orchestrator (Go side)
-        status: queued
-        scope: |
-          Spawn BeaconGetSpawnTo(TRUE) host (default
-          C:\Windows\SysWOW64\rundll32.exe) suspended, VirtualAllocEx
-          + WriteProcessMemory three regions (x86 loader DLL, the
-          BOF .o + args, the shared control block + output buffer),
-          launch via CreateRemoteThread, WaitForSingleObject, then
-          ReadProcessMemory the captured output. TerminateProcess +
-          CloseHandle on teardown.
+        status: closed
+        commits:
+          - HEAD  # this commit
+        deliverable: |
+          rundll32-as-host orchestrator: writes the loader DLL +
+          the BOF + args to four %TEMP% files, spawns
+          SysWOW64\rundll32.exe with "loader.dll,BOFExec <proto>"
+          as argv, waits up to 30s (configurable via
+          SetTimeout), reads back the out/err files, classifies
+          rundll32's exit code as a structured Go error. Gated
+          behind //go:build bof_x86_loader; default builds keep
+          the slice 1.d phase A sentinel behaviour.
+        architecture_change: |
+          Original plan: CreateProcess suspended + VirtualAllocEx
+          + remote-thread injection of BOFExec at a parent-resolved
+          address. Switched to rundll32-as-host during phase B
+          design because rundll32 handles LoadLibrary +
+          GetProcAddress + the calling convention for us — saves
+          ~400 LOC of WoW64 PEB walking + remote PE export
+          parsing. Phase D will swap rundll32 for a reflective
+          injector once the value of the lower-IOC path
+          justifies the implementation cost.
       - phase: C
         title: x86 loader DLL (C, mingw32)
         status: in-progress (step 0 closed)

@@ -21,44 +21,69 @@ file is committed to the repo (same model as
 toolchain at runtime; the script exists for rebuilds when the
 ABI bumps or a new feature lands.
 
-## ABI (`abi.h` ↔ `runtime/bof/x86control_windows.go`)
+## Architecture — rundll32-as-host
 
-The parent (Go) and the loader (C) communicate through a shared
-control block placed in the child process by `VirtualAllocEx`.
-The struct is mirrored byte-for-byte on both sides — any change in
-`abi.h` MUST land in the Go mirror in the same commit, with a
-`BOF_CTRL_VERSION` bump if the change is wire-incompatible.
+The orchestrator never injects into a separate process. Instead it
+spawns `SysWOW64\rundll32.exe` against the loader DLL, and rundll32
+handles `LoadLibrary` + `GetProcAddress` + the calling convention:
 
-| Field | Direction | Purpose |
+```
+parent (x64 Go)                    helper (x86 rundll32)
+─────────────────                  ─────────────────────
+1. write .dll → %TEMP%\ld…dll
+2. write bof  → %TEMP%\b…bin
+3. write args → %TEMP%\a…bin
+4. CreateProcess(
+     SysWOW64\rundll32.exe,
+     "%TEMP%\ld…dll,BOFExec
+      v=1 bof=… args=… out=… err=…")
+                                    LoadLibrary(loader.dll)
+                                    GetProcAddress("BOFExec")
+                                    BOFExec(HWND, HINST, lpCmdLine, nCmdShow)
+                                      ├─ parse lpCmdLine tokens
+                                      ├─ read bof / args files
+                                      ├─ run BOF in-process       ← phase C step 1
+                                      ├─ write out / err files
+                                      └─ ExitProcess(BOF_EXIT_*)
+5. WaitForSingleObject(rundll32)
+6. ReadFile(out, err)
+7. RemoveAll(%TEMP%\…)
+```
+
+## ABI (`abi.h` ↔ `runtime/bof/x86fork_windows.go`)
+
+The wire format is the single ASCII line passed to rundll32 as
+the post-comma argv, plus the helper's exit code as the structured
+status word. No shared memory, no control block.
+
+| Token | Direction | Purpose |
 |---|---|---|
-| `magic` | parent → loader | `0x36384342` (`'BC86'`). Refuses corrupted blocks. |
-| `version` | parent → loader | `1`. Loader returns `BOF_STATUS_ABI_MISMATCH` on mismatch. |
-| `status` | loader → parent | One of the `BOF_STATUS_*` codes; populated before thread exit. |
-| `error_code` | loader → parent | OS-level last-error / SEH code when `status` is an error. |
-| `bof_addr` / `bof_len` | parent → loader | Remote address + length of the BOF `.o` bytes. |
-| `args_addr` / `args_len` | parent → loader | Remote address + length of the `BeaconDataPack` blob. |
-| `entry_off` | parent → loader | 0 = use `"go"` symbol; non-zero = explicit offset. |
-| `spawn_to_addr` | parent → loader | NUL-terminated UTF-8 SpawnTo string (0 = none). |
-| `user_data_addr` / `user_data_len` | parent → loader | `BeaconGetCustomUserData` blob (0 = none). |
-| `out_addr` / `out_capacity` / `out_len` | parent allocates; loader fills `_len` | BOF stdout. |
-| `err_addr` / `err_capacity` / `err_len` | parent allocates; loader fills `_len` | `BeaconErrorD/DD/NA`. |
-| `reserved[16]` | — | Reserved. Keeps the struct fixed-size across minor bumps. |
+| `v=1`           | parent → loader | Protocol version. Mismatch → `BOF_EXIT_BAD_VERSION`. |
+| `bof=<path>`    | parent → loader | Temp file with the BOF `.o` bytes. |
+| `args=<path>`   | parent → loader | Temp file with the BeaconDataPack blob (may be 0-byte). |
+| `out=<path>`    | parent ← loader | Temp file the loader truncates + fills with BOF output. |
+| `err=<path>`    | parent ← loader | Temp file the loader truncates + fills with BeaconError*. |
+| `spawnto=<path>` | parent → loader | Optional NUL-terminated UTF-8 SpawnTo (Phase C step 1). |
+| `user-data=<path>` | parent → loader | Optional BeaconGetCustomUserData blob (Phase C step 1). |
+| `entry=<symbol>` | parent → loader | Optional explicit entry symbol (default `"go"`). |
+
+Helper exit codes: see `bof_exit_t` in `abi.h`. `0` = DONE; non-zero
+maps to a structured Go error via `classifyX86Exit`.
 
 ## Threat model + opsec
 
-The default injection path (parent writes DLL to disk under
-`%TEMP%`, then `CreateRemoteThread → LoadLibraryA`) trades stealth
-for correctness — the OS PE loader resolves the loader's own
-Win32 imports for free. The disk artefact + the `LoadLibraryA`
-call ARE detectable by image-load-event sensors; that's
-acceptable for the phase-C-step-0 skeleton because the goal is
-to validate the IPC end-to-end before optimising opsec.
+The default path produces three artefacts: a 5 KB i386 DLL plus
+two transient `.bin` files under `%TEMP%`. The DLL lives only for
+the rundll32 lifetime — the orchestrator `os.RemoveAll`s the temp
+dir on Execute return. The `rundll32 <dll>,BOFExec` command line
+itself is the most visible IOC (sysmon event 1, etlw process
+create).
 
-Phase D (queued) will swap the loader-injection path for a
-reflective injector — same DLL bytes, no disk artefact, no
-`LoadLibraryA` API trail. The DLL is reflective-friendly because
-it has no static imports beyond `kernel32` (resolved manually by
-the reflective stub).
+Phase D (queued) will replace the rundll32 host with a reflective
+injector — no disk artefact, no rundll32 process tree, no
+LoadLibraryA API trail. The DLL is reflective-friendly because it
+has no static imports beyond `kernel32` (resolved manually by the
+reflective stub).
 
 ## See also
 

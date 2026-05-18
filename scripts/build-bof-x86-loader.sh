@@ -20,15 +20,14 @@ CFLAGS_COMMON=(
     -O2 -Wall -Wextra
     -fno-asynchronous-unwind-tables
     -fno-ident
-    -nostdlib -lkernel32
+    -nostdlib
     -Wl,--enable-stdcall-fixup
     -Wl,--kill-at
-    # ASLR + relocations: the loader is LoadLibrary'd into a freshly
-    # spawned host whose address space is mostly empty, but the mingw
-    # default base (0x10000000) collides with the host's heap on some
-    # Windows builds. --dynamicbase emits a .reloc section so the OS
-    # loader can rebase. Strip symbols / debug data on top so the
-    # final blob stays under ~4 KB.
+    # ASLR + relocations: --dynamicbase + --enable-reloc-section so
+    # the OS loader can rebase if the preferred base (0x66000000 on
+    # current mingw32) collides. --nxcompat marks the DLL as DEP-
+    # aware. -s strips symbols / debug data so the final blob stays
+    # under ~4 KB.
     -Wl,--dynamicbase
     -Wl,--enable-reloc-section
     -Wl,--nxcompat
@@ -37,12 +36,18 @@ CFLAGS_COMMON=(
     -Wl,--entry=_DllMain@12
 )
 
+# Libraries go AFTER the source file in the ld command line —
+# ld is single-pass left-to-right. Putting -lkernel32 before
+# loader.c leaves the kernel32 imports unresolved.
+LDLIBS=( -lkernel32 )
+
 build_with_host() {
     echo "[1/1] Compiling via host i686-w64-mingw32-gcc"
     i686-w64-mingw32-gcc \
         "${CFLAGS_COMMON[@]}" \
         -o "${OUT}" \
-        "${DIR}/loader.c"
+        "${DIR}/loader.c" \
+        "${LDLIBS[@]}"
 }
 
 build_with_podman() {
@@ -61,7 +66,8 @@ build_with_podman() {
         i686-w64-mingw32-gcc \
         "${CFLAGS_COMMON[@]}" \
         -o "runtime/bof/internal/x86loader/bof_x86_loader.x86.dll" \
-        "runtime/bof/internal/x86loader/loader.c"
+        "runtime/bof/internal/x86loader/loader.c" \
+        "${LDLIBS[@]}"
 }
 
 if command -v i686-w64-mingw32-gcc >/dev/null 2>&1; then

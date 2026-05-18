@@ -7,6 +7,57 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — slice 1.d phase B: fork-and-run orchestrator (2026-05-18)
+
+# What landed
+
+  bof.Run on an x86 .o now spawns SysWOW64\rundll32.exe against
+  the embedded loader DLL when built with `-tags=bof_x86_loader`.
+  Default builds keep the phase-A sentinel.
+
+# Public surface (only visible under -tags=bof_x86_loader)
+
+  *x86BOF                      // Runnable returned by KindCOFFx86 loader
+      (.SetSpawnTo / SetUserData / SetTimeout)
+  (no new exports — orchestration is transparent through bof.Run)
+
+# Architecture pivot
+
+The plan originally called for CreateProcess + VirtualAllocEx +
+CreateRemoteThread injection of `BOFExec` at a parent-resolved
+address. During phase B design that approach was deferred in
+favour of **rundll32-as-host**: rundll32 (SysWOW64) handles
+LoadLibrary + GetProcAddress + the calling convention for us,
+which saved ~400 LOC of WoW64 PEB walking + remote PE export
+parsing. The lower-IOC reflective-injector path is now phase D.
+
+# IPC
+
+Four temp files under %TEMP% (loader.dll / bof.bin / args.bin /
+out.bin / err.bin). Protocol is a single ASCII line passed via
+rundll32's lpCmdLine: `v=1 bof=<path> args=<path> out=<path>
+err=<path>`. Helper exit code maps to a structured Go error via
+classifyX86Exit; orchestrator surfaces e.g. ErrCrossArchX86-
+Unsupported on default builds, BOF_EXIT_DONE/LOAD_FAILED/
+BOF_CRASHED on tagged builds.
+
+# Build tag
+
+  -tags=bof_x86_loader
+
+Adds ~5 KB to the binary (the embedded loader DLL). Default
+keeps the slice 1.d phase A sentinel so a default build still
+returns ErrCrossArchX86Unsupported on x86 .o input.
+
+# Tests (under -tags=bof_x86_loader)
+
+  TestX86Loader_Embedded_NotEmpty
+  TestX86Loader_Load_ReturnsRunnable
+  TestClassifyX86Exit            // every BOF_EXIT_* mapping
+  TestRandSuffix_Distinct
+  TestX86BOF_Execute_EndToEnd    // VM-only, MALDEV_X86_RUNDLL32=1
+  TestX86BOF_Execute_TimeoutKillsHost
+
 ### runtime/bof — slice 1.d phase C step 0: x86 loader DLL skeleton + build pipeline (2026-05-18)
 
 # What landed
