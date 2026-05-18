@@ -122,15 +122,42 @@ slices:
           CloseHandle on teardown.
       - phase: C
         title: x86 loader DLL (C, mingw32)
-        status: queued
-        scope: |
-          runtime/bof/internal/x86loader/loader.c — exports
-          RunBOF(bofBytes, bofLen, args, argsLen, ctrl). Implements
-          the Beacon API in-child against a shared control block.
-          Build script (scripts/build-bof-x86-loader.sh), .dll
-          committed to the repo, embed gated behind
-          //go:build bof_x86_loader (same pattern as
-          pe_noconsolation in runtime/pe).
+        status: in-progress (step 0 closed)
+        steps:
+          - step: 0
+            title: ABI design + build pipeline + skeleton DLL
+            status: closed
+            commits:
+              - HEAD  # this commit
+            deliverable: |
+              abi.h + Go-mirror contract documented;
+              runtime/bof/internal/x86loader/loader.c skeleton
+              compiles (2.5 KB DLL); BOFExec stdcall export wired,
+              validates magic+version and acks via the shared
+              control block; scripts/build-bof-x86-loader.sh uses
+              host mingw32 if present or falls back to Podman
+              (fedora:42 + mingw32-gcc).
+          - step: 1
+            title: COFF parser + relocation engine + Beacon API impl
+            status: queued
+            scope: |
+              Port the loader-half of runtime/bof/bof_windows.go to
+              C/i386: parse + VirtualAlloc + IMAGE_REL_I386_*
+              relocations + Beacon API stubs writing into the
+              control block's out/err buffers. Same architectural
+              choices: RW→RX flip, all-sections relocs, panic
+              guard via __try/__except.
+          - step: 2
+            title: reflective injector (drop the LoadLibraryA artefact)
+            status: queued
+            scope: |
+              Phase D candidate. Replace the "write DLL to disk +
+              LoadLibraryA" injection path with a position-
+              independent reflective loader so no disk artefact
+              and no LoadLibrary API trail in the child. The DLL
+              already imports only kernel32, so reflectively
+              resolving 4 functions (VirtualAlloc, VirtualProtect,
+              GetProcAddress, LoadLibraryA) is enough to bootstrap.
   - id: 3
     title: goloader integration
     status: queued

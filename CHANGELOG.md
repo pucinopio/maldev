@@ -7,6 +7,37 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — slice 1.d phase C step 0: x86 loader DLL skeleton + build pipeline (2026-05-18)
+
+# What landed
+
+  runtime/bof/internal/x86loader/abi.h           // shared control-block ABI
+  runtime/bof/internal/x86loader/loader.c        // BOFExec skeleton (ack-only)
+  runtime/bof/internal/x86loader/bof_x86_loader.x86.dll // built artefact (2.5 KB)
+  runtime/bof/internal/x86loader/README.md       // ABI + threat-model doc
+  scripts/build-bof-x86-loader.sh                // host mingw32 → Podman fallback
+  scripts/bof-x86-loader.Containerfile           // fedora:42 + mingw32-gcc
+
+# What it does (and doesn't)
+
+The DLL exports `BOFExec(bof_control_t *)` as the
+CreateRemoteThread entry point. Today it only validates the
+control-block magic + version and acks via `BOF_STATUS_DONE` —
+the COFF parser + relocation engine + Beacon API implementation
+are queued for phase C step 1. The point of step 0 is to lock
+the wire format and prove the build pipeline (Podman fallback
+keeps the toolchain off the host critical path).
+
+# ABI summary
+
+`bof_control_t` is a 96-byte (24×uint32) struct: identity
+(magic 'BC86' + version), status word, error code, inputs
+(bof bytes + args + spawn-to + user-data remote addresses),
+outputs (stdout + error buffers' addresses + lengths), plus a
+16-uint32 reserved tail. Little-endian, no padding. Will be
+mirrored verbatim in Go (`x86control_windows.go`) when phase
+B lands.
+
 ### runtime/bof — slice 1.d phase A: x86 COFF detection + clean error path (2026-05-18)
 
 # New public surface
