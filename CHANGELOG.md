@@ -7,6 +7,147 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+## v0.155.0 — slice 1.d: x86 BOF cross-process loader (2026-05-18)
+
+# Headline
+
+Beacon Object Files compiled for i386 now execute end-to-end from
+a 64-bit implant — no disk artefact, no `LoadLibrary` API trail,
+full 25-symbol Beacon API surface. Activated by
+`-tags=bof_x86_loader`; default builds keep the slice 1.d phase A
+sentinel (`bof.ErrCrossArchX86Unsupported`).
+
+# How it works (Stephen-Fewer-style manual reflective load)
+
+1. `bof.Run` detects `Machine == 0x014c` → `KindCOFFx86` →
+   `coffX86Loader`.
+2. Parent spawns `C:\Windows\SysWOW64\rundll32.exe` suspended.
+3. Parent reflective-loads a small 11 KB i386 DLL (committed
+   under `runtime/bof/internal/x86loader/`) into the helper:
+   parse PE → VirtualAllocEx SizeOfImage → WriteProcessMemory →
+   apply `.reloc` → VirtualProtectEx per section.
+4. Parent VirtualAllocEx's a separate IO region + 96-byte
+   `loader_params_t` control block (BOF bytes, args, out buf,
+   err buf addrs + lens).
+5. `CreateRemoteThread` targets the loader's exported `BOFExec`.
+6. Loader walks PEB for `kernel32`, resolves the kapi via ROR13,
+   parses the BOF .o, applies i386 relocations, resolves
+   `__imp__Beacon*` against an in-DLL Beacon function table,
+   calls `_go` cdecl.
+7. Parent `WaitForSingleObject` + `ReadProcessMemory` to read
+   back out/err buffers, `TerminateProcess` + `CloseHandle`.
+
+# Beacon API surface (25 symbols)
+
+| Group | Symbols |
+|---|---|
+| Output / Errors | `BeaconPrintf`, `BeaconOutput`, `BeaconErrorD/DD/NA`, `BeaconGetOutputData` |
+| Data parsing | `BeaconDataParse`, `BeaconDataInt`, `BeaconDataShort`, `BeaconDataLength`, `BeaconDataExtract` |
+| Format | `BeaconFormatAlloc/Reset/Free/Append/Int/Printf/ToString` |
+| Helpers | `BeaconGetCustomUserData`, `BeaconGetSpawnTo`, `toWideChar` |
+| KV (per-Run) | `BeaconAddValue`, `BeaconGetValue`, `BeaconRemoveValue` |
+| Token + IsAdmin | `BeaconIsAdmin`, `BeaconUseToken`, `BeaconRevertToken` |
+| Inject + Spawn | `BeaconSpawnTemporaryProcess`, `BeaconInjectProcess`, `BeaconInjectTemporaryProcess`, `BeaconCleanupProcess` |
+
+`BeaconPrintf` and `BeaconFormatPrintf` expand `%d/%i/%u/%x/%X/
+%p/%s/%c/%%` from cdecl varargs.
+
+# Public Go surface (under -tags=bof_x86_loader)
+
+```go
+// In bof.Run() — transparent x86 dispatch via KindCOFFx86.
+res, err := bof.Run(ctx, bof.Spec{Bytes: x86BofBytes, …})
+
+// Or via the Runnable directly.
+*x86BOF
+    .Execute(args) ([]byte, error)
+    .Errors() []byte
+    .SetSpawnTo(string) / SetUserData([]byte) / SetTimeout(time.Duration)
+    .SetOutputCapacity(uint32) / SetErrorCapacity(uint32)
+```
+
+# Tests on Windows 10 VM (10/10 PASS)
+
+  TestX86Loader_Embedded_NotEmpty
+  TestX86Loader_IsPE32DLL
+  TestX86BOF_Execute_NoopFixture          // empty BOF, parser smoke test
+  TestX86BOF_Execute_HelloBeacon          // BeaconPrintf round-trip
+  TestX86BOF_Execute_ParseArgs            // Data + Format + Output
+  TestX86BOF_Execute_HelpersKV            // UserData + SpawnTo + toWideChar + KV
+  TestX86BOF_Execute_TokenAdmin           // IsAdmin + RevertToken (advapi32)
+  TestX86BOF_Execute_PrintfSpecifiers     // %d/%X/%u/%s/%c/%% expansion
+  TestX86BOF_Execute_InjectSpawn          // Spawn → cleanup round-trip
+  TestX86BOF_Execute_BadHost_FailsSpawn   // negative path
+
+# Threat-model + opsec
+
+- **No disk artefact** in the BOF execution path. The loader DLL
+  is embedded via `go:embed` and manually reflective-loaded.
+- **No LoadLibrary call** for the loader (manual map bypasses
+  the OS PE loader). advapi32 is `LoadLibrary`'d lazily ONLY
+  when a BOF uses Token / IsAdmin.
+- **rundll32.exe child** is the visible IOC: a fresh suspended
+  rundll32 process per BOF invocation, terminated immediately
+  after. Operators wanting a different cover image can call
+  `SetSpawnTo` with any 32-bit Windows binary.
+- **Forwarder traps avoided**: `kernel32!RtlMoveMemory` and
+  `HeapAlloc` are forwarders to ntdll on Win 7+ — the loader
+  uses `loader_memcpy` (inline) + `VirtualAlloc/Free` instead.
+
+# Build & rebuild
+
+```bash
+# Operator: no C toolchain required — the DLL bytes are embedded.
+go build -tags bof_x86_loader ./...
+
+# Maintainer refreshing the loader DLL:
+bash scripts/build-bof-x86-loader.sh
+# Uses host i686-w64-mingw32-gcc if present, else falls back to
+# a Podman container (fedora:42 + mingw32-gcc).
+```
+
+# Phase progression (slice 1.d)
+
+| Phase / Step | Commit | Scope |
+|---|---|---|
+| A | `8bf86c8` | x86 detection + clean sentinel error |
+| B+C (rundll32+tempfiles) | `9d7b15b` | rejected — disk artefacts |
+| B-bis 0 | `b1ba58d` | PIC shellcode skeleton |
+| B-bis 2 | `076370d` | Go-side cross-process orchestrator |
+| 1.a | `597715c` | expanded kernel32 set |
+| 1.b | `313f426` | i386 COFF parser + relocs |
+| 1.c pivot | `fe7ec9f` | reflective-DLL model |
+| 1.c.0 | `7724c9d` | RtlMoveMemory forwarder bypass |
+| 1.c.1 | `98cbdfe` | Data + Format families |
+| 1.e | `1d92979` | Helpers + KV |
+| 1.f | `0a4913d` | Token + IsAdmin via advapi32 |
+| 1.g | `d77a815` | printf% expansion |
+| 1.h | `9aef7ea` | Inject + Spawn family |
+| closure | HEAD | GetOutputData + docs |
+
+### runtime/bof — slice 1.d closure: BeaconGetOutputData parity + docs (2026-05-18)
+
+Final symbol of slice 1.d:
+
+  BeaconGetOutputData   // returns (out_addr, out_len) so a wrapper
+                        // BOF can read its own accumulated output
+
+Matches the x64 loader's slice 1.c.8 addition. Total Beacon API
+surface for the x86 path is now **25 symbols** — full Group 1–6
+of beacon.h plus GetOutputData and the four Inject/Spawn process-
+control entries.
+
+# Docs
+
+- `docs/techniques/runtime/bof-loader.md`: limitation block
+  updated — x86 is no longer "rejected cleanly" but supported via
+  the cross-process reflective load under `-tags=bof_x86_loader`.
+- `runtime/bof/internal/x86loader/README.md`: Beacon API surface
+  table + step roadmap + compatibility notes (forwarder traps,
+  helper-process teardown, extension recipe).
+- `bof-loader-revamp-plan.md`: step 1 closed with the 9-commit
+  chain (1.a → 1.h) recorded.
+
 ### runtime/bof — slice 1.d step 1.h: Inject + Spawn family (2026-05-18)
 
 4 new Beacon API exports — the process-control surface every

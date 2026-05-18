@@ -98,10 +98,48 @@ same 13-bit-right-rotate accumulator used by
 the ones produced by the Go-side test
 (`TestRor13_KnownAnswers` in `x86fork_present_windows_test.go`).
 
+## Beacon API surface (25 symbols)
+
+| Group | Symbols |
+|---|---|
+| Output / Errors | `BeaconPrintf`, `BeaconOutput`, `BeaconErrorD/DD/NA`, `BeaconGetOutputData` |
+| Data parsing | `BeaconDataParse`, `BeaconDataInt`, `BeaconDataShort`, `BeaconDataLength`, `BeaconDataExtract` |
+| Format | `BeaconFormatAlloc/Reset/Free/Append/Int/Printf/ToString` |
+| Helpers | `BeaconGetCustomUserData`, `BeaconGetSpawnTo`, `toWideChar` |
+| KV (per-Run) | `BeaconAddValue`, `BeaconGetValue`, `BeaconRemoveValue` |
+| Token + Admin | `BeaconIsAdmin`, `BeaconUseToken`, `BeaconRevertToken` |
+| Inject + Spawn | `BeaconSpawnTemporaryProcess`, `BeaconInjectProcess`, `BeaconInjectTemporaryProcess`, `BeaconCleanupProcess` |
+
+`BeaconPrintf` and `BeaconFormatPrintf` honour `%d / %i / %u / %x
+/ %X / %p / %s / %c / %%` from cdecl varargs (width / padding /
+precision flags parsed but ignored). Unknown specifiers emit
+raw `%<x>`.
+
 ## Step roadmap
 
 | Step | Status | Scope |
 |---|---|---|
-| 0 | **closed (this commit)** | Skeleton: PEB walk, ROR13, ExitThread resolution, status = DONE. |
-| 1 | queued | Real loader: COFF parser + IMAGE_REL_I386_* relocs + Beacon API impl writing into the out/err buffers. |
-| 2 | queued | Goroutine + Go-side orchestrator (VirtualAllocEx × 3 + WriteProcessMemory + CreateRemoteThread + ReadProcessMemory). |
+| 0 | closed | Skeleton: PEB walk, ROR13, ExitThread resolution, status = DONE. |
+| 1.a | closed | Expanded kernel32 set (VirtualAlloc / Protect / Free + LoadLibraryA + GetCurrentProcess + CloseHandle + …). |
+| 1.b | closed | i386 COFF parser + IMAGE_REL_I386_ABSOLUTE/DIR32/DIR32NB/REL32 relocations + `_go` entry call. |
+| 1.c | closed | Reflective-DLL pivot (drops flat-PIC + .reloc-discard) + Data + Format + Output families. |
+| 1.e | closed | Helpers + KV — UserData, SpawnTo, toWideChar, Add/Get/Remove. |
+| 1.f | closed | Token + IsAdmin via advapi32 (LDR/LoadLibraryA + ROR13). |
+| 1.g | closed | printf-with-% expansion via cdecl-stack varargs. |
+| 1.h | closed | Inject + Spawn family (CreateProcessA + VirtualAllocEx + WriteProcessMemory + CreateRemoteThread + TerminateProcess + ResumeThread). |
+
+## Compatibility notes
+
+- `kernel32!RtlMoveMemory` is a forwarder to `ntdll!RtlMoveMemory`
+  on Win 7+. Our ROR13 walker returns the forwarder string's
+  address, not code — calling it crashes. The loader uses an
+  inline `loader_memcpy` instead. Same trap applies to
+  `kernel32!HeapAlloc` on some SKUs; `BeaconFormatAlloc/Free`
+  uses `VirtualAlloc/VirtualFree` for that reason.
+- The rundll32 helper is terminated after every BOF invocation,
+  so per-call leaks (Format buffer page, KV pool, thread stack)
+  are reclaimed by process teardown.
+- BOFs that import unknown Beacon symbols surface as
+  `LOADER_STATUS_LOAD_FAIL` with `error_code = 0x10012`
+  (unresolved external). Add a new hash + dispatch entry to
+  `beacon_resolve` in `loader.c` to extend coverage.

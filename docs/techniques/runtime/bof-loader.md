@@ -552,17 +552,24 @@ for _, target := range targets {
   This matches the CS-compatible loader convention (BOF
   execution is fundamentally single-threaded) but is worth
   knowing if a host program runs many BOFs in parallel.
-- **x64 only — x86 detected, rejected cleanly (slice 1.d phase
-  A, v0.155+).** The in-process loader handles `Machine == 0x8664`
-  exclusively. An x86 `.o` (`Machine == 0x014c`) is detected as
-  `KindCOFFx86` by `DetectKind` and routed through the
-  `coffX86Loader` stub, which returns the sentinel
-  `bof.ErrCrossArchX86Unsupported`. Operators can `errors.Is`
-  against it and pick a path: build a 32-bit implant, or wait
-  for the fork-and-run orchestrator (slice 1.d phase B/C) which
-  will spawn a SysWOW64 helper, inject an embedded x86 loader
-  DLL, and marshal output back. Until then x86 BOFs cannot
-  execute from a 64-bit implant.
+- **x86 BOFs supported via cross-process reflective load (slice
+  1.d, `-tags=bof_x86_loader`).** An x86 `.o` (`Machine == 0x014c`)
+  is detected as `KindCOFFx86` by `DetectKind` and routed through
+  the `coffX86Loader`. With the `bof_x86_loader` build tag
+  active, the orchestrator manually reflective-loads a small
+  i386 DLL (`runtime/bof/internal/x86loader/bof_x86_loader.x86.dll`,
+  ~11 KB) into a freshly-spawned `SysWOW64\rundll32.exe` via
+  VirtualAllocEx + WriteProcessMemory + .reloc application +
+  CreateRemoteThread. The loader DLL parses the BOF .o inside
+  the WoW64 helper, implements the full Beacon API surface (24
+  symbols incl. Inject / Spawn / Token / IsAdmin / Format /
+  Data / KV / printf%), and writes captured output into a
+  parent-allocated RW region the parent ReadProcessMemory's
+  back. Zero disk artefacts, zero LoadLibrary call on the
+  loader. Default builds (no tag) surface
+  `bof.ErrCrossArchX86Unsupported` — operators `errors.Is`
+  against it. See `runtime/bof/internal/x86loader/README.md`
+  for the architecture diagram, ABI, and threat-model notes.
 - **Relocation coverage.** `IMAGE_REL_AMD64_ABSOLUTE` (no-op),
   `_ADDR64`, `_ADDR32` (errors out cleanly when target exceeds
   32-bit range), `_ADDR32NB`, `_REL32`, and the `_REL32_1`

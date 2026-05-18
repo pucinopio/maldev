@@ -312,6 +312,7 @@ static int ensure_advapi(void)
 #define HASH_BEACON_INJECT_TEMPORARY_PROCESS    0x8414B892u
 #define HASH_BEACON_SPAWN_TEMPORARY_PROCESS     0xF19882B0u
 #define HASH_BEACON_CLEANUP_PROCESS             0x9BD1CDDBu
+#define HASH_BEACON_GET_OUTPUT_DATA             0x2B16A31Eu
 
 static uint32_t cstr_len(const char *s)
 {
@@ -906,6 +907,21 @@ __declspec(dllexport) void __cdecl BeaconCleanupProcess(void *pInfo)
     if (hThread) g_kapi.CloseHandle(hThread);
 }
 
+/* BeaconGetOutputData — parity with runtime/bof/beacon_api_extra
+ * (slice 1.c.8). Returns the running output buffer + its current
+ * length so a BOF can read back what it has emitted so far. Used
+ * by No-Consolation-style wrappers that need to post-process
+ * their own captured output mid-execution. */
+__declspec(dllexport) char * __cdecl BeaconGetOutputData(int *out_size)
+{
+    if (!g_params) {
+        if (out_size) *out_size = 0;
+        return 0;
+    }
+    if (out_size) *out_size = (int)g_params->out_len;
+    return (char *)g_params->out_addr;
+}
+
 __declspec(dllexport) int __cdecl BeaconIsAdmin(void)
 {
     if (!ensure_advapi()) return 0;
@@ -963,6 +979,7 @@ static uint32_t beacon_resolve(uint32_t hash)
     if (hash == HASH_BEACON_INJECT_PROCESS)           return (uint32_t)&BeaconInjectProcess;
     if (hash == HASH_BEACON_INJECT_TEMPORARY_PROCESS) return (uint32_t)&BeaconInjectTemporaryProcess;
     if (hash == HASH_BEACON_CLEANUP_PROCESS)          return (uint32_t)&BeaconCleanupProcess;
+    if (hash == HASH_BEACON_GET_OUTPUT_DATA)          return (uint32_t)&BeaconGetOutputData;
     return 0;
 }
 

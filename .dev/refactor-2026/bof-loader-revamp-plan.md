@@ -145,14 +145,28 @@ slices:
               `mov eax, fs:0x30` for PEB load).
           - step: 1
             title: real loader — COFF parser + Beacon API impl
-            status: queued
-            scope: |
-              Port the loader half of runtime/bof/bof_windows.go
-              to i386 inside the shellcode: parse + VirtualAlloc
-              + IMAGE_REL_I386_* relocations + Beacon API stubs
-              writing into the params block's out/err buffers.
-              All kernel32 calls resolved through the same
-              PEB-walk-by-hash primitive.
+            status: closed (steps 1.a → 1.h)
+            commits:
+              - 597715c  # 1.a — expanded kernel32 set
+              - 313f426  # 1.b — COFF parser + i386 relocs
+              - fe7ec9f  # 1.c pivot — reflective-DLL model
+              - 7724c9d  # 1.c.0 — RtlMoveMemory forwarder bypass
+              - 98cbdfe  # 1.c.1 — Data + Format families
+              - 1d92979  # 1.e — Helpers + KV
+              - 0a4913d  # 1.f — Token + IsAdmin via advapi32
+              - d77a815  # 1.g — printf% expansion
+              - 9aef7ea  # 1.h — Inject + Spawn family
+            deliverable: |
+              25 Beacon API symbols implemented inside the loader
+              DLL: full Group 1–6 of beacon.h plus
+              BeaconGetOutputData. printf-with-% supports
+              %d/%i/%u/%x/%X/%p/%s/%c/%% via cdecl-stack
+              varargs. advapi32 is resolved lazily via
+              kernel32!LoadLibraryA on first Token/IsAdmin call.
+              All cross-process steps go through the canonical
+              kernel32 set (CreateProcessA, VirtualAllocEx,
+              WriteProcessMemory, CreateRemoteThread, etc.).
+              10/10 VM E2E tests passing on Windows 10 fr-FR.
           - step: 2
             title: Go-side orchestrator
             status: closed
