@@ -7,6 +7,57 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — Beacon API full coverage + admin CS-SA suite (2026-05-18)
+
+# Custom BOFs exercising every Beacon API symbol
+
+Two new in-tree fixtures fill the coverage gap left by the
+existing examples:
+
+- `beacon_api_complete.c` (safe, default suite) — exercises
+  `BeaconGetCustomUserData`, `BeaconRemoveValue` (add → get →
+  remove → re-get → idempotent re-remove), and
+  `BeaconGetOutputData` (introspects accumulated output).
+- `beacon_api_intrusive.c` (MALDEV_INTRUSIVE=1 gated) —
+  exercises `BeaconSpawnTemporaryProcess`,
+  `BeaconInjectTemporaryProcess`, `BeaconCleanupProcess` and
+  `BeaconInjectProcess` against the calling process. Payload
+  is a single `0xC3` (RET) so the spawned thread exits clean.
+
+# Master coverage matrix
+
+New `TestBeaconAPI_FullSurfaceMatrix` enumerates every
+documented Beacon API symbol and maps each to the in-tree
+fixture that references it (verified by string-grep of the
+`.o` symbol table). Adding a new Beacon function without a
+fixture-touch now FAILs at PR time instead of slipping through
+to production. 28 symbols covered (the canonical Beacon API)
++ `BeaconGetOutputData` (No-Consolation extension).
+
+# Admin CS-SA suite via MALDEV_INTRUSIVE=1
+
+Five admin-gated CS-SA BOFs added — surface APIs only
+reachable with elevation or that touch session state:
+
+| BOF | Surface |
+|---|---|
+| `adv_audit_policies` | ADVAPI32$AuditEnumeratePerUserPolicy (SE_SECURITY_NAME) |
+| `regsession` | HKEY_USERS\<SID> registry walk (ACL'd subkeys) |
+| `sc_query` | ADVAPI32$QueryServiceStatusEx (named service) |
+| `vssenum` | VSS COM (IVssBackupComponents) |
+| `netuser` | NETAPI32$NetUserGetInfo (SAM details) |
+
+Each test accepts both the success and the documented BOF
+failure paths (ACCESS_DENIED, MORE_DATA, etc.) — both witness
+that the loader resolved imports + the BOF executed +
+BeaconPrintf captured. Run with `MALDEV_INTRUSIVE=1 go test`.
+
+# Verified
+
+  go test ./runtime/bof/                       # host: 35/35 PASS (5 admin SKIP)
+  MALDEV_INTRUSIVE=1 go test ./runtime/bof/    # host: 40/40 PASS
+  vm-run-tests.sh windows ./runtime/bof/...    # VM: same numbers, exit 0
+
 ### runtime/bof — CS-SA E2E expansion 18 → 32 BOFs (2026-05-18)
 
 Fourteen more public BOFs added — total now 32, zero skips.

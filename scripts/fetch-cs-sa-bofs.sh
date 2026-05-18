@@ -72,7 +72,8 @@ for bof in \
     sc_enum list_firewall_rules driversigs md5 \
     whoami tasklist uptime useridletime windowlist \
     sha1 sha256 cacls nettime schtasksenum aadjoininfo \
-    get_session_info netshares get_password_policy; do
+    get_session_info netshares get_password_policy \
+    adv_audit_policies regsession sc_query vssenum netuser; do
     src="${WORK}/SA/${bof}/${bof}.x64.o"
     if [ ! -f "${src}" ]; then
         echo "  ! missing ${src}"

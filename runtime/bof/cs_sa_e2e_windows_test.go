@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/oioio-space/maldev/testutil"
 )
 
 // E2E suite against TrustedSec's CS-Situational-Awareness-BOF
@@ -508,4 +510,102 @@ func TestCSSA_GetPasswordPolicy(t *testing.T) {
 	a.AddWideString("") // empty = local
 	out := runCSSABOF(t, "get_password_policy", a.Pack())
 	assertContainsAny(t, "get_password_policy", out, "Password", "password", "Min", "Max")
+}
+
+// ============================================================
+// MALDEV_INTRUSIVE=1 — admin / privileged BOFs
+// ============================================================
+//
+// These call APIs that require LocalSystem or admin (audit
+// policy enumeration, SAM access, VSS service, etc.) or
+// touch session-state that other tests rely on. Each is
+// gated by testutil.RequireIntrusive so default `go test`
+// runs stay clean.
+
+// TestCSSA_AdvAuditPolicies exercises adv_audit_policies.x64.o —
+// per-user audit policy via ADVAPI32$AuditEnumeratePerUserPolicy.
+// Needs admin: querying audit policy requires SE_SECURITY_NAME.
+// The BOF takes an int "iswow64" flag — pass 0 for native x64.
+func TestCSSA_AdvAuditPolicies(t *testing.T) {
+	testutil.RequireIntrusive(t)
+	a := NewArgs()
+	a.AddInt(0) // 0 = native x64
+	out := runCSSABOF(t, "adv_audit_policies", a.Pack())
+	assertContainsAny(t, "adv_audit_policies", out,
+		"Policy", "policy", "Audit", "audit",
+		"AuditEnumerate", // failure path acceptable
+	)
+}
+
+// TestCSSA_Regsession exercises regsession.x64.o — registry-
+// session enumeration (the keys that map to remote user
+// sessions via HKEY_USERS). Empty hostname = local registry.
+// Needs admin because some HKEY_USERS\<SID> subkeys are
+// ACL'd against non-admin reads.
+func TestCSSA_Regsession(t *testing.T) {
+	testutil.RequireIntrusive(t)
+	a := NewArgs()
+	a.AddString("") // empty = local
+	out := runCSSABOF(t, "regsession", a.Pack())
+	assertContainsAny(t, "regsession", out,
+		"S-1-5", "Session", "session", "User", "user",
+		"RegOpenKey", "RegQueryValue", // failure path
+	)
+}
+
+// TestCSSA_ScQuery exercises sc_query.x64.o — query a single
+// service's status via ADVAPI32$QueryServiceStatusEx. Targets
+// "RpcSs" (Remote Procedure Call), which every Windows install
+// has running. Not strictly admin-only but intrusive because
+// it touches the SCM.
+func TestCSSA_ScQuery(t *testing.T) {
+	testutil.RequireIntrusive(t)
+	a := NewArgs()
+	a.AddString("")      // hostname empty = local SCM
+	a.AddString("RpcSs") // always-present built-in service
+	out := runCSSABOF(t, "sc_query", a.Pack())
+	assertContainsAny(t, "sc_query", out,
+		"RpcSs", "STATE", "RUNNING", "TYPE",
+		"Failed to query service", // non-admin path (ACCESS_DENIED)
+	)
+}
+
+// TestCSSA_Vssenum exercises vssenum.x64.o — Volume Shadow
+// Copy enumeration via the VSS COM interface (IVssBackup
+// Components). Needs admin because VSS service queries are
+// gated. Empty hostname = local. Empty sharename = all
+// volumes.
+func TestCSSA_Vssenum(t *testing.T) {
+	testutil.RequireIntrusive(t)
+	a := NewArgs()
+	a.AddWideString(`C:`) // hostname slot is repurposed as drive root
+	a.AddWideString(`C$`) // share name
+	out := runCSSABOF(t, "vssenum", a.Pack())
+	assertContainsAny(t, "vssenum", out,
+		"Volume", "Shadow", "VSS", "vssadmin",
+		// The BOF builds a UNC root path from the two args. With
+		// empty inputs it produces \\\ which the FS rejects; the
+		// BOF prints "Could not open root folder to query" which
+		// still witnesses that NetWkstaGetInfo + path build ran.
+		"Could not open root folder", "Error:",
+	)
+}
+
+// TestCSSA_Netuser exercises netuser.x64.o — query a single
+// user's properties via NETAPI32$NetUserGetInfo. Targets the
+// well-known "Administrator" SID; empty domain = local SAM.
+// Admin-gated because reading SAM details about other accounts
+// is privileged on hardened systems.
+func TestCSSA_Netuser(t *testing.T) {
+	testutil.RequireIntrusive(t)
+	a := NewArgs()
+	a.AddWideString("Administrator") // always-present account
+	a.AddWideString("")              // empty = local SAM
+	out := runCSSABOF(t, "netuser", a.Pack())
+	assertContainsAny(t, "netuser", out,
+		"User name", "Administrator", "User ID",
+		"SID", "S-1-5",
+		"Failed to get user info", // BOF's failure path when non-admin
+		"NetUserGetInfo",          // raw API failure form
+	)
 }

@@ -142,17 +142,25 @@ Each `.o` is committed to `testutil/` next to the existing
 ## Status
 
 - [x] In-tree examples (`hello_beacon.c` / `parse_args.c` /
-  `loadlib.c` / `realworld_calls.c`) — `.o` committed, tests
-  pass on host + VM.
-- [x] CS-SA-BOF subset (10 BOFs) — fetch-on-demand, all 10
-  PASS on host + Windows10 VM as of 2026-05-18.
+  `loadlib.c` / `realworld_calls.c` / `data_extras.c` /
+  `format_output.c` / `format_extras.c` / `error_spawnto.c`) —
+  `.o` committed, tests pass on host + VM.
+- [x] **Beacon API full coverage** —
+  `beacon_api_complete.c` adds the safe missing functions
+  (GetCustomUserData / RemoveValue / GetOutputData);
+  `beacon_api_intrusive.c` (MALDEV_INTRUSIVE=1) adds the
+  Spawn / Inject / Cleanup chain. `TestBeaconAPI_FullSurfaceMatrix`
+  asserts every documented symbol has a fixture.
+- [x] CS-SA-BOF subset — 32 default + 5 admin
+  (MALDEV_INTRUSIVE=1) = 37 total, all PASS on host +
+  Windows10 VM as of 2026-05-18.
 
 Pickup ideas (no current owner):
 
 - Add x86 variants (`.x86.o`) to exercise the future
   `BeaconGetSpawnTo(BOOL bX86)` operator path.
-- Cover the SE-required BOFs (`netuser`, `netshares /asAdmin`)
-  in a separate intrusive suite gated by `MALDEV_INTRUSIVE=1`.
+- AD-required BOFs (`adcs_enum`, `ldapsearch`,
+  `nonpagedldapsearch`, `netgroup`) need a Kali / domain lab.
 
 This file unblocks future contributors: once mingw is available,
 running the build commands above produces the missing artefacts
