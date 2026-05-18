@@ -10,14 +10,22 @@
 
 ```bash
 # One-time toolchain install on a Fedora/Debian dev box.
-dnf install mingw64-gcc      # Fedora
-apt install mingw-w64        # Debian/Ubuntu
+dnf install mingw64-gcc mingw32-gcc   # Fedora — both arches
+apt install mingw-w64                  # Debian/Ubuntu (incl. i686)
 
-# Build all examples.
+# Build all x64 examples.
 cd runtime/bof/testdata
 for src in *.c; do
+    [ "${src%.x86.c}" != "$src" ] && continue   # x86 fixtures handled below
     x86_64-w64-mingw32-gcc -c "$src" -o "${src%.c}.o" \
         -O2 -Wall -ffreestanding -fno-stack-protector
+done
+
+# Build x86 fixtures (slice 1.d step 1.b+).
+for src in *.x86.c; do
+    i686-w64-mingw32-gcc -m32 -c "$src" -o "${src%.c}.o" \
+        -O2 -Wall -ffreestanding -fno-stack-protector \
+        -fno-asynchronous-unwind-tables -fno-unwind-tables -fno-ident
 done
 ```
 

@@ -87,42 +87,35 @@ func TestABIMagic_LittleEndianMatchesCSide(t *testing.T) {
 	assert.Equal(t, []byte{'B', 'C', '8', '6'}, buf[:])
 }
 
-// TestX86BOF_Execute_SkeletonRoundTrip is the cross-process E2E
-// test. Spawns SysWOW64\rundll32.exe suspended, injects the
-// loader shellcode, hands it a minimal fake-BOF param block, and
-// expects the loader to update params.status from PENDING to DONE
-// via ReadProcessMemory.
+// TestX86BOF_Execute_NoopFixture is the cross-process E2E for
+// slice 1.d step 1.b: the loader's COFF parser + relocation
+// engine + entry call dispatch are exercised against a real
+// (but trivial) i386 BOF that has no Beacon API imports and no
+// cross-section relocations.
 //
-// Skipped when SysWOW64\rundll32.exe is missing (non-Windows
-// test host, Windows ARM64 without WoW64, etc.).
+// The fixture testdata/noop.x86.o is `void go(char*, int) {}`
+// compiled with i686-w64-mingw32-gcc — 16 bytes of .text plus
+// empty .data/.bss. A passing test means the shellcode found
+// the entry symbol "_go", called it cdecl-correctly, and
+// returned to ExitThread without crashing.
 //
-// Until phase B-bis step 1 lands a real COFF parser, the
-// skeleton's contract is exactly "round-trip the params block";
-// out/err lengths stay 0 and status flips to DONE. This test
-// pins that contract — it's the only thing that would catch a
-// regression in the shellcode bytes (offset 0 ↔ loader_entry,
-// PEB walk path, ROR13 export resolution).
-func TestX86BOF_Execute_SkeletonRoundTrip(t *testing.T) {
+// Skipped on hosts without SysWOW64\rundll32.exe (non-Windows
+// or Windows-on-ARM without WoW64).
+func TestX86BOF_Execute_NoopFixture(t *testing.T) {
 	if _, err := os.Stat(defaultX86Host); err != nil {
 		t.Skipf("WoW64 host %s missing: %v", defaultX86Host, err)
 	}
-
-	// Minimal i386 COFF header — 20 bytes, Machine=0x014c, 0
-	// sections. The skeleton doesn't parse the bytes, just
-	// records bof_len; phase B-bis step 1 will need a real .o
-	// fixture.
-	fake := make([]byte, 20)
-	fake[0] = 0x4c
-	fake[1] = 0x01
+	bof, err := os.ReadFile("testdata/noop.x86.o")
+	require.NoError(t, err, "noop.x86.o fixture missing")
 
 	res, err := Run(context.Background(), Spec{
-		Bytes: fake,
-		Args:  []byte("ignored-by-skeleton"),
+		Bytes: bof,
+		Args:  []byte{},
 	})
-	require.NoError(t, err, "expected loader to surface BOF_STATUS_DONE")
+	require.NoError(t, err, "expected loader to surface LOADER_STATUS_DONE")
 	require.NotNil(t, res)
-	assert.Empty(t, res.Output, "skeleton writes 0 bytes of output")
-	assert.Empty(t, res.Errors, "skeleton writes 0 bytes of errors")
+	assert.Empty(t, res.Output, "noop fixture writes no output")
+	assert.Empty(t, res.Errors, "noop fixture writes no errors")
 }
 
 // TestX86BOF_Execute_Timeout exercises the WaitForSingleObject
@@ -133,7 +126,9 @@ func TestX86BOF_Execute_Timeout(t *testing.T) {
 	if _, err := os.Stat(defaultX86Host); err != nil {
 		t.Skipf("WoW64 host %s missing: %v", defaultX86Host, err)
 	}
-	r, err := coffX86Loader{}.Load(make([]byte, 20))
+	bof, err := os.ReadFile("testdata/noop.x86.o")
+	require.NoError(t, err)
+	r, err := coffX86Loader{}.Load(bof)
 	require.NoError(t, err)
 	x := r.(*x86BOF)
 	x.SetTimeout(1 * time.Millisecond)

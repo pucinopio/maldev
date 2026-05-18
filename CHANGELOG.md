@@ -7,6 +7,43 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### runtime/bof — slice 1.d step 1.b: i386 COFF parser + relocations in shellcode (2026-05-18)
+
+# What the loader now does inside the WoW64 host
+
+- Validates the COFF i386 header (Machine 0x014c, ≤32 sections).
+- Lays out every section with raw data into a single VirtualAlloc
+  region (RW initially).
+- Applies IMAGE_REL_I386_ABSOLUTE / DIR32 / REL32 / DIR32NB
+  relocations against per-section bases.
+- VirtualProtect each IMAGE_SCN_MEM_EXECUTE section → PAGE_EXECUTE_READ
+  (drops the RWX tell).
+- Finds the "_go" entry symbol (short name + long name string-table
+  forms), calls it cdecl-correctly with (args_addr, args_len).
+- Returns LOADER_STATUS_DONE on clean BOF return; surfaces
+  LOADER_STATUS_LOAD_FAIL + a specific error_code on any
+  parser / reloc / entry-resolution failure (errors namespace
+  0x10001..0x10021).
+
+# Out of scope (step 1.c/1.d)
+
+External imports (symbol section_number == 0) currently surface as
+LOAD_FAIL error_code 0x10012. The Beacon API resolver (and
+__imp__Beacon* relocations against an in-loader Beacon table)
+land in step 1.c + 1.d.
+
+# Fixtures + tests
+
+  runtime/bof/testdata/noop.x86.c                  // void go(*,int) {}
+  runtime/bof/testdata/noop.x86.o                  // committed mingw32 build
+  TestX86BOF_Execute_NoopFixture                   // Windows-VM E2E
+  TestX86BOF_Execute_Timeout                       // uses the same fixture
+
+# Shellcode growth
+
+The shellcode embedded under -tags=bof_x86_loader grew from
+576 B (step 1.a) to 1.8 KB. Still well under the page budget.
+
 ### runtime/bof — slice 1.d phase B-bis step 2: cross-process orchestrator (2026-05-18)
 
 # What landed
