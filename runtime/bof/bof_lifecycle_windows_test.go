@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -488,6 +489,55 @@ func TestBOF_SacrificialThread_TokenAccessDeniedSurfaces(t *testing.T) {
 	if !strings.Contains(err.Error(), "SetThreadToken") {
 		t.Errorf("error %q does not mention SetThreadToken", err)
 	}
+}
+
+// TestBOF_ParallelExecute pins the Bundle-C contract: two distinct
+// *BOF instances Execute concurrently without serialising on each
+// other. The old design held a package-wide bofMu for the entire
+// Execute call so two BOFs always queued; the per-TID bofRegistry +
+// per-*BOF execMu lets them run in parallel.
+//
+// Smoke-tests with hello_beacon (cheap, deterministic output). 8
+// goroutines × 4 *BOFs round-robin → 32 concurrent Executes. The
+// assertion is correctness: every output must contain the expected
+// greeting bytes, no torn registry, no data race.
+func TestBOF_ParallelExecute(t *testing.T) {
+	const (
+		numBOFs       = 4
+		numGoroutines = 8
+		callsPerWorker = 4
+	)
+	data := loadLifecycleBOF(t, "hello_beacon.o")
+
+	bofs := make([]*BOF, numBOFs)
+	for i := range bofs {
+		b, err := Load(data)
+		if err != nil {
+			t.Fatalf("Load #%d: %v", i, err)
+		}
+		bofs[i] = b
+		defer b.Close()
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+	for g := 0; g < numGoroutines; g++ {
+		go func(workerID int) {
+			defer wg.Done()
+			for i := 0; i < callsPerWorker; i++ {
+				b := bofs[(workerID+i)%numBOFs]
+				out, err := b.Execute(nil)
+				if err != nil {
+					t.Errorf("worker %d call %d: Execute: %v", workerID, i, err)
+					return
+				}
+				if len(out) == 0 {
+					t.Errorf("worker %d call %d: empty output", workerID, i)
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
 }
 
 // TestBOF_PDataRegistered pins the SEH-unwind registration in

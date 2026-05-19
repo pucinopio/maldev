@@ -113,7 +113,8 @@ func beaconIsAdminImpl() uintptr {
 // supplied a non-NULL receiver — CS BOFs sometimes pass only the buffer
 // pointer and skip the length.
 func beaconGetCustomUserDataImpl(bufPP, lenP uintptr) uintptr {
-	if currentBOF == nil || len(currentBOF.userData) == 0 {
+	b := bofForCurrentThread()
+	if b == nil || len(b.userData) == 0 {
 		if bufPP != 0 {
 			*(*uintptr)(unsafe.Pointer(bufPP)) = 0
 		}
@@ -123,10 +124,10 @@ func beaconGetCustomUserDataImpl(bufPP, lenP uintptr) uintptr {
 		return 0
 	}
 	if bufPP != 0 {
-		*(*uintptr)(unsafe.Pointer(bufPP)) = uintptr(unsafe.Pointer(&currentBOF.userData[0]))
+		*(*uintptr)(unsafe.Pointer(bufPP)) = uintptr(unsafe.Pointer(&b.userData[0]))
 	}
 	if lenP != 0 {
-		*(*int32)(unsafe.Pointer(lenP)) = int32(len(currentBOF.userData))
+		*(*int32)(unsafe.Pointer(lenP)) = int32(len(b.userData))
 	}
 	return 0
 }
@@ -157,20 +158,21 @@ func toWideCharImpl(srcPtr, dstPtr, maxUnits uintptr) uintptr {
 // the BOF for the rest of Execute so the address handed back stays
 // valid across subsequent callbacks; resets between Execute runs.
 func beaconGetOutputDataImpl(sizePtr uintptr) uintptr {
-	if currentBOF == nil || currentBOF.output == nil {
+	b := bofForCurrentThread()
+	if b == nil || b.output == nil {
 		if sizePtr != 0 {
 			*(*int32)(unsafe.Pointer(sizePtr)) = 0
 		}
 		return 0
 	}
-	currentBOF.outputSnapshot = currentBOF.output.Bytes()
+	b.outputSnapshot = b.output.Bytes()
 	if sizePtr != 0 {
-		*(*int32)(unsafe.Pointer(sizePtr)) = int32(len(currentBOF.outputSnapshot))
+		*(*int32)(unsafe.Pointer(sizePtr)) = int32(len(b.outputSnapshot))
 	}
-	if len(currentBOF.outputSnapshot) == 0 {
+	if len(b.outputSnapshot) == 0 {
 		return 0
 	}
-	return uintptr(unsafe.Pointer(&currentBOF.outputSnapshot[0]))
+	return uintptr(unsafe.Pointer(&b.outputSnapshot[0]))
 }
 
 // beaconAddValueImpl maps key (C string) → ptr in the per-BOF KV store.
@@ -181,22 +183,24 @@ func beaconGetOutputDataImpl(sizePtr uintptr) uintptr {
 // The CS-canonical contract is `void`, but No-Consolation and other
 // BOFs check the return; treating it as void makes them silently fail.
 func beaconAddValueImpl(keyPtr, valPtr uintptr) uintptr {
-	if currentBOF == nil || keyPtr == 0 {
+	b := bofForCurrentThread()
+	if b == nil || keyPtr == 0 {
 		return 0
 	}
-	if currentBOF.kv == nil {
-		currentBOF.kv = newKVStore()
+	if b.kv == nil {
+		b.kv = newKVStore()
 	}
-	currentBOF.kv.set(cStringFromPtr(keyPtr, 4096), valPtr)
+	b.kv.set(cStringFromPtr(keyPtr, 4096), valPtr)
 	return 1
 }
 
 // beaconGetValueImpl looks up key in the KV store; returns 0 when absent.
 func beaconGetValueImpl(keyPtr uintptr) uintptr {
-	if currentBOF == nil || keyPtr == 0 || currentBOF.kv == nil {
+	b := bofForCurrentThread()
+	if b == nil || keyPtr == 0 || b.kv == nil {
 		return 0
 	}
-	return currentBOF.kv.get(cStringFromPtr(keyPtr, 4096))
+	return b.kv.get(cStringFromPtr(keyPtr, 4096))
 }
 
 // beaconRemoveValueImpl drops key from the KV store; no-op when absent.
@@ -205,13 +209,14 @@ func beaconGetValueImpl(keyPtr uintptr) uintptr {
 // the return interpret 0 as failure, so we report 1 on success and on
 // the no-op-when-absent path (the operation post-condition holds).
 func beaconRemoveValueImpl(keyPtr uintptr) uintptr {
-	if currentBOF == nil || keyPtr == 0 {
+	b := bofForCurrentThread()
+	if b == nil || keyPtr == 0 {
 		return 0
 	}
-	if currentBOF.kv == nil {
+	if b.kv == nil {
 		return 1
 	}
-	currentBOF.kv.remove(cStringFromPtr(keyPtr, 4096))
+	b.kv.remove(cStringFromPtr(keyPtr, 4096))
 	return 1
 }
 
@@ -229,10 +234,11 @@ type processInfo struct {
 // the matched BeaconInject* call decides whether to allocate. Returns BOOL.
 func beaconSpawnTemporaryProcessImpl(bIgnoreToken, bAlloc, _, piPtr uintptr) uintptr {
 	_, _ = bIgnoreToken, bAlloc
-	if piPtr == 0 || currentBOF == nil {
+	b := bofForCurrentThread()
+	if piPtr == 0 || b == nil {
 		return 0
 	}
-	target := currentBOF.spawnTo
+	target := b.spawnTo
 	if target == "" {
 		target = `C:\Windows\System32\rundll32.exe`
 	}
@@ -391,11 +397,12 @@ func beaconInjectProcessImpl(
 		return 0
 	}
 	// Route every cross-process primitive through the BOF's optional
-	// *wsyscall.Caller — nil keeps the kernel32 path. currentBOF is
-	// held under bofMu so the deref is race-free.
+	// *wsyscall.Caller — nil keeps the kernel32 path. The *BOF is
+	// resolved from the current OS thread's registry entry; under
+	// b.execMu the deref is race-free with concurrent Close.
 	var caller *wsyscall.Caller
-	if currentBOF != nil {
-		caller = currentBOF.caller
+	if cur := bofForCurrentThread(); cur != nil {
+		caller = cur.caller
 	}
 	h := windows.Handle(hProc)
 	total := uintptr(payloadLen) + uintptr(argLen)

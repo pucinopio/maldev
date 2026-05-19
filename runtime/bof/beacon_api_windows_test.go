@@ -4,23 +4,28 @@ package bof
 
 import (
 	"encoding/binary"
+	"runtime"
 	"testing"
 	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/windows"
 )
 
-// withCurrentBOF runs fn with currentBOF set to a freshly-built BOF that has
-// an output buffer. The bofMu lock and currentBOF restoration are handled
-// here so individual stub tests stay focused on the assertion.
+// withCurrentBOF runs fn with a fresh *BOF registered under the
+// current OS thread's TID so the Beacon API stubs that call
+// bofForCurrentThread() resolve to it. Pins the goroutine via
+// LockOSThread so the registry entry can't be torn by Go's
+// scheduler migrating to a different thread mid-test.
 func withCurrentBOF(t *testing.T, fn func(b *BOF)) {
 	t.Helper()
-	bofMu.Lock()
-	defer bofMu.Unlock()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	b := &BOF{output: newBeaconOutput(), errors: newBeaconOutput()}
-	currentBOF = b
-	defer func() { currentBOF = nil }()
+	tid := windows.GetCurrentThreadId()
+	bofRegistry.Store(tid, b)
+	defer bofRegistry.Delete(tid)
 	fn(b)
 }
 
@@ -94,11 +99,12 @@ func TestBeaconPrintfImpl_CapturesOutput(t *testing.T) {
 }
 
 func TestBeaconPrintfImpl_NoCurrentBOF(t *testing.T) {
-	// currentBOF is nil outside a withCurrentBOF block — the stub must
-	// not panic on a missing receiver.
-	bofMu.Lock()
-	defer bofMu.Unlock()
-	currentBOF = nil
+	// No *BOF registered for this thread — the stub must not panic
+	// on a missing receiver. LockOSThread guards against the
+	// scheduler migrating to a thread that happens to have one.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	bofRegistry.Delete(windows.GetCurrentThreadId())
 	msg := []byte("ignored\x00")
 	ret := beaconPrintfImpl(0, uintptr(unsafe.Pointer(&msg[0])), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	assert.Zero(t, ret)
@@ -316,9 +322,9 @@ func TestBeaconError_RoutesToErrorsBuffer(t *testing.T) {
 }
 
 func TestBeaconError_NoCurrentBOF(t *testing.T) {
-	bofMu.Lock()
-	defer bofMu.Unlock()
-	currentBOF = nil
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	bofRegistry.Delete(windows.GetCurrentThreadId())
 	// Each variant must no-op safely when no BOF context is active.
 	assert.Equal(t, uintptr(0), beaconErrorDImpl(1, 2))
 	assert.Equal(t, uintptr(0), beaconErrorDDImpl(1, 2, 3))

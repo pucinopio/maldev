@@ -148,8 +148,8 @@ type faultRecord struct {
 // Returns ErrAlreadyPrepared if called after the first Execute
 // — the mode toggle is part of the prepared-state contract.
 func (b *BOF) SetSacrificialThread(timeout time.Duration) error {
-	bofMu.Lock()
-	defer bofMu.Unlock()
+	b.execMu.Lock()
+	defer b.execMu.Unlock()
 	if b.prepared {
 		return ErrAlreadyPrepared
 	}
@@ -160,7 +160,7 @@ func (b *BOF) SetSacrificialThread(timeout time.Duration) error {
 // callEntry dispatches the BOF entry call. In default mode it
 // runs inline (current behaviour). In sacrificial mode it runs
 // on a dedicated OS thread with VEH-mediated fault isolation.
-// Caller must hold bofMu.
+// Caller must hold b.execMu.
 func (b *BOF) callEntry(args []byte) error {
 	var argPtr, argLen uintptr
 	// argPtr stays 0 when args is empty — passing &args[0] on a
@@ -222,6 +222,12 @@ func (b *BOF) callEntrySacrificial(argPtr, argLen uintptr) error {
 	tid := uint32(tidR)
 
 	sacrificialMap.Store(tid, frame)
+	// Also register the BOF under the sacrificial TID in the
+	// callback registry — Beacon API impls fire on this thread
+	// and resolve their *BOF via bofForCurrentThread(). Without
+	// this, every callback during a sacrificial Execute would
+	// see a nil BOF and silently no-op.
+	bofRegistry.Store(tid, b)
 	b.fault = faultRecord{} // clear from any previous call
 
 	// If the operator configured an impersonation token via
@@ -235,6 +241,7 @@ func (b *BOF) callEntrySacrificial(argPtr, argLen uintptr) error {
 		if err := windows.SetThreadToken(&hThreadHandle, b.executeAsToken); err != nil {
 			_, _, _ = api.ProcTerminateThread.Call(hThread, 1)
 			sacrificialMap.Delete(tid)
+			bofRegistry.Delete(tid)
 			return fmt.Errorf("runtime/bof: SetThreadToken: %w", err)
 		}
 	}
@@ -248,6 +255,7 @@ func (b *BOF) callEntrySacrificial(argPtr, argLen uintptr) error {
 		// to drop the registry entry.
 		_, _, _ = api.ProcTerminateThread.Call(hThread, 1)
 		sacrificialMap.Delete(tid)
+		bofRegistry.Delete(tid)
 		return fmt.Errorf("runtime/bof: ResumeThread: %w", err)
 	}
 
@@ -268,8 +276,13 @@ func (b *BOF) callEntrySacrificial(argPtr, argLen uintptr) error {
 	}
 	// Thread terminated cleanly (either ran to completion OR
 	// faulted into the exit-stub which called ExitThread(1)).
-	// Safe to drop the entry; Go GC reclaims the capsule.
+	// Safe to drop both registry entries; Go GC reclaims the
+	// capsule. bofRegistry MUST be cleared too — any stray
+	// callback from a misbehaving BOF after ExitThread would
+	// otherwise resolve to a *BOF whose Execute has already
+	// returned.
 	sacrificialMap.Delete(tid)
+	bofRegistry.Delete(tid)
 	// Pin the frame until after Delete: the trampoline's last
 	// memory read is fenced by WaitForSingleObject's kernel-side
 	// acquire, but Go's escape analyser doesn't see that — keep
@@ -430,7 +443,7 @@ func installSacrificialVEH() error {
 }
 
 // sacrificialBOFActive reports whether *any* registry entry
-// points at this *BOF. Called by Close under bofMu to refuse
+// points at this *BOF. Called by Close under b.execMu to refuse
 // freeing the mapping while a sacrificial thread is still
 // running. Linear scan, but the registry is tiny (one entry
 // per concurrent sacrificial Execute) so the cost is trivial.
@@ -463,10 +476,11 @@ func sacrificialBOFActive(b *BOF) bool {
 //
 // Both fields are pointers; CONTEXT.Rip lives at offset 0xF8.
 //
-// b.execMem is read without bofMu — safe because a *BOF is in
-// the sacrificialMap only between ResumeThread and the deferred
-// Delete, a window during which Close cannot run (it would block
-// on bofMu held by the host's Execute call). The worst case
+// b.execMem is read without b.execMu — safe because a *BOF is
+// in the sacrificialMap only between ResumeThread and the
+// deferred Delete, a window during which Close cannot run (it
+// would block on b.execMu held by the host's Execute call).
+// The worst case
 // (Close races with the VEH and reads execMem=0) falls cleanly
 // through to CONTINUE_SEARCH, which Go's handler then turns
 // into a process exit — losing the isolation, not corrupting

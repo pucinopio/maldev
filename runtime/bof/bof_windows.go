@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"sync"
 	"syscall"
 	"time"
 
@@ -144,6 +145,15 @@ type BOF struct {
 	// default — keeps the host's primary token. Has no effect on
 	// the inline path (sacrificialTimeout == 0).
 	executeAsToken windows.Token
+
+	// execMu serialises Execute / Close / prepare-state-mutating
+	// setters (SetPersistent, SetSacrificialThread) on THIS *BOF.
+	// Different *BOFs run concurrently — the per-instance lock
+	// replaces the historical package-wide lock. Beacon callbacks
+	// resolve their *BOF via bofRegistry[GetCurrentThreadId()];
+	// the registry is set under execMu so concurrent host
+	// goroutines never see a torn registration.
+	execMu sync.Mutex
 }
 
 // SetPersistent toggles state retention across multiple Execute
@@ -168,8 +178,8 @@ type BOF struct {
 // affect future restores without resetting the current state,
 // which is a footgun. Set persistence before the first Execute.
 func (b *BOF) SetPersistent(p bool) error {
-	bofMu.Lock()
-	defer bofMu.Unlock()
+	b.execMu.Lock()
+	defer b.execMu.Unlock()
 	if b.prepared {
 		return ErrAlreadyPrepared
 	}
@@ -183,10 +193,10 @@ func (b *BOF) SetPersistent(p bool) error {
 // inconsistent).
 var ErrAlreadyPrepared = fmt.Errorf("runtime/bof: BOF already prepared (SetPersistent must be called before first Execute)")
 
-// Close releases the VirtualAlloc'd executable memory + drops
-// the cached mapping. Subsequent Execute calls fail cleanly.
-// Idempotent; concurrent Close vs Execute is serialised through
-// the package-wide bofMu.
+// Close releases the executable mapping + unregisters the .pdata
+// unwind entries. Subsequent Execute calls fail cleanly.
+// Idempotent; concurrent Close vs Execute on the same *BOF is
+// serialised through b.execMu.
 //
 // Callers that Load + Execute once and discard can skip Close —
 // the runtime finalizer wired in Load releases the mapping when
@@ -194,8 +204,8 @@ var ErrAlreadyPrepared = fmt.Errorf("runtime/bof: BOF already prepared (SetPersi
 // runtime/pe.RunExecutable hot path that caches the embedded
 // No-Consolation .o) should Close explicitly at shutdown.
 func (b *BOF) Close() error {
-	bofMu.Lock()
-	defer bofMu.Unlock()
+	b.execMu.Lock()
+	defer b.execMu.Unlock()
 	if b.closed {
 		return nil
 	}
@@ -408,8 +418,10 @@ func Load(data []byte) (*BOF, error) {
 // first result.
 //
 // Concurrency: BOF execution is serialised package-wide (the
-// Beacon API stubs read a single currentBOF pointer guarded by
-// bofMu). Concurrent Execute calls block on each other.
+// Beacon API stubs resolve their *BOF via the per-thread
+// bofRegistry; concurrent Execute on the SAME *BOF blocks on
+// b.execMu, concurrent Execute on different *BOFs runs in
+// parallel (Bundle C).
 func (b *BOF) Execute(args []byte) ([]byte, error) {
 	if len(b.Data) < coffHeaderSize {
 		return nil, fmt.Errorf("invalid COFF: data too small")
@@ -431,17 +443,20 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 	// Pin the goroutine to its OS thread for the BOF call. BeaconUseToken
 	// impersonates on the *current thread*; without LockOSThread the Go
 	// scheduler could migrate the goroutine after the impersonation call
-	// and run subsequent Win32 calls under the original token.
+	// and run subsequent Win32 calls under the original token. Registry
+	// entry must be written AFTER LockOSThread — otherwise a callback
+	// firing immediately after Store on a different thread would race.
 	runtime.LockOSThread()
-	bofMu.Lock()
-	currentBOF = b
+	b.execMu.Lock()
+	tid := windows.GetCurrentThreadId()
+	bofRegistry.Store(tid, b)
 	defer func() {
 		// Best-effort revert in case the BOF impersonated and didn't
 		// revert. Errors are ignored — RevertToSelf can only fail when
 		// no impersonation is active, which is the common case.
 		_ = windows.RevertToSelf()
-		currentBOF = nil
-		bofMu.Unlock()
+		bofRegistry.Delete(tid)
+		b.execMu.Unlock()
 		runtime.UnlockOSThread()
 	}()
 

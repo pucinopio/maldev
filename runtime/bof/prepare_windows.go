@@ -15,7 +15,7 @@ import (
 // b.execMem points at the mapping, b.entryAddr at the entry
 // symbol, and b.writableSnapshots holds the initial bytes of
 // every non-exec section for the stateless-reset path. Called
-// from Execute under bofMu.
+// from Execute under b.execMu.
 func (b *BOF) prepare() error {
 	hdr := parseCOFFHeader(b.Data)
 

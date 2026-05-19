@@ -10,27 +10,56 @@ import (
 	"syscall"
 	"unsafe"
 
+	"golang.org/x/sys/windows"
+
 	"github.com/oioio-space/maldev/hash"
 	"github.com/oioio-space/maldev/win/api"
 )
 
-// bofMu serialises BOF execution package-wide. The Beacon API stubs read
-// currentBOF — set under bofMu by Execute — to find the per-call output
-// buffer and arg parser. Concurrent Execute calls block on each other.
-var (
-	bofMu      sync.Mutex
-	currentBOF *BOF
+// bofRegistry maps each OS thread that is currently executing a BOF
+// to the corresponding *BOF instance. Beacon API callbacks fire on
+// the BOF's executing thread and resolve their target via
+// bofForCurrentThread() → GetCurrentThreadId → registry lookup.
+//
+// Both Execute paths register here for the duration of the call:
+//
+//   - Inline: Execute LockOSThread's the host goroutine, then stores
+//     itself under GetCurrentThreadId(). Callbacks fire on the same
+//     thread. Deregistered on Execute exit.
+//   - Sacrificial: Execute stores itself under the SACRIFICIAL
+//     thread's TID (returned by GetThreadId on the CreateThread
+//     handle), since callbacks fire there — NOT on the host thread.
+//
+// Concurrent Execute on different *BOF instances run on different
+// threads with different registry entries; concurrent Execute on
+// the SAME *BOF serialises through b.execMu.
+var bofRegistry sync.Map // map[uint32 tid]*BOF
 
-	// beaconCBs holds one syscall.NewCallback thunk per Beacon API
-	// symbol the loader resolves. Each NewCallback call allocates an
-	// RX page from Go's runtime, so the full set (~28 symbols on the
-	// default build, 25 on the x86 path) costs ≈112 KB of RX pages
-	// at process startup the first time a BOF is Loaded. Pages live
-	// for the process lifetime — Go has no API to release them — and
-	// show up as small VAD entries with the syscall thunk pattern.
-	// OPSEC-visible but identical to every Go program that uses
-	// syscall.NewCallback (it's the same mechanism the standard
-	// library uses for IAT-style callbacks).
+// bofForCurrentThread resolves the *BOF the current OS thread is
+// executing, or nil when the thread is not inside a BOF call. Every
+// Beacon API impl that needs per-call state (output buffer, arg
+// parser, kv store, etc.) calls this — never reach into a global.
+//
+// Cheap: one syscall (GetCurrentThreadId) + one sync.Map.Load.
+func bofForCurrentThread() *BOF {
+	v, ok := bofRegistry.Load(windows.GetCurrentThreadId())
+	if !ok {
+		return nil
+	}
+	return v.(*BOF)
+}
+
+// beaconCBs holds one syscall.NewCallback thunk per Beacon API
+// symbol the loader resolves. Each NewCallback call allocates an
+// RX page from Go's runtime, so the full set (~28 symbols on the
+// default build, 25 on the x86 path) costs ≈112 KB of RX pages
+// at process startup the first time a BOF is Loaded. Pages live
+// for the process lifetime — Go has no API to release them — and
+// show up as small VAD entries with the syscall thunk pattern.
+// OPSEC-visible but identical to every Go program that uses
+// syscall.NewCallback (it's the same mechanism the standard
+// library uses for IAT-style callbacks).
+var (
 	beaconCBsOnce sync.Once
 	beaconCBs     map[string]uintptr
 )
@@ -196,11 +225,12 @@ func initBeaconCallbacks() {
 // trailing conversions filled with zero rather than reading
 // uninitialised memory.
 func beaconPrintfImpl(typ, fmtPtr, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10 uintptr) uintptr {
-	if currentBOF == nil || fmtPtr == 0 {
+	b := bofForCurrentThread()
+	if b == nil || fmtPtr == 0 {
 		return 0
 	}
 	fmtStr := cStringFromPtr(fmtPtr, 65535)
-	currentBOF.output.write(expandCFormat(fmtStr, []uintptr{a1, a2, a3, a4, a5, a6, a7, a8, a9, a10}))
+	b.output.write(expandCFormat(fmtStr, []uintptr{a1, a2, a3, a4, a5, a6, a7, a8, a9, a10}))
 	_ = typ
 	return 0
 }
@@ -208,13 +238,14 @@ func beaconPrintfImpl(typ, fmtPtr, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10 uintp
 // beaconOutputImpl handles BeaconOutput(int type, char *data, int len).
 // The bytes are copied into the BOF's output buffer.
 func beaconOutputImpl(typ uintptr, dataPtr uintptr, length uintptr) uintptr {
-	if currentBOF == nil || dataPtr == 0 || length == 0 {
+	b := bofForCurrentThread()
+	if b == nil || dataPtr == 0 || length == 0 {
 		return 0
 	}
 	src := unsafe.Slice((*byte)(unsafe.Pointer(dataPtr)), int(length))
 	out := make([]byte, int(length))
 	copy(out, src)
-	currentBOF.output.write(out)
+	b.output.write(out)
 	_ = typ
 	return 0
 }
@@ -249,7 +280,7 @@ type dataParser struct {
 }
 
 func beaconDataParseImpl(parserPtr, bufPtr, sz uintptr) uintptr {
-	if parserPtr == 0 || currentBOF == nil {
+	if parserPtr == 0 || bofForCurrentThread() == nil {
 		return 0
 	}
 	p := (*dataParser)(unsafe.Pointer(parserPtr))
@@ -357,14 +388,15 @@ type formatp struct {
 // fields. The previous design stored buffers in a package-global map
 // that never evicted; per-BOF storage gets reset between Executes.
 func beaconFormatAllocImpl(formatPtr, maxsz uintptr) uintptr {
-	if formatPtr == 0 || maxsz == 0 || currentBOF == nil {
+	b := bofForCurrentThread()
+	if formatPtr == 0 || maxsz == 0 || b == nil {
 		return 0
 	}
 	buf := make([]byte, int(maxsz))
-	if currentBOF.formats == nil {
-		currentBOF.formats = newFormatBufStore()
+	if b.formats == nil {
+		b.formats = newFormatBufStore()
 	}
-	currentBOF.formats.store(formatPtr, buf)
+	b.formats.store(formatPtr, buf)
 	base := uintptr(unsafe.Pointer(&buf[0]))
 	p := (*formatp)(unsafe.Pointer(formatPtr))
 	p.original = base
@@ -393,8 +425,8 @@ func beaconFormatFreeImpl(formatPtr uintptr) uintptr {
 	if formatPtr == 0 {
 		return 0
 	}
-	if currentBOF != nil && currentBOF.formats != nil {
-		currentBOF.formats.drop(formatPtr)
+	if b := bofForCurrentThread(); b != nil && b.formats != nil {
+		b.formats.drop(formatPtr)
 	}
 	p := (*formatp)(unsafe.Pointer(formatPtr))
 	p.original = 0
@@ -487,14 +519,16 @@ func beaconFormatPrintfImpl(formatPtr, fmtPtr, a1, a2, a3, a4, a5, a6, a7, a8, a
 	return 0
 }
 
-// writeError appends a formatted error line to currentBOF.errors (or
-// no-ops when currentBOF is nil — defensive guard for unit tests that
-// don't go through Execute).
+// writeError appends a formatted error line to the current thread's
+// *BOF.errors buffer (or no-ops when no BOF is registered for the
+// thread — defensive guard for unit tests that don't go through
+// Execute).
 func writeError(line string) {
-	if currentBOF == nil || currentBOF.errors == nil {
+	b := bofForCurrentThread()
+	if b == nil || b.errors == nil {
 		return
 	}
-	currentBOF.errors.write([]byte(line))
+	b.errors.write([]byte(line))
 }
 
 func beaconErrorDImpl(typ uintptr, d uintptr) uintptr {
@@ -519,7 +553,8 @@ func beaconErrorNAImpl(typ uintptr) uintptr {
 // the BOF's spawnTo*CStr fields so the address stays stable across
 // Beacon API callbacks.
 func beaconGetSpawnToImpl(x86 uintptr, _ uintptr) uintptr {
-	if currentBOF == nil {
+	b := bofForCurrentThread()
+	if b == nil {
 		return 0
 	}
 	// Legacy compatibility: BOFs built against `char *BeaconGetSpawnTo(void)`
@@ -527,18 +562,18 @@ func beaconGetSpawnToImpl(x86 uintptr, _ uintptr) uintptr {
 	// when the operator actually configured an x86 path — otherwise
 	// fall back to the x64 path. This matches the goffloader behaviour
 	// (which ignores the arg) and won't fail BOFs from either API era.
-	if x86 != 0 && len(currentBOF.spawnToX86CStr) != 0 {
-		return uintptr(unsafe.Pointer(&currentBOF.spawnToX86CStr[0]))
+	if x86 != 0 && len(b.spawnToX86CStr) != 0 {
+		return uintptr(unsafe.Pointer(&b.spawnToX86CStr[0]))
 	}
-	if len(currentBOF.spawnToCStr) == 0 {
+	if len(b.spawnToCStr) == 0 {
 		// x64 path empty too — last resort: try the x86 path so a BOF
 		// configured for x86-only doesn't see a null pointer.
-		if len(currentBOF.spawnToX86CStr) != 0 {
-			return uintptr(unsafe.Pointer(&currentBOF.spawnToX86CStr[0]))
+		if len(b.spawnToX86CStr) != 0 {
+			return uintptr(unsafe.Pointer(&b.spawnToX86CStr[0]))
 		}
 		return 0
 	}
-	return uintptr(unsafe.Pointer(&currentBOF.spawnToCStr[0]))
+	return uintptr(unsafe.Pointer(&b.spawnToCStr[0]))
 }
 
 // fmtSprintf is a thin alias for fmt.Sprintf so the Beacon error stubs
