@@ -9,6 +9,18 @@ introduce breaking API changes.
 
 ### Added
 
+- `inject.Hollow(HollowConfig) (*HollowResult, error)` — classic
+  process hollowing (T1055.012). Spawns the target SUSPENDED, strips
+  the loaded image via `NtUnmapViewOfSection` (Caller-routed when
+  non-nil), allocates a fresh region at the payload's preferred
+  base, writes headers + each section, patches the suspended
+  thread's RIP, returns the still-suspended thread for the caller
+  to Resume. Sentinel errors per failure point (`ErrHollow{Spawn,
+  Parse,Unmap,Alloc,Write,Context}`) so callers branch via
+  `errors.Is`. x64 only; no base-relocation handling yet (rejects
+  with `ErrHollowAlloc` when the alloc lands non-preferred — most
+  targets free the preferred base after unmap, so the branch is
+  rare). Closes M8 in the maldev-primitives-roadmap.
 - `inject.CreateRemoteThreadWithCaller(h, entry, param, caller)` —
   canonical primitive for "spawn a thread in a remote process via the
   operator's `*wsyscall.Caller` or the kernel32 fallback". nil caller

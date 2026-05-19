@@ -210,7 +210,7 @@ Don't fork — implement the pivoting model fresh on top of
 
 | Need | Library | Status |
 |---|---|---|
-| TCP SYN scanner | `github.com/google/gopacket` (BSD) + raw socket — **not to be confused with mandiant/gopacket, which is the impacket-in-Go reimplementation, used for lateral movement (M10/M11/M13/M14) not packet capture** | adopt |
+| TCP scanner | `github.com/Ullaakut/nmap/v3` wrapping `nmap.exe` — stage nmap alongside the operator/server. **Not confused with mandiant/gopacket, which is the impacket-in-Go reimplementation used for lateral movement (M10/M11/M13/M14).** | adopt |
 | Service fingerprinter | `projectdiscovery/nuclei` recipes OR custom banner-grab | evaluate |
 | LDAP enumerator | `go-ldap/ldap/v3` | adopt |
 | BloodHound collector | port `BloodHoundAD/SharpHound`'s collector format from C# | **port effort** — JSON spec is public |

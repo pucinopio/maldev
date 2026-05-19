@@ -103,6 +103,7 @@ into an unrelated running process is a textbook EDR trigger.
 | [Kernel Callback Table](kernel-callback-table.md) | `KernelCallbackExec` | Remote | no | yes | high |
 | [EtwpCreateEtwThread](etwp-create-etw-thread.md) | `MethodEtwpCreateEtwThread` | Self | yes (internal) | no | high |
 | [Process Argument Spoofing](process-arg-spoofing.md) | `SpawnWithSpoofedArgs` | Child (suspended) | n/a — disguise | yes | medium |
+| [Process Hollowing](process-hollowing.md) | `Hollow` | Child (suspended, image-replaced) | no (reuses spawn thread) | yes | moderate |
 
 ## Decision flow
 
