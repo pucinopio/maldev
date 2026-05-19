@@ -100,3 +100,6 @@ workspace.xml
 /asmtrace
 /pe/packer/testdata/testlib.dll
 runtime/bof/testdata/cs-sa/
+
+# mermaid-check helper drops a ~150 MB node_modules tree; never commit.
+scripts/mermaid-check/node_modules/
