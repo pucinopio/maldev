@@ -1,8 +1,8 @@
 ---
-status: execution underway — M5 + M8 closed
+status: execution underway — M4 + M5 + M8 closed
 opened: 2026-05-19
 last_reviewed: 2026-05-19
-reflects_commit: pending-m5
+reflects_commit: a110c89
 owner: oioio-space
 scope: maldev — missing primitives for downstream consumers (WRAITH and any other C2 framework)
 companion: wraith-roadmap.md (orchestration layer lives there, NOT here)
@@ -61,7 +61,7 @@ adds orchestration on top.
 | M1  | 🟦 | — | DNS listener (TXT/A/CNAME server-side, slow-exfil capable) | `c2/transport` extension OR new `c2/listener/dns` |
 | M2  | 🟦 | — | SMB named pipe server primitive | `c2/listener/smbpipe` — needs server-side work on top of `hirochachacha/go-smb2` (client-only) or port from Impacket |
 | M3  | 🟦 | — | WebSocket listener | `c2/listener/ws` via `coder/websocket` |
-| M4  | 🟦 | — | Multi-channel router (`Transport` interface chain w/ fallback + backoff) | `c2/transport.Router` |
+| M4  | ✅ | `a110c89` | Multi-channel router (`Transport` interface chain w/ fallback + backoff). `Router` itself implements `Transport` (nestable tiers). Serial fallback + exponential backoff per channel + operator `KillSwitch` + `ErrChannelLost` sentinel for clean re-Connect. 14 tests under `-race`, lock held only across pointer writes (Close runs unlocked), `time.NewTimer`/`Stop` instead of `time.After`. Tech md: `docs/techniques/c2/multi-channel-router.md`. | `c2/transport.Router` |
 | M28 | 🟦 | — | Chunked file transfer protocol (resume-capable) | `c2/transport/chunked` |
 
 ### P0 — Pivoting primitives
