@@ -1,8 +1,8 @@
 ---
-status: execution underway — M8 closed
+status: execution underway — M5 + M8 closed
 opened: 2026-05-19
 last_reviewed: 2026-05-19
-reflects_commit: d675a67
+reflects_commit: pending-m5
 owner: oioio-space
 scope: maldev — missing primitives for downstream consumers (WRAITH and any other C2 framework)
 companion: wraith-roadmap.md (orchestration layer lives there, NOT here)
@@ -68,7 +68,7 @@ adds orchestration on top.
 
 | ID | Status | Commit | Scope | Package target |
 |---|---|---|---|---|
-| M5  | 🟦 | — | SOCKS5 server primitive (forward + reverse) | `c2/pivot/socks5` — adopt `armon/go-socks5` (MIT). NOT ligolo-ng (GPLv3). |
+| M5  | 🟡 | partial — `pending-m5` | SOCKS5 forward-proxy primitive shipped (`c2/pivot/socks5.Server` + `RuleSet`/`PermitAll`/`PermitNone` re-exports). Reverse pivot (M5.b) queued. `armon/go-socks5` is **MPL-2.0** (file-level copyleft, compatible with maldev MIT as a Go import — roadmap originally mis-stated MIT). 8 tests + 4 examples; all host-runnable, no Win32 → no Caller matrix. |
 | M6  | 🟦 | — | Port-forward (local + remote) | `c2/pivot/portforward` |
 | M7  | 🟦 | — | Beacon-over-beacon SMB pipe transport | `c2/pivot/smbpipe` (depends on M2) |
 

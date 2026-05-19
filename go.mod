@@ -4,6 +4,7 @@ go 1.21
 
 require (
 	github.com/Binject/go-donut v0.0.0-20220908180326-fcdcc35d591c
+	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
 	github.com/creack/pty v1.1.24
 	github.com/ebitengine/purego v0.8.2
 	github.com/glaslos/ssdeep v1.0.0
@@ -15,6 +16,7 @@ require (
 	github.com/jcmturner/gofork v1.7.6
 	github.com/jcmturner/goidentity/v6 v6.0.1
 	github.com/jcmturner/rpc/v2 v2.0.3
+	github.com/pierrec/lz4/v4 v4.1.26
 	github.com/refraction-networking/utls v1.6.7
 	github.com/saferwall/pe v1.5.6
 	github.com/secDre4mer/pkcs7 v0.0.0-20240322103146-665324a4461d
@@ -38,7 +40,6 @@ require (
 	github.com/google/uuid v1.2.0 // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
-	github.com/pierrec/lz4/v4 v4.1.26 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	golang.org/x/image v0.12.0 // indirect
 	golang.org/x/net v0.23.0 // indirect

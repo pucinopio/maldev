@@ -86,6 +86,8 @@ OPSEC / MITRE / Limitations / See also).
 | [T1078](https://attack.mitre.org/techniques/T1078/) | [`win/privilege`](https://pkg.go.dev/github.com/oioio-space/maldev/win/privilege) |
 | [T1082](https://attack.mitre.org/techniques/T1082/) | [`win/domain`](https://pkg.go.dev/github.com/oioio-space/maldev/win/domain) · [`win/version`](https://pkg.go.dev/github.com/oioio-space/maldev/win/version) |
 | [T1083](https://attack.mitre.org/techniques/T1083/) | [`recon/drive`](https://pkg.go.dev/github.com/oioio-space/maldev/recon/drive) · [`recon/folder`](https://pkg.go.dev/github.com/oioio-space/maldev/recon/folder) |
+| [T1090](https://attack.mitre.org/techniques/T1090/) | [`c2/pivot/socks5`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/pivot/socks5) |
+| [T1090.001](https://attack.mitre.org/techniques/T1090/001/) | [`c2/pivot/socks5`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/pivot/socks5) |
 | [T1095](https://attack.mitre.org/techniques/T1095/) | [`c2`](https://pkg.go.dev/github.com/oioio-space/maldev/c2) · [`c2/meterpreter`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/meterpreter) · [`c2/transport`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport) |
 | [T1098](https://attack.mitre.org/techniques/T1098/) | [`persistence/account`](https://pkg.go.dev/github.com/oioio-space/maldev/persistence/account) |
 | [T1106](https://attack.mitre.org/techniques/T1106/) | [`pe`](https://pkg.go.dev/github.com/oioio-space/maldev/pe) · [`pe/imports`](https://pkg.go.dev/github.com/oioio-space/maldev/pe/imports) · [`win/api`](https://pkg.go.dev/github.com/oioio-space/maldev/win/api) · [`win/ntapi`](https://pkg.go.dev/github.com/oioio-space/maldev/win/ntapi) · [`win/syscall`](https://pkg.go.dev/github.com/oioio-space/maldev/win/syscall) |
@@ -333,7 +335,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 
 </details>
 
-<details><summary><strong>C2 — `c2/*`</strong> — 7 packages</summary>
+<details><summary><strong>C2 — `c2/*`</strong> — 8 packages</summary>
 
 | Package | Detection | Summary |
 |---|---|---|
@@ -341,6 +343,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 | [`c2/cert`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/cert) | quiet | provides self-signed X.509 certificate generation and fingerprint computation for C2 TLS infrastructure |
 | [`c2/meterpreter`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/meterpreter) | noisy | implements Metasploit Framework staging — pulls a second-stage Meterpreter payload from a `multi/handler` and executes it in the current process or a target picked via the optional `Config.Injector` |
 | [`c2/multicat`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/multicat) | quiet | provides a multi-session reverse-shell listener for operator use |
+| [`c2/pivot/socks5`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/pivot/socks5) | moderate | wraps the armon/go-socks5 server in a thin maldev primitive — a beacon-side SOCKS5 listener the operator pivots through to reach the beacon's network |
 | [`c2/shell`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/shell) | noisy | provides a reverse shell with automatic reconnection, PTY support, and optional Windows evasion integration |
 | [`c2/transport`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport) | moderate | provides pluggable network transport implementations for C2 communication: plain TCP, TLS with optional certificate pinning, and uTLS for JA3/JA4 fingerprint randomisation |
 | [`c2/transport/namedpipe`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport/namedpipe) | quiet | provides a Windows named-pipe transport implementing the [github.com/oioio-space/maldev/c2/transport] `Transport` and `Listener` interfaces |

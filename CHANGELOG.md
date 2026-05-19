@@ -9,6 +9,16 @@ introduce breaking API changes.
 
 ### Added
 
+- `c2/pivot/socks5` — beacon-side SOCKS5 forward-proxy primitive
+  (M5 of the maldev-primitives-roadmap). Wraps
+  [`github.com/armon/go-socks5`](https://github.com/armon/go-socks5)
+  (MPL-2.0) with a thin `Server` exposing `New` / `Serve(ctx)` /
+  `Start() → (addr, stop, err)` / `Addr()` plus `Auth`, `Config`,
+  and re-exported `RuleSet` / `PermitAll` / `PermitNone` so
+  consumers don't have to import the underlying package. MITRE
+  T1090.001 (Internal Proxy). 8 tests + 4 godoc examples, all
+  host-runnable (no Win32 → no Caller matrix needed). Forward-only
+  for now; reverse pivot queued as M5.b.
 - `inject.Hollow(HollowConfig) (*HollowResult, error)` — classic
   process hollowing (T1055.012). Spawns the target SUSPENDED, strips
   the loaded image via `NtUnmapViewOfSection` (Caller-routed when
