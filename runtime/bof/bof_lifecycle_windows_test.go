@@ -296,3 +296,48 @@ func TestBOF_SacrificialThread_HappyPath(t *testing.T) {
 			refOut, out)
 	}
 }
+
+// TestBOF_SacrificialThread_SharedTrampolineDistinctArgs pins the
+// contract for the per-process shared trampoline: many successive
+// sacrificial Execute calls — each with a different argument
+// buffer — must each see exactly their own args. A bug in the
+// per-call *sacArgs capsule layout (or premature GC of a previous
+// capsule) would cause one iteration to observe another's
+// argPtr/argLen pair and either crash or echo a stale string.
+//
+// Uses parse_args.o which BeaconPrintf-echoes the length-prefixed
+// string from the args buffer; comparing against the freshly
+// packed input per iteration catches both kinds of regression.
+//
+// Constraint: parse_args.c forwards the extracted string as the
+// fmt argument to BeaconPrintf, so inputs containing '%' would be
+// consumed by expandCFormat. The fixtures below are intentionally
+// '%'-free.
+func TestBOF_SacrificialThread_SharedTrampolineDistinctArgs(t *testing.T) {
+	b, err := Load(loadLifecycleBOF(t, "parse_args.o"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	defer b.Close()
+	if err := b.SetSacrificialThread(5 * time.Second); err != nil {
+		t.Fatalf("SetSacrificialThread: %v", err)
+	}
+
+	inputs := []string{
+		"alpha", "bravo-bravo", "charlie 12345",
+		"delta\x09tab", "echo", "foxtrot-medium-length-string",
+		"golf", "hotel-hotel-hotel", "india", "juliet-final",
+	}
+	for i, s := range inputs {
+		args := NewArgs()
+		args.AddInt(int32(i))
+		args.AddString(s)
+		out, err := b.Execute(args.Pack())
+		if err != nil {
+			t.Fatalf("iter %d (%q): Execute: %v", i, s, err)
+		}
+		if !strings.Contains(string(out), s) {
+			t.Errorf("iter %d: output %q does not contain %q", i, out, s)
+		}
+	}
+}

