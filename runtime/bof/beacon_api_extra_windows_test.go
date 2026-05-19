@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/windows"
 
+	"github.com/oioio-space/maldev/testutil"
 	wsyscall "github.com/oioio-space/maldev/win/syscall"
 )
 
@@ -50,6 +51,32 @@ func TestBeaconRemoteAlloc_LocalProcess_RoundTrip(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			addr := beaconRemoteAlloc(tc.caller, self, size, windows.PAGE_READWRITE)
 			require.NotZero(t, addr, "allocation must succeed")
+			require.NoError(t, windows.VirtualFree(addr, 0, windows.MEM_RELEASE))
+		})
+	}
+}
+
+// TestBeaconRemoteAlloc_CallerMatrix exercises every meaningful
+// Caller method × SSN-resolver combination through beaconRemoteAlloc
+// — the cross-process primitive operators reach when they bind
+// SetCaller to a non-nil wsyscall.Caller. Each sub-test allocates
+// 4 KB in the current process and immediately VirtualFrees,
+// asserting:
+//
+//   - the chosen syscall path produced a non-zero base address
+//   - no kernel-side leak (VirtualFree succeeds)
+//
+// The matrix is exhaustive on purpose: a regression in any single
+// (Method, Resolver) pair shouldn't get masked by a green default.
+// Sourced from testutil.CallerResolverMatrix so the same 14 rows
+// stay in lock-step with the CS-SA E2E matrix in cs_sa_e2e_*_test.
+func TestBeaconRemoteAlloc_CallerMatrix(t *testing.T) {
+	const size = 4096
+	self := windows.CurrentProcess()
+	for _, cm := range testutil.CallerResolverMatrix(t) {
+		t.Run(cm.Name, func(t *testing.T) {
+			addr := beaconRemoteAlloc(cm.Caller, self, size, windows.PAGE_READWRITE)
+			require.NotZero(t, addr, "allocation must succeed under %s", cm.Name)
 			require.NoError(t, windows.VirtualFree(addr, 0, windows.MEM_RELEASE))
 		})
 	}

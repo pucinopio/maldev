@@ -329,6 +329,15 @@ func (b *BOF) SetExecuteAsToken(t windows.Token) {
 // the entry call, BeaconPrintf, etc.). The Caller only re-routes
 // the three kernel32 calls the BOF can drive via BeaconInjectProcess.
 //
+// SCOPE WARNING: dynamic imports the BOF itself resolves
+// (__imp_KERNEL32$VirtualAlloc / __imp_NTDLL$Nt* / etc.) are patched
+// at prepare time as direct function addresses via PEB walk + ROR13.
+// The BOF then `call [rip+slot]`s straight into the resolved
+// function — bypassing this Caller entirely. Only the three
+// BeaconInjectProcess primitives route through it. Operators who
+// need full Caller coverage must rewrite the BOF's imports to call
+// into a host dispatcher; today's package does not.
+//
 // The Caller's lifetime is operator-owned: BOF.Close does NOT call
 // caller.Close — the same Caller is typically shared across many
 // BOFs and inject sites and must outlive all of them.

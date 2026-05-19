@@ -4,9 +4,11 @@ package bof
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -120,6 +122,40 @@ func TestRun_AppliesUserData_NoFixture(t *testing.T) {
 		UserData: []byte("custom-blob"),
 	})
 	assert.NoError(t, err)
+}
+
+// TestRun_Sacrificial_HappyPath pins the Spec.Sacrificial wire-up:
+// when the operator sets Sacrificial=true with a non-zero Timeout,
+// Run applies SetSacrificialThread on the loaded *BOF and the entry
+// runs on the dedicated thread with VEH-mediated isolation.
+func TestRun_Sacrificial_HappyPath(t *testing.T) {
+	bytes := loadFixture(t, "hello_beacon.o")
+	res, err := Run(context.Background(), Spec{
+		Bytes:       bytes,
+		Sacrificial: true,
+		Timeout:     5 * time.Second,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.NotEmpty(t, res.Output, "BOF must produce output under sacrificial mode")
+}
+
+// TestRun_Sacrificial_RequiresTimeout asserts the early-return
+// contract: Sacrificial without a Timeout is operator error
+// (WaitForSingleObject with timeout=0 would mean "wait forever"
+// which is almost never what an implant wants). The package
+// surfaces ErrSacrificialNoTimeout rather than launching a thread
+// the host might never reclaim.
+func TestRun_Sacrificial_RequiresTimeout(t *testing.T) {
+	bytes := loadFixture(t, "hello_beacon.o")
+	_, err := Run(context.Background(), Spec{
+		Bytes:       bytes,
+		Sacrificial: true,
+		// Timeout intentionally zero.
+	})
+	if !errors.Is(err, ErrSacrificialNoTimeout) {
+		t.Fatalf("want ErrSacrificialNoTimeout, got %v", err)
+	}
 }
 
 // TestRun_NoLoaderFallsThroughKindError is the negative twin of

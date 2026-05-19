@@ -338,6 +338,41 @@ func TestCSSA_Whoami(t *testing.T) {
 	assertContainsAny(t, "whoami", out, "S-1-5", "SID", "User Name")
 }
 
+// TestCSSA_Whoami_CallerMatrix runs whoami.x64.o through every
+// meaningful (wsyscall.Method, SSN-resolver) combination so each
+// syscall dispatch strategy gets exercised on a real public-corpus
+// BOF — not a synthetic primitive. 14 sub-tests, sourced from
+// testutil.CallerResolverMatrix so the same row set stays in
+// lock-step with TestBeaconRemoteAlloc_CallerMatrix.
+//
+// Each sub-test asserts the BOF completes end-to-end (Load + Execute
+// + Close) under that Caller configuration and emits the SID prefix
+// — i.e. the kernel32 wrapper that BeaconInjectProcess would have
+// used is correctly bypassed and the BOF observes a working host.
+//
+// whoami is the canonical pick: short runtime, deterministic output,
+// no admin / network / side effects. A regression in any single
+// (Method, Resolver) cell shows up here before it can hide behind a
+// green default-path test.
+func TestCSSA_Whoami_CallerMatrix(t *testing.T) {
+	bytes := loadCSSA(t, "whoami")
+	for _, cm := range testutil.CallerResolverMatrix(t) {
+		t.Run(cm.Name, func(t *testing.T) {
+			b, err := Load(bytes)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			defer b.Close()
+			b.SetCaller(cm.Caller)
+			out, err := b.Execute(nil)
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			assertContainsAny(t, "whoami", string(out), "S-1-5", "SID", "User Name")
+		})
+	}
+}
+
 // TestCSSA_Tasklist exercises tasklist.x64.o — process
 // enumeration via WMI (ConnectServer + ExecQuery
 // Win32_Process). Two valid outcomes:

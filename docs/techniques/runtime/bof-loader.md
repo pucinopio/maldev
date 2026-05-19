@@ -100,9 +100,40 @@ b, err := bof.Load(data)
 if err != nil {
     return
 }
+defer b.Close()
 output, _ := b.Execute(nil)
 fmt.Println(string(output))
 ```
+
+### Shorter — one-shot helpers (v0.156.0+)
+
+The same three-line pattern (Load → Execute → Close) wrapped in
+one call. Five helpers cover the common cases:
+
+```go
+// 1. One-shot from bytes (embedded via go:embed, decrypted in
+//    memory, ...). Load + Execute + Close in one line.
+out, err := bof.RunFromBytes(coffBytes, nil)
+
+// 2. One-shot from disk. The stealthopen.Opener parameter is
+//    optional — nil falls back to os.Open. Pass a *Stealth /
+//    *MultiStealth to read the file via NTFS Object-ID and
+//    bypass path-based EDR file hooks.
+out, err := bof.RunFromFile(nil, "whoami.o", nil)
+
+// 3. Crash-isolated one-shot. Identical to RunFromBytes but
+//    spawns the entry on a sacrificial OS thread with VEH-
+//    mediated fault catching. Required: a non-zero timeout.
+out, err := bof.RunSafe(coffBytes, args, 5*time.Second)
+
+// 4. Pack a list of strings without the NewArgs boilerplate.
+args := bof.ArgsFromStrings("target.exe", "C:\\Windows\\System32")
+out, err := bof.RunFromBytes(coffBytes, args)
+```
+
+Prefer the long form (`Load` + many `Execute` + `Close`) when the
+same `*BOF` runs many times — the prepare pass amortises across
+calls. Use the helpers for genuinely one-shot workloads.
 
 ### Composed — chain multiple BOFs
 
@@ -138,6 +169,25 @@ prefixes via `memcpy` into a native `int`, which on x64 is a
 little-endian load. Use `AddInt` / `AddShort` for fixed-width
 ints, `AddString` for length-prefixed NUL-terminated strings,
 `AddBytes` for raw blobs.
+
+### `Spec.Sacrificial` + `Spec.Timeout` — crash isolation via Run (v0.156.0+)
+
+The `Run(ctx, Spec)` façade now honours the same sacrificial-thread
+contract as `(*BOF).SetSacrificialThread`:
+
+```go
+res, err := bof.Run(ctx, bof.Spec{
+    Bytes:       coffBytes,
+    Args:        args,
+    Sacrificial: true,
+    Timeout:     30 * time.Second, // mandatory when Sacrificial is set
+})
+```
+
+`Sacrificial=true` without a `Timeout` returns `ErrSacrificialNoTimeout` —
+the package refuses to launch a thread with no wall-clock cap (zero
+to `WaitForSingleObject` means "wait forever" and is almost never
+what an implant wants).
 
 ### Architecture routing — x64 in-process, x86 cross-process (v0.155.0+)
 
@@ -478,6 +528,19 @@ lifetime is operator-owned: `BOF.Close` does NOT call
 `caller.Close`, so the same Caller can be shared across many
 BOFs and inject sites. Matches the convention used across
 [`inject`](../injection/README.md).
+
+> **Scope: only the `BeaconInjectProcess` primitives route
+> through the Caller.** Dynamic imports the BOF itself
+> resolves — `__imp_KERNEL32$VirtualAlloc`,
+> `__imp_ADVAPI32$OpenProcessToken`, `__imp_NTDLL$Nt*`, etc.
+> — are patched into the BOF's import table at prepare time
+> as **direct function addresses** (PEB walk + ROR13 export
+> match). When the BOF later issues `mov reg, [rip+slot]; call
+> reg`, it jumps straight to the resolved function and bypasses
+> the operator's Caller entirely. Routing every BOF→Win32 call
+> through the Caller would require patching each slot with a
+> per-import trampoline that calls `Caller.Call(name, ...)`;
+> not implemented today.
 
 ### `SetExecuteAsToken` — pin a token on the sacrificial thread (v0.156.0+)
 

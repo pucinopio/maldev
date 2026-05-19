@@ -55,6 +55,25 @@ introduce breaking API changes.
   sacrificial-thread path started under the host's primary token
   regardless of what `BeaconUseToken` did inside the BOF. Zero —
   the default — keeps the host token.
+- `runtime/bof`: per-`*BOF` mutex + per-thread `bofRegistry` —
+  drops the package-wide `bofMu` + `currentBOF` global. Two
+  distinct `*BOF` instances now `Execute` in parallel on
+  separate goroutines; same-`*BOF` concurrency still serialises
+  through `b.execMu`. Beacon API callbacks resolve their `*BOF`
+  via `GetCurrentThreadId()` → registry lookup, so the
+  sacrificial-thread path no longer relies on a global pointer.
+- `runtime/bof`: one-shot helpers — `RunFromBytes(coffBytes,
+  args)`, `RunFromFile(opener, path, args)` (the opener follows
+  the `stealthopen.Opener` convention: nil → `os.Open`,
+  `*Stealth`/`*MultiStealth` → NTFS Object-ID bypass), `RunSafe(
+  coffBytes, args, timeout)` (sacrificial-thread wrapper), and
+  `ArgsFromStrings(strings...)` for the common "pack a list of
+  strings" case.
+- `runtime/bof`: `Spec.Sacrificial bool` + `Spec.Timeout
+  time.Duration` — the `Run(ctx, Spec)` façade now drives the
+  sacrificial-thread path. `Sacrificial=true` with `Timeout=0`
+  returns the new `ErrSacrificialNoTimeout` sentinel rather
+  than launching a thread with no wall-clock cap.
 
 ## v0.155.0 — slice 1.d: x86 BOF cross-process loader (2026-05-18)
 

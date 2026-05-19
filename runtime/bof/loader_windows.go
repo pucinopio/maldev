@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 )
 
 // Kind labels a module-format family. Today only KindCOFF is wired;
@@ -66,13 +67,36 @@ type Runnable interface {
 // Spec drives Run. Zero-value Method triggers magic-byte detection.
 // SpawnTo / UserData are applied only when the loaded Runnable exposes
 // the matching setter — loaders that don't honour them simply ignore.
+//
+// Sacrificial + Timeout enable VEH-mediated crash isolation on the
+// COFF-loader path (see (*BOF).SetSacrificialThread). Loaders that
+// don't expose the matching setter ignore the flag — same convention
+// as the other Spec knobs.
 type Spec struct {
 	Bytes    []byte
 	Args     []byte
 	SpawnTo  string
 	UserData []byte
 	Method   Kind
+
+	// Sacrificial spawns the BOF entry on a dedicated OS thread
+	// and converts in-mapping faults to a Go error via a process-
+	// wide VEH. Default (false) runs inline on the caller goroutine.
+	Sacrificial bool
+
+	// Timeout caps the sacrificial thread's wall-clock execution.
+	// Honoured only when Sacrificial is true. Zero with Sacrificial
+	// true yields ErrSacrificialNoTimeout — operators must pick a
+	// duration explicitly because zero would mean "infinite wait"
+	// to WaitForSingleObject and is almost never what they want.
+	Timeout time.Duration
 }
+
+// ErrSacrificialNoTimeout is returned by Run when Spec.Sacrificial
+// is set but Spec.Timeout is zero. The sacrificial-thread path
+// requires a wall-clock cap; the package refuses to launch a
+// permanent thread by accident.
+var ErrSacrificialNoTimeout = fmt.Errorf("runtime/bof: Spec.Sacrificial requires a non-zero Spec.Timeout")
 
 // Result is what Run produces. Output is the BOF's stdout-equivalent
 // (BeaconPrintf / BeaconOutput on the COFF path); Errors is what
@@ -91,6 +115,9 @@ type Result struct {
 // documentation of the future contract.
 func Run(ctx context.Context, s Spec) (*Result, error) {
 	_ = ctx
+	if s.Sacrificial && s.Timeout == 0 {
+		return nil, ErrSacrificialNoTimeout
+	}
 	kind := s.Method
 	if kind == KindUnknown {
 		kind = DetectKind(s.Bytes)
@@ -106,7 +133,9 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("bof.Run: load (%s): %w", kind, err)
 	}
-	applySpecKnobs(r, s)
+	if err := applySpecKnobs(r, s); err != nil {
+		return nil, fmt.Errorf("bof.Run: knob (%s): %w", kind, err)
+	}
 	out, err := r.Execute(s.Args)
 	if err != nil {
 		return nil, fmt.Errorf("bof.Run: execute (%s): %w", kind, err)
@@ -140,8 +169,10 @@ func DetectKind(b []byte) Kind {
 // applySpecKnobs forwards per-call configuration to the loaded
 // Runnable when it advertises the matching setter. Loaders that don't
 // implement a particular setter silently no-op — Run never fails on a
-// non-applicable knob.
-func applySpecKnobs(r Runnable, s Spec) {
+// non-applicable knob (except the sacrificial setter, whose
+// ErrAlreadyPrepared we surface verbatim because it indicates a
+// genuine caller contract violation rather than a missing capability).
+func applySpecKnobs(r Runnable, s Spec) error {
 	type spawnSetter interface{ SetSpawnTo(string) }
 	if s.SpawnTo != "" {
 		if ss, ok := r.(spawnSetter); ok {
@@ -154,6 +185,17 @@ func applySpecKnobs(r Runnable, s Spec) {
 			us.SetUserData(s.UserData)
 		}
 	}
+	type sacrificialSetter interface {
+		SetSacrificialThread(time.Duration) error
+	}
+	if s.Sacrificial {
+		if ss, ok := r.(sacrificialSetter); ok {
+			if err := ss.SetSacrificialThread(s.Timeout); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // loader registry. Plug-ins call registerLoader in init.
