@@ -1,6 +1,6 @@
 ---
-last_reviewed: 2026-05-07
-reflects_commit: 8771e95
+last_reviewed: 2026-05-19
+reflects_commit: 9f3967b
 ---
 
 # Documentation refactor — progress tracker
@@ -8,6 +8,36 @@ reflects_commit: 8771e95
 > **Read this file first** when picking the refactor up on another
 > machine or after a session break. It is the canonical view of what's
 > done, what's in flight, and what comes next.
+
+## 2026-05-19 session — `runtime/bof` v0.156.0 ship
+
+Ten-commit minor release covering bug fixes, new public surface, file
+split, SEH unwind, parallel-BOF refactor, exhaustive Caller × SSN-
+Resolver matrix. Tagged `v0.156.0` (commit `2549335` was the post-tag
+Bundle I design doc; `9f3967b` closes Bundle I as wontfix). Bundles:
+
+| ID | Commit  | Theme                                                                       |
+|----|---------|-----------------------------------------------------------------------------|
+| —  | `6885995` | perf: shared sacrificial trampoline (slice closure)                       |
+| A  | `b2139f4` | fix: formatBuffers leak + %s safe-read probes + 3 benchmarks               |
+| B  | `6d3397f` | feat: `SetCaller` — cross-process Beacon API via *wsyscall.Caller          |
+| D  | `3e6d92a` | refactor: split `bof_windows.go` 1085→491 LOC                              |
+| E  | `9db0fb5` | feat: SEH unwind via `RtlAddFunctionTable`                                 |
+| G  | `ee7b464` | docs: `syscallN` cap, `beaconCBs` RX cost, post-Close `Errors`, Concurrency |
+| F  | `ee50263` | feat: `SetExecuteAsToken` — pin sacrificial-thread identity + doc audit    |
+| C  | `bd33d50` | refactor: per-BOF mutex + `bofRegistry` → parallel BOFs                    |
+| H  | `778ec24` | feat: one-shot helpers + `Spec.Sacrificial` + Caller × SSN-Resolver matrix |
+| I  | `9f3967b` | docs: Bundle I closed as wontfix — corpus audit (0.4% Nt* direct → option C) |
+
+**v0.156.0 release notes**: see `git show v0.156.0`.
+
+Bundle I (route every BOF import through the operator's Caller) was
+closed as wontfix after auditing the CS-SA corpus (37 BOFs, 652 imports):
+0.4% are direct `Nt*` while 55% are kernel32/advapi32 wrappers. The
+realistic path for full coverage is `evasion/unhook` (clean ntdll
+itself) — pair with `SetCaller` for end-to-end bypass on the
+`BeaconInjectProcess` primitives. Design + closing rationale:
+[`bundle-i-import-routing.md`](bundle-i-import-routing.md).
 
 ## Phase 7+ — Polish backlog (post-refactor)
 
