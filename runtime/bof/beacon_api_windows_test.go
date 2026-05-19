@@ -224,6 +224,33 @@ func TestBeaconFormat_RoundTrip(t *testing.T) {
 	})
 }
 
+// TestBeaconFormatAlloc_AttachedToBOF pins the leak fix: every
+// BeaconFormatAlloc registers its slice on the CURRENT *BOF (not a
+// package-global map), and BeaconFormatFree releases the entry. Was
+// previously stored in a package-wide map[uintptr][]byte that grew
+// forever — a BOF that crashed mid-execute or skipped Free leaked
+// the slice into that global for the process lifetime.
+func TestBeaconFormatAlloc_AttachedToBOF(t *testing.T) {
+	withCurrentBOF(t, func(b *BOF) {
+		require.Nil(t, b.formats, "fresh *BOF should not own any format store")
+
+		var fmt1, fmt2 formatp
+		beaconFormatAllocImpl(uintptr(unsafe.Pointer(&fmt1)), 32)
+		beaconFormatAllocImpl(uintptr(unsafe.Pointer(&fmt2)), 32)
+		require.NotNil(t, b.formats, "Alloc must lazily create the store")
+		assert.Equal(t, 2, b.formats.len())
+
+		// Free one — the other survives.
+		beaconFormatFreeImpl(uintptr(unsafe.Pointer(&fmt1)))
+		assert.Equal(t, 1, b.formats.len())
+
+		// Execute / Close reset b.formats to nil — modelled here by
+		// hand. A BOF that forgot Free is reclaimed at the boundary.
+		b.formats = nil
+		assert.Nil(t, b.formats)
+	})
+}
+
 func TestBeaconFormatAppend_Truncates(t *testing.T) {
 	withCurrentBOF(t, func(_ *BOF) {
 		var fmt formatp

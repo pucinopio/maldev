@@ -498,6 +498,23 @@ for _, target := range targets {
   Any unknown `__imp_Beacon*` import still fails at relocation
   time with `unresolved external symbol __imp_BeaconXxx` — loud
   and traceable rather than silent NULL-patching.
+- **BeaconFormatAlloc buffers live one Execute call.** Slices
+  produced by `BeaconFormatAlloc` are held on the `*BOF`
+  (per-instance map, not a process-global). `BeaconFormatFree`
+  drops the entry; whatever the BOF forgets to free is reclaimed
+  automatically when the next `Execute` starts and on `Close()`.
+  A BOF that crashes mid-call no longer leaks its format buffer
+  for the process lifetime.
+- **Pointer-safety probes on `%s` / Beacon string reads.**
+  `BeaconPrintf("%s", p)` (and any callback that dereferences a
+  BOF-supplied `char*` / `wchar_t*`) routes through
+  [`win/api.CStringFromPtr`](https://pkg.go.dev/github.com/oioio-space/maldev/win/api#CStringFromPtr)
+  and [`win/api.WStringFromPtr`](https://pkg.go.dev/github.com/oioio-space/maldev/win/api#WStringFromPtr).
+  Both call `VirtualQuery` once to clamp the walk to the
+  committed region containing the pointer, so a malformed,
+  freed, or guard-page-crossing pointer returns `""` instead of
+  faulting the host. The wide-string heuristic in
+  `expandCFormat` shares the same probe via `SafeRegionBytes`.
 - **`BeaconPrintf` / `BeaconFormatPrintf` varargs are not
   expanded.** `syscall.NewCallback` binds a fixed-arity Go
   function as a stdcall callback; Go cannot introspect cdecl

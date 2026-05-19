@@ -48,6 +48,37 @@ func (k *kvStore) remove(key string) {
 	delete(k.m, key)
 }
 
+// formatBufStore is a per-BOF, mutex-guarded map of formatp-pointer →
+// BeaconFormatAlloc-issued slice. Mirrors kvStore. Scope is the single
+// Execute call — Execute resets the store between invocations so any
+// BeaconFormatAlloc that lacks a matching BeaconFormatFree is reclaimed
+// instead of leaking for the process lifetime (the original design used
+// a package-global map with no eviction).
+type formatBufStore struct {
+	mu sync.Mutex
+	m  map[uintptr][]byte
+}
+
+func newFormatBufStore() *formatBufStore { return &formatBufStore{m: map[uintptr][]byte{}} }
+
+func (s *formatBufStore) store(ptr uintptr, buf []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m[ptr] = buf
+}
+
+func (s *formatBufStore) drop(ptr uintptr) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.m, ptr)
+}
+
+func (s *formatBufStore) len() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.m)
+}
+
 // beaconUseTokenImpl wraps ImpersonateLoggedOnUser. Execute holds the OS
 // thread for the BOF invocation duration so subsequent Win32 calls within
 // the BOF inherit the impersonated identity. Returns BOOL.

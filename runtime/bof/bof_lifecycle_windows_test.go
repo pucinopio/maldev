@@ -12,19 +12,27 @@ import (
 	"github.com/oioio-space/maldev/testutil"
 )
 
-// loadLifecycleBOF reads a testdata .o by basename, skipping the
-// test cleanly if the fixture is missing (e.g. fresh clone before
-// mingw build). Keeps the lifecycle suite self-contained — we
-// can't import loadExampleBOF from example_bofs_windows_test.go
-// without pulling the testutil.RequireIntrusive gate they use.
-func loadLifecycleBOF(t *testing.T, name string) []byte {
-	t.Helper()
+// loadTestBOF reads a testdata .o by basename, skipping cleanly if
+// the fixture is missing (e.g. fresh clone before mingw build).
+// Accepts testing.TB so both tests (T) and benchmarks (B) share one
+// helper. Lives here (not in a dedicated _test.go) so other suites in
+// this package — bench, lifecycle, sacrificial — pick it up via the
+// package-internal scope without importing testutil.RequireIntrusive.
+func loadTestBOF(tb testing.TB, name string) []byte {
+	tb.Helper()
 	path := filepath.Join("testdata", name)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		t.Skipf("%s missing: %v (build per testdata/README.md)", path, err)
+		tb.Skipf("%s missing: %v (build per testdata/README.md)", path, err)
 	}
 	return data
+}
+
+// loadLifecycleBOF preserves the historical name used across this
+// file's tests. Forwarder to loadTestBOF.
+func loadLifecycleBOF(t *testing.T, name string) []byte {
+	t.Helper()
+	return loadTestBOF(t, name)
 }
 
 // TestBOF_Close_Idempotent verifies Close() is safe to call any

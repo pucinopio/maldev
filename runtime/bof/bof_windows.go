@@ -122,6 +122,11 @@ type BOF struct {
 	// on first call and reset between Execute invocations (see Execute).
 	kv *kvStore
 
+	// formats tracks BeaconFormatAlloc-issued Go-heap slices so they
+	// survive past the BOF entry frame. Lazily allocated on first
+	// Alloc, reset between Executes — same shape + scope as kv.
+	formats *formatBufStore
+
 	// outputSnapshot pins the bytes BeaconGetOutputData returns to the
 	// BOF for the remainder of the BOF call. Used by host-side wrappers
 	// (No-Consolation PE loader) that re-read their accumulated output
@@ -256,6 +261,7 @@ func (b *BOF) Close() error {
 	// us — finalizers run on their own goroutine and would
 	// double-free if Close ran first then GC fired.
 	runtime.SetFinalizer(b, nil)
+	b.formats = nil // drop any unfreed BeaconFormatAlloc slices
 	if b.execMem != 0 {
 		err := windows.VirtualFree(b.execMem, 0, windows.MEM_RELEASE)
 		b.execMem = 0
@@ -277,6 +283,10 @@ func (b *BOF) Close() error {
 // SetUserData configures the blob BeaconGetCustomUserData returns to the
 // BOF. The slice is retained by value — callers may reuse the original
 // buffer afterwards without disturbing the BOF.
+//
+// Call before the first Execute or between Execute calls; mutating it
+// concurrently with an in-flight (especially sacrificial-thread)
+// Execute is a race the package does not currently guard against.
 func (b *BOF) SetUserData(data []byte) {
 	if len(data) == 0 {
 		b.userData = nil
@@ -291,7 +301,7 @@ func (b *BOF) SetUserData(data []byte) {
 // empty C string and typically fall back to their own logic. Path is
 // converted to a NUL-terminated byte slice once and pinned for the
 // remaining lifetime of the BOF instance, so the address stays stable
-// across Beacon API callbacks.
+// across Beacon API callbacks. Same call-time contract as SetUserData.
 func (b *BOF) SetSpawnTo(path string) {
 	b.spawnTo = path
 	if path == "" {
@@ -305,7 +315,8 @@ func (b *BOF) SetSpawnTo(path string) {
 // BOF asks for an x86 host (the `BOOL x86` arg is TRUE). Distinct from
 // the default SetSpawnTo, which configures the x64 path. Empty string
 // clears the override; BOFs that ask for x86 without an x86 path
-// configured see an empty C string.
+// configured see an empty C string. Same call-time contract as
+// SetSpawnTo.
 func (b *BOF) SetSpawnToX86(path string) {
 	b.spawnToX86 = path
 	if path == "" {
@@ -388,7 +399,11 @@ func (b *BOF) Execute(args []byte) ([]byte, error) {
 		b.pendingStream = nil // one-shot
 	}
 	b.argBuf = args
-	b.kv = nil // fresh KV store per Execute — cross-Run state goes through the implant
+	// fresh per-Execute scope for both kv + format buffers — cross-Run
+	// state goes through the implant. Without the format reset, BOFs
+	// that crash or skip BeaconFormatFree leaked their buffer forever.
+	b.kv = nil
+	b.formats = nil
 
 	// Pin the goroutine to its OS thread for the BOF call. BeaconUseToken
 	// impersonates on the *current thread*; without LockOSThread the Go

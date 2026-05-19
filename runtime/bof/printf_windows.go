@@ -4,8 +4,9 @@ package bof
 
 import (
 	"strconv"
-	"unicode/utf16"
 	"unsafe"
+
+	"github.com/oioio-space/maldev/win/api"
 )
 
 // expandCFormat is the minimal printf-style expander used by
@@ -129,10 +130,14 @@ func expandCFormat(format string, args []uintptr) []byte {
 			// by garbage. Detect by reading as a C-string first; if
 			// the result is shorter than 5 chars and the source bytes
 			// look like UTF-16 (every second byte is zero for ASCII
-			// content), retry as a wide string.
-			cstr := cStringFromPtr(ptr, 65535)
+			// content), retry as a wide string. Caps at 16 KB: any
+			// printf string longer than that is a corruption signal,
+			// not a real %s; the api.{C,W}StringFromPtr probes also
+			// cap to the committed region so a bogus pointer no
+			// longer crashes the host.
+			cstr := cStringFromPtr(ptr, 16*1024)
 			if len(cstr) < 5 && looksLikeWideString(ptr) {
-				b = append(b, wStringFromPtr(ptr, 65535)...)
+				b = append(b, api.WStringFromPtr(ptr, 16*1024)...)
 			} else {
 				b = append(b, cstr...)
 			}
@@ -154,11 +159,24 @@ func expandCFormat(format string, args []uintptr) []byte {
 // 32 wide units. Cheap heuristic — false positives are bounded
 // because most ANSI strings longer than 4 chars without a NUL hit
 // produce non-zero high bytes by the 5th char.
+//
+// Caps the probe length by api.SafeRegionBytes so a pointer in
+// unmapped or guard-page memory returns false instead of faulting.
+// The %s heuristic in expandCFormat reaches this with bogus pointers
+// when the BOF passes a NULL-equivalent or a freed wchar_t*.
 func looksLikeWideString(ptr uintptr) bool {
 	if ptr == 0 {
 		return false
 	}
-	for i := 0; i < 32; i++ {
+	safe := api.SafeRegionBytes(ptr)
+	if safe < 2 {
+		return false
+	}
+	maxUnits := 32
+	if uintptr(maxUnits*2) > safe {
+		maxUnits = int(safe / 2)
+	}
+	for i := 0; i < maxUnits; i++ {
 		lo := *(*byte)(unsafe.Pointer(ptr + uintptr(i*2)))
 		hi := *(*byte)(unsafe.Pointer(ptr + uintptr(i*2+1)))
 		if lo == 0 && hi == 0 {
@@ -170,23 +188,6 @@ func looksLikeWideString(ptr uintptr) bool {
 		}
 	}
 	return false
-}
-
-// wStringFromPtr decodes a UTF-16LE NUL-terminated string into a Go
-// string. `max` bounds the scan in WIDE characters (each 2 bytes).
-func wStringFromPtr(ptr uintptr, max int) string {
-	if ptr == 0 {
-		return ""
-	}
-	var units []uint16
-	for i := 0; i < max; i++ {
-		u := *(*uint16)(unsafe.Pointer(ptr + uintptr(i*2)))
-		if u == 0 {
-			break
-		}
-		units = append(units, u)
-	}
-	return string(utf16.Decode(units))
 }
 
 // upperASCII upper-cases ASCII hex digits in place (a..f → A..F).

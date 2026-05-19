@@ -340,22 +340,21 @@ type formatp struct {
 	size     int32
 }
 
-var (
-	formatBufMu  sync.Mutex
-	formatBuffers = map[uintptr][]byte{}
-)
-
 // beaconFormatAllocImpl handles BeaconFormatAlloc(format*, int maxsz).
-// Allocates a maxsz-byte slice in Go heap, stores it under the formatp
-// pointer, and seeds the BOF-visible cursor/size fields.
+// Allocates a maxsz-byte slice in Go heap, registers it on the current
+// BOF's formatBufStore (lazily created) so Go GC keeps the bytes alive
+// past the BOF entry frame, and seeds the BOF-visible cursor/size
+// fields. The previous design stored buffers in a package-global map
+// that never evicted; per-BOF storage gets reset between Executes.
 func beaconFormatAllocImpl(formatPtr, maxsz uintptr) uintptr {
-	if formatPtr == 0 || maxsz == 0 {
+	if formatPtr == 0 || maxsz == 0 || currentBOF == nil {
 		return 0
 	}
 	buf := make([]byte, int(maxsz))
-	formatBufMu.Lock()
-	formatBuffers[formatPtr] = buf
-	formatBufMu.Unlock()
+	if currentBOF.formats == nil {
+		currentBOF.formats = newFormatBufStore()
+	}
+	currentBOF.formats.store(formatPtr, buf)
 	base := uintptr(unsafe.Pointer(&buf[0]))
 	p := (*formatp)(unsafe.Pointer(formatPtr))
 	p.original = base
@@ -378,14 +377,15 @@ func beaconFormatResetImpl(formatPtr uintptr) uintptr {
 
 // beaconFormatFreeImpl drops the Go-side slice. After Free, subsequent
 // calls on the same formatp are no-ops (the slice is gone, length is
-// already zero).
+// already zero). Any buffers the BOF forgets to Free are reclaimed
+// automatically when Execute returns (resetFormatBuffers).
 func beaconFormatFreeImpl(formatPtr uintptr) uintptr {
 	if formatPtr == 0 {
 		return 0
 	}
-	formatBufMu.Lock()
-	delete(formatBuffers, formatPtr)
-	formatBufMu.Unlock()
+	if currentBOF != nil && currentBOF.formats != nil {
+		currentBOF.formats.drop(formatPtr)
+	}
 	p := (*formatp)(unsafe.Pointer(formatPtr))
 	p.original = 0
 	p.buffer = 0

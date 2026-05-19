@@ -7,6 +7,35 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- `runtime/bof`: `BeaconFormatAlloc` buffers are now tracked on the
+  `*BOF` instance instead of a process-global map. The previous design
+  leaked the slice for the process lifetime whenever a BOF crashed
+  mid-call or skipped `BeaconFormatFree`. `Execute` resets the
+  per-BOF map between invocations; `Close` clears it at teardown.
+- `runtime/bof`: `BeaconPrintf("%s", p)` and every Beacon callback
+  that dereferences a BOF-supplied `char*` / `wchar_t*` no longer
+  faults the host on a malformed pointer. `win/api.CStringFromPtr`
+  + new `win/api.WStringFromPtr` clamp the walk via `VirtualQuery`
+  to the committed region containing the pointer; the wide-string
+  heuristic in `expandCFormat` shares the same probe.
+
+### Added
+
+- `win/api.SafeRegionBytes(uintptr) uintptr` — returns the number of
+  bytes safely readable from a pointer (single `VirtualQuery`).
+  Foundation for the BOF pointer probes; usable by other callers
+  that need to dereference operator-supplied addresses.
+- `win/api.WStringFromPtr(uintptr, int) string` — UTF-16LE
+  counterpart of `CStringFromPtr` with the same safety contract.
+  Replaces the private helper that previously lived in
+  `runtime/bof/printf_windows.go`.
+- `runtime/bof`: `BenchmarkExecute_Inline`,
+  `BenchmarkExecute_Sacrificial`, `BenchmarkArgs_Pack` — pin the
+  per-call cost so future regressions (e.g. accidental re-prepare,
+  Args double-copy) show up as 10×+ jumps.
+
 ## v0.155.0 — slice 1.d: x86 BOF cross-process loader (2026-05-18)
 
 # Headline
