@@ -1,10 +1,39 @@
 ---
-status: design-pending
+status: wontfix (option C — corpus audit closed the question)
 opened: 2026-05-19
+closed: 2026-05-19
 owner: oioio-space
 scope: runtime/bof
 parent_bundle: v0.156.0 (Bundles A–H shipped)
+audit_data: docs/techniques/runtime/bof-loader.md "import-routing scope"
 ---
+
+## Decision: option C (close as wontfix)
+
+**Audit of the CS-SA public corpus (37 BOFs, 652 imports total)**:
+
+  | Class                                  | Count | Share |
+  |----------------------------------------|-------|-------|
+  | Beacon API stubs                       |   109 |  16%  |
+  | MSVCRT (libc)                          |   157 |  24%  |
+  | NTDLL$Nt* (direct syscall)             |     3 |   0.4%|
+  | kernel32 / advapi32 / etc. wrappers    |   359 |  55%  |
+  | other (ntdll utility, COM helpers, …)  |    24 |   4%  |
+
+  BOFs with any Nt* direct import: 2 / 37 (driversigs, vssenum).
+
+**Option A would route 3 of 652 imports (0.4%)** — measurably
+useless. Option B is the only path to meaningful coverage but
+requires a 40+ entry wrapper-to-syscall translation table and
+several days of maintenance-bearing engineering. The audit
+collapses the design space to option C: keep `SetCaller` scoped to
+`BeaconInjectProcess` and point operators at `evasion/unhook` as
+the layer that actually handles the kernel32-wrapper case (clean
+the ntdll page → kernel32!VirtualAlloc → ntdll!NtAllocateVirtualMemory
+via the cleaned thunk, hooks bypassed).
+
+Documenting and closing.
+
 
 # Bundle I — Route every BOF import through `*wsyscall.Caller`
 

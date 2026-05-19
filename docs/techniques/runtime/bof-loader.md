@@ -537,10 +537,21 @@ BOFs and inject sites. Matches the convention used across
 > as **direct function addresses** (PEB walk + ROR13 export
 > match). When the BOF later issues `mov reg, [rip+slot]; call
 > reg`, it jumps straight to the resolved function and bypasses
-> the operator's Caller entirely. Routing every BOF→Win32 call
-> through the Caller would require patching each slot with a
-> per-import trampoline that calls `Caller.Call(name, ...)`;
-> not implemented today.
+> the operator's Caller entirely.
+>
+> **For full coverage of BOF Win32 calls, clean ntdll instead**:
+> the public-corpus audit (CS-SA, 37 BOFs, 652 imports) shows
+> 55% are kernel32/advapi32/etc. wrappers and only **0.4%**
+> are `Nt*` direct — so a per-import shim would only intercept
+> the 0.4%. The pragmatic answer is
+> [`evasion/unhook`](../evasion/ntdll-unhooking.md): once
+> ntdll's `Nt*` thunks are restored to their on-disk bytes,
+> `kernel32!VirtualAlloc` → `ntdll!NtAllocateVirtualMemory`
+> internally goes through a clean syscall stub, no hook fires.
+> Pair `SetCaller` with `evasion/unhook` for end-to-end bypass.
+>
+> See `.dev/refactor-2026/bundle-i-import-routing.md` for the
+> closed design discussion + corpus data.
 
 ### `SetExecuteAsToken` — pin a token on the sacrificial thread (v0.156.0+)
 
