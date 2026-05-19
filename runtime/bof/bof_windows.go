@@ -128,6 +128,15 @@ type BOF struct {
 	// after WaitForSingleObject returns. Atomic stores via the
 	// sacrificial_windows.go path keep host-side reads coherent.
 	fault faultRecord
+
+	// pdataTable + pdataCount track the .pdata section registered
+	// with RtlAddFunctionTable. nil when the BOF has no .pdata
+	// section or when prepare skipped registration (Bundle E).
+	// Close calls RtlDeleteFunctionTable before VirtualFree —
+	// freeing the mapping while the kernel still has function-
+	// table entries pointing into it would leak unwind context.
+	pdataTable *windows.RUNTIME_FUNCTION
+	pdataCount uint32
 }
 
 // SetPersistent toggles state retention across multiple Execute
@@ -200,6 +209,18 @@ func (b *BOF) Close() error {
 	// double-free if Close ran first then GC fired.
 	runtime.SetFinalizer(b, nil)
 	b.formats = nil // drop any unfreed BeaconFormatAlloc slices
+	// Unregister .pdata with the kernel BEFORE the VirtualFree.
+	// Reverse order matters: freeing the mapping while the kernel
+	// still has function-table entries pointing into it would
+	// leave dangling unwind context for any thread that faulted
+	// later (rare, but real — observed once on a long-lived
+	// implant that kept Close'ing and Loading BOFs in a tight
+	// loop while another goroutine deliberately threw).
+	if b.pdataTable != nil {
+		windows.RtlDeleteFunctionTable(b.pdataTable)
+		b.pdataTable = nil
+		b.pdataCount = 0
+	}
 	if b.execMem != 0 {
 		err := windows.VirtualFree(b.execMem, 0, windows.MEM_RELEASE)
 		b.execMem = 0
@@ -327,6 +348,9 @@ func Load(data []byte) (*BOF, error) {
 	// VirtualAlloc'd executable region in a timely fashion.
 	runtime.SetFinalizer(b, func(b *BOF) {
 		if b.prepared && !b.closed && b.execMem != 0 {
+			if b.pdataTable != nil {
+				windows.RtlDeleteFunctionTable(b.pdataTable)
+			}
 			_ = windows.VirtualFree(b.execMem, 0, windows.MEM_RELEASE)
 		}
 	})

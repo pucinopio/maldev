@@ -41,6 +41,13 @@ introduce breaking API changes.
   the supplied `*wsyscall.Caller` (NtAllocateVirtualMemory /
   NtWriteVirtualMemory / NtCreateThreadEx). nil keeps the
   kernel32 path. Same convention as `inject/`.
+- `runtime/bof`: `prepare` now registers every non-empty `.pdata`
+  section with `RtlAddFunctionTable` so the kernel unwinder can
+  resolve RUNTIME_FUNCTION entries for the BOF mapping. BOFs that
+  raise structured exceptions (C++ `throw`, compiler-emitted
+  bounds checks, `RaiseException`) can now unwind into their own
+  handler frames instead of aborting. `Close` calls
+  `RtlDeleteFunctionTable` before `VirtualFree`.
 
 ## v0.155.0 — slice 1.d: x86 BOF cross-process loader (2026-05-18)
 

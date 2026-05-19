@@ -349,3 +349,36 @@ func TestBOF_SacrificialThread_SharedTrampolineDistinctArgs(t *testing.T) {
 		}
 	}
 }
+
+// TestBOF_PDataRegistered pins the SEH-unwind registration in
+// prepare: a BOF whose COFF carries a non-empty .pdata section
+// (mingw-w64 default for any function call with a stack frame)
+// must end up with b.pdataTable / b.pdataCount populated so the
+// kernel can resolve RUNTIME_FUNCTION entries during stack
+// unwinds — exceptions thrown inside the BOF would otherwise
+// abort instead of unwinding into the BOF's handler frames.
+//
+// realworld_calls.o is the canonical fixture: 12-byte .pdata =
+// exactly one RUNTIME_FUNCTION. Close must clear the fields and
+// call RtlDeleteFunctionTable before VirtualFree.
+func TestBOF_PDataRegistered(t *testing.T) {
+	b, err := Load(loadLifecycleBOF(t, "realworld_calls.o"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if _, err := b.Execute(nil); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if b.pdataTable == nil {
+		t.Fatal("pdataTable nil after Execute — .pdata not registered with RtlAddFunctionTable")
+	}
+	if b.pdataCount == 0 {
+		t.Errorf("pdataCount = 0, want >= 1")
+	}
+	if err := b.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if b.pdataTable != nil || b.pdataCount != 0 {
+		t.Errorf("Close did not clear pdata fields: table=%p count=%d", b.pdataTable, b.pdataCount)
+	}
+}

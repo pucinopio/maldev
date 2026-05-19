@@ -225,9 +225,45 @@ func (b *BOF) prepare() error {
 		}
 	}
 
+	// 6.7. Register .pdata with the kernel unwinder so BOFs that
+	//      raise structured exceptions (C++ throw, RaiseException,
+	//      compiler-emitted bounds checks) can unwind their stack
+	//      frames properly. Without this, a BOF that throws inside
+	//      a try/catch faults on the unwind walk because the
+	//      kernel can't find a RUNTIME_FUNCTION for the BOF's PC.
+	//
+	//      Each .pdata entry is 12 bytes (BeginAddress / EndAddress
+	//      / UnwindData — all RVAs relative to the image base; the
+	//      ADDR32NB relocations applied in step 6 already rebased
+	//      them against textBase). On failure (malformed .pdata,
+	//      RtlAddFunctionTable returns FALSE) we silently skip —
+	//      the BOF still runs, just without SEH unwind support.
+	const runtimeFunctionSize = 12 // sizeof(RUNTIME_FUNCTION) on x64
+	for _, l := range laid {
+		sec := sections[l.idx-1]
+		if sectionName(sec.Name) != ".pdata" || sec.SizeOfRawData == 0 {
+			continue
+		}
+		count := uint32(sec.SizeOfRawData) / runtimeFunctionSize
+		if count == 0 {
+			continue
+		}
+		pdataBase := execMem + uintptr(l.offset)
+		table := (*windows.RUNTIME_FUNCTION)(unsafe.Pointer(pdataBase))
+		if windows.RtlAddFunctionTable(table, count, textBase) {
+			b.pdataTable = table
+			b.pdataCount = count
+		}
+		break // a COFF has at most one .pdata; bail after the first
+	}
+
 	// 7. Find entry point symbol within .text.
 	entryOffset, err := b.findSymbolOffset(hdr, textIdx)
 	if err != nil {
+		if b.pdataTable != nil {
+			windows.RtlDeleteFunctionTable(b.pdataTable)
+			b.pdataTable = nil
+		}
 		_ = windows.VirtualFree(execMem, 0, windows.MEM_RELEASE)
 		return err
 	}

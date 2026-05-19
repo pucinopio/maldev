@@ -505,6 +505,17 @@ for _, target := range targets {
   automatically when the next `Execute` starts and on `Close()`.
   A BOF that crashes mid-call no longer leaks its format buffer
   for the process lifetime.
+- **SEH unwind via `RtlAddFunctionTable`.** Every COFF with a
+  non-empty `.pdata` section gets its RUNTIME_FUNCTION entries
+  registered with the kernel during `prepare` so the OS unwinder
+  can resolve frames inside the BOF mapping. Without this, a BOF
+  that raises a structured exception (C++ `throw`, compiler-
+  emitted bounds check, `RaiseException`) would abort during the
+  unwind walk — the kernel could not find a function entry for
+  the BOF's PC. Registration is silent on failure (malformed
+  `.pdata` → the BOF still runs, just without SEH support).
+  `Close` calls `RtlDeleteFunctionTable` before `VirtualFree`
+  to avoid leaving dangling unwind context.
 - **Cross-process Beacon API routes via optional `*wsyscall.Caller`.**
   `BeaconInjectProcess` and the spawn/inject combos use
   `VirtualAllocEx` + `WriteProcessMemory` + `CreateRemoteThread`
