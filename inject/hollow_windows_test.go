@@ -15,37 +15,34 @@ import (
 )
 
 // TestHollow_RejectsX86Payload pins the early-out: a 32-bit PE
-// payload (IMAGE_FILE_MACHINE_I386 = 0x014C) must surface
-// ErrHollowParse without ever touching the target process. Built
-// from a minimal MZ + PE\0\0 header inline so the test doesn't
-// depend on a real x86 fixture (the repo's testdata is x64-only).
+// payload must surface ErrHollowParse without ever touching the
+// target process. Uses C:\Windows\SysWOW64\notepad.exe — the real
+// 32-bit notepad that every 64-bit Windows ships, so the test
+// runs against a genuine i386 PE32 image rather than synthetic
+// bytes.
 func TestHollow_RejectsX86Payload(t *testing.T) {
+	x86 := loadRealX86Notepad(t)
 	_, err := Hollow(HollowConfig{
 		Target:  systemTarget(t),
-		Payload: craftMinimalPE(0x014C), // IMAGE_FILE_MACHINE_I386
+		Payload: x86,
 	})
 	if !errors.Is(err, ErrHollowParse) {
 		t.Fatalf("want ErrHollowParse, got %v", err)
 	}
 }
 
-// craftMinimalPE builds the smallest byte blob that passes the
-// MZ + PE\0\0 prefix check while exposing the requested Machine
-// field. Used to exercise the x64-only gate without needing a
-// real PE fixture of the rejected architecture.
-func craftMinimalPE(machine uint16) []byte {
-	const eLfanew = 0x40
-	buf := make([]byte, eLfanew+8)
-	buf[0] = 'M'
-	buf[1] = 'Z'
-	buf[0x3C] = eLfanew
-	buf[eLfanew] = 'P'
-	buf[eLfanew+1] = 'E'
-	buf[eLfanew+2] = 0
-	buf[eLfanew+3] = 0
-	buf[eLfanew+4] = byte(machine)
-	buf[eLfanew+5] = byte(machine >> 8)
-	return buf
+// loadRealX86Notepad reads SysWOW64\notepad.exe — the real x86 PE
+// shipped by every 64-bit Windows. Skips the test cleanly when
+// SysWOW64 isn't present (e.g. a 32-bit-only Windows install or a
+// stripped image without WoW64).
+func loadRealX86Notepad(t *testing.T) []byte {
+	t.Helper()
+	const path = `C:\Windows\SysWOW64\notepad.exe`
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Skipf("%s not available (WoW64 absent?): %v", path, err)
+	}
+	return data
 }
 
 // TestHollow_GarbagePayloadErrors covers the parse-failure branch
