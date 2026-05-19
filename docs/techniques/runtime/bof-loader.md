@@ -31,11 +31,15 @@ What this DOES achieve:
   PEB + ROR13 hash, so the BOF's import table doesn't appear
   as plaintext strings.
 
-What this does NOT achieve:
+What this DOES NOT achieve (out of the box):
 
-- **x64 only** — no x86, no ARM64.
-- **Doesn't sandbox** — BOF runs in your process address space.
-  Crash in the BOF = crash in your implant.
+- **No ARM64.** x86 and x64 are both supported (x86 via the
+  cross-process loader under `-tags=bof_x86_loader`, see below).
+- **In-process by default — crash in the BOF kills the implant.**
+  The default `Execute` path runs the BOF on the host's OS thread
+  with no isolation. Opt in to [`SetSacrificialThread`](#setsacrificialthread--crash-isolation-v01540)
+  to spawn a dedicated thread with a VEH that turns BOF-mapping
+  faults into a recoverable Go `error`.
 - **AMSI / ETW telemetry from the BOF still fires** — pair
   with [`evasion/preset.Stealth`](../evasion/preset.md) before
   `Run`.
@@ -64,11 +68,14 @@ Use cases:
 ```mermaid
 flowchart LR
     INPUT[BOF .o bytes] --> PARSE[parse COFF<br>header + sections]
-    PARSE --> ALLOC[VirtualAlloc RWX<br>copy .text + .data]
+    PARSE --> ALLOC[VirtualAlloc RW<br>copy every section w/ raw data]
     ALLOC --> RELOC[apply relocations<br>ADDR64 / ADDR32NB / REL32]
-    RELOC --> SYM[resolve entry symbol<br>from COFF symtab]
-    SYM --> EXEC[jump to entry<br>via function ptr]
-    EXEC --> OUT[capture output<br>via stdout redirect]
+    RELOC --> IMP[resolve __imp_*<br>PEB walk + ROR13]
+    IMP --> FLIP[VirtualProtect<br>exec sections → RX]
+    FLIP --> SEH[RtlAddFunctionTable<br>register .pdata]
+    SEH --> SYM[resolve entry symbol<br>from COFF symtab]
+    SYM --> EXEC[call entry<br>inline OR sacrificial thread]
+    EXEC --> OUT[capture output<br>BeaconPrintf / BeaconOutput]
 ```
 
 ## API → godoc
@@ -132,12 +139,14 @@ little-endian load. Use `AddInt` / `AddShort` for fixed-width
 ints, `AddString` for length-prefixed NUL-terminated strings,
 `AddBytes` for raw blobs.
 
-### Architecture routing — detect x86 vs x64 cleanly (slice 1.d phase A, v0.155+)
+### Architecture routing — x64 in-process, x86 cross-process (v0.155.0+)
 
 `bof.Run` sniffs the COFF `Machine` field and dispatches: x64
-runs in-process, x86 returns the sentinel
-`bof.ErrCrossArchX86Unsupported` so callers can branch on
-architecture without parsing the file themselves.
+runs in-process, x86 runs in a spawned `SysWOW64\rundll32.exe`
+via the cross-process loader DLL embedded under the
+`bof_x86_loader` build tag. Without the tag, x86 input returns
+the sentinel `bof.ErrCrossArchX86Unsupported` so callers can
+branch on architecture without parsing the file themselves.
 
 ```go
 import (
@@ -152,14 +161,16 @@ data, _ := os.ReadFile(bofPath)
 res, err := bof.Run(context.Background(), bof.Spec{Bytes: data})
 switch {
 case err == nil:
+    // Auto-routed: x64 ran in-process, x86 ran in a WoW64 helper
+    // if the implant was built with `-tags=bof_x86_loader`.
     fmt.Println(string(res.Output))
 case errors.Is(err, bof.ErrCrossArchX86Unsupported):
-    // 32-bit .o detected. In a v0.155-era implant, this means
-    // the fork-and-run orchestrator (slice 1.d phase B/C)
-    // hasn't shipped yet. Skip the BOF, log it, or fall back
-    // to a separate 32-bit implant. The detection at least
-    // never silently no-ops.
-    log.Printf("skip %s: x86 BOF not yet supported", bofPath)
+    // 32-bit .o detected and this implant was NOT compiled with
+    // `bof_x86_loader`. The build-tag gate keeps the implant
+    // small for missions that don't need x86 — rebuild with the
+    // tag (or fall back to a separate 32-bit implant) when an
+    // x86 BOF actually shows up in the corpus.
+    log.Printf("skip %s: rebuild with -tags=bof_x86_loader", bofPath)
 default:
     log.Printf("bof.Run failed: %v", err)
 }
@@ -167,7 +178,10 @@ default:
 
 `bof.DetectKind(data)` is also exported if a caller wants to
 classify the bytes without running them — handy for triage
-tools that enumerate a public corpus before execution.
+tools that enumerate a public corpus before execution. See
+`runtime/bof/internal/x86loader/README.md` for the x86 loader
+architecture (Beacon API symbol surface, parent ↔ helper IPC,
+threat model).
 
 ### Token impersonation + spawn-and-inject
 
@@ -215,7 +229,7 @@ import "github.com/oioio-space/maldev/runtime/bof"
 
 bytes, _ := os.ReadFile("whoami.o")
 b, _ := bof.Load(bytes)
-defer b.Close() // releases the cached VirtualAlloc mapping
+defer b.Close() // releases the cached RX mapping + .pdata unwind table
 
 // First call: full parse + alloc + reloc + execute.
 out1, _ := b.Execute(nil)
@@ -242,11 +256,13 @@ if err != nil {
 }
 ```
 
-`Close` is **idempotent** — multiple calls are safe. A
-`runtime.SetFinalizer` in `Load` is a safety net for callers
-who forget Close, but Go finalizer timing isn't guaranteed:
-long-lived implants should Close explicitly to free the
-VirtualAlloc'd RWX region in a timely fashion.
+`Close` is **idempotent** — multiple calls are safe. It does
+two things in order: `RtlDeleteFunctionTable` (unregister the
+`.pdata` unwind entries from Bundle E) then `VirtualFree` (drop
+the RX mapping). A `runtime.SetFinalizer` in `Load` is a safety
+net for callers who forget Close, but Go finalizer timing isn't
+guaranteed: long-lived implants should Close explicitly to free
+the mapping in a timely fashion.
 
 ### `SetPersistent` — stateful vs stateless BOFs (v0.153.0+)
 
@@ -332,16 +348,21 @@ clean Go error. The implant keeps running.
 
 | Mode | When BOF AVs | Host process |
 |---|---|---|
-| Inline (default, current) | SEH → Go runtime → TerminateProcess | dies with the BOF |
+| Inline (default) | SEH → Go runtime → TerminateProcess | dies with the BOF |
 | Sacrificial (`SetSacrificialThread > 0`) | VEH catches in-mapping fault → ExitThread → host gets `error` | survives |
 
 #### Honest limitations
 
-1. **Token impersonation does not cross threads.** `BeaconUseToken`
-   impersonates on the BOF's sacrificial thread; the host
-   goroutine keeps its original token. BOFs that rely on
-   chained token state across calls are not compatible with
-   sacrificial mode.
+1. **Token impersonation does not cross threads by default — use
+   `SetExecuteAsToken` to pin one.** `BeaconUseToken` inside the
+   BOF impersonates on the BOF's sacrificial thread; the host
+   goroutine keeps its original token. To start the sacrificial
+   thread under a specific identity, call
+   [`(*BOF).SetExecuteAsToken(token)`](https://pkg.go.dev/github.com/oioio-space/maldev/runtime/bof#BOF.SetExecuteAsToken)
+   before `Execute` — the loader applies it via `SetThreadToken`
+   between `CreateThread(SUSPENDED)` and `ResumeThread`. BOFs
+   that rely on **chained** token state across calls still need
+   to manage the chain themselves.
 2. **Only faults inside the BOF mapping are caught.** A BOF
    that passes a NULL pointer to `kernel32!HeapAlloc` takes
    the fault inside kernel32 — outside the BOF range — and
@@ -398,17 +419,19 @@ default:
 
 #### Mixing knobs
 
-The three knobs are independent — pick what fits your
-threat model:
+Every knob below is independent — pick what fits your threat
+model and combine freely:
 
 ```go
 b, _ := bof.Load(realworldCallsBytes)
 defer b.Close()
 
 b.SetSpawnTo(`C:\Windows\System32\notepad.exe`)
-b.SetUserData(payload)            // surfaced via BeaconGetCustomUserData
-b.SetPersistent(false)            // default — fresh .data per call
-b.SetSacrificialThread(30 * time.Second) // implant survives crashes
+b.SetUserData(payload)                   // surfaced via BeaconGetCustomUserData
+b.SetPersistent(false)                   // default — fresh .data per call
+b.SetSacrificialThread(30 * time.Second) // implant survives BOF crashes
+b.SetCaller(myIndirectCaller)            // route BeaconInjectProcess via Nt*
+b.SetExecuteAsToken(impersonationToken)  // run the sacrificial thread under that token
 
 for _, target := range targets {
     out, err := b.Execute(packArgs(target))
@@ -423,27 +446,110 @@ for _, target := range targets {
 }
 ```
 
+### `SetCaller` — route cross-process Beacon API via `*wsyscall.Caller` (v0.156.0+)
+
+`BeaconInjectProcess` (and the spawn/inject combos that build on
+it) drives three cross-process kernel32 calls: `VirtualAllocEx`,
+`WriteProcessMemory`, `CreateRemoteThread`. By default these go
+through the kernel32 wrappers; under userland-hooking EDR they
+appear in the API trail. `SetCaller` redirects all three through
+a `*wsyscall.Caller` so they route via `NtAllocateVirtualMemory`
+/ `NtWriteVirtualMemory` / `NtCreateThreadEx` — direct, indirect,
+hells-gate, or any combination the operator builds.
+
+```go
+import (
+    "github.com/oioio-space/maldev/runtime/bof"
+    wsyscall "github.com/oioio-space/maldev/win/syscall"
+)
+
+// Indirect syscalls with a hells-gate-style SSN resolver.
+caller := wsyscall.New(wsyscall.MethodIndirect, wsyscall.NewHellsGate())
+defer caller.Close()
+
+b, _ := bof.Load(coffBytes)
+defer b.Close()
+b.SetCaller(caller)
+_, _ = b.Execute(args)
+```
+
+nil — the default — keeps the kernel32 path. The Caller's
+lifetime is operator-owned: `BOF.Close` does NOT call
+`caller.Close`, so the same Caller can be shared across many
+BOFs and inject sites. Matches the convention used across
+[`inject`](../injection/README.md).
+
+### `SetExecuteAsToken` — pin a token on the sacrificial thread (v0.156.0+)
+
+Closes the historical limitation where `BeaconUseToken` inside
+the BOF impersonated only on the sacrificial thread but
+`Execute` started that thread under the host's primary token.
+With `SetExecuteAsToken`, the loader applies `SetThreadToken`
+between `CreateThread(SUSPENDED)` and `ResumeThread` — the BOF
+entry runs under the supplied identity from instruction zero.
+
+Requires `SeImpersonatePrivilege` (admin / service contexts by
+default) or a token the caller is permitted to assign.
+
+```go
+import (
+    "github.com/oioio-space/maldev/runtime/bof"
+    "golang.org/x/sys/windows"
+)
+
+// Duplicate the current process's primary token to an
+// impersonation-grade copy with TOKEN_IMPERSONATE rights.
+var primary windows.Token
+_ = windows.OpenProcessToken(windows.CurrentProcess(),
+    windows.TOKEN_DUPLICATE|windows.TOKEN_QUERY, &primary)
+defer windows.CloseHandle(windows.Handle(primary))
+
+var dup windows.Token
+_ = windows.DuplicateTokenEx(primary,
+    windows.TOKEN_IMPERSONATE|windows.TOKEN_QUERY,
+    nil,
+    windows.SecurityImpersonation, windows.TokenImpersonation,
+    &dup)
+defer windows.CloseHandle(windows.Handle(dup))
+
+b, _ := bof.Load(coffBytes)
+defer b.Close()
+b.SetSacrificialThread(5 * time.Second) // required — token only applies on the sacrificial path
+b.SetExecuteAsToken(dup)
+_, _ = b.Execute(args)
+```
+
+Zero — the default — keeps the host's primary token. Has **no
+effect on inline `Execute`** (the host's own token always
+applies on that path).
+
 ## OPSEC & Detection
 
 | Artefact | Where defenders look |
 |---|---|
-| `VirtualAlloc(RWX)` followed by EXECUTE from the alloc | Behavioural EDR — high-fidelity reflective-loader signal |
-| Module-load events for non-stack `.text` regions | ETW Microsoft-Windows-Threat-Intelligence |
+| `VirtualAlloc(RW)` → `VirtualProtect(RX)` cycle on a single mapping (the loader pattern) | Behavioural EDR — generic reflective-loader signal even after the RWX→RX-flip mitigation. The two-syscall cadence is itself a tell |
+| `MEM_TOP_DOWN` allocation with `IMAGE_SCN_MEM_EXECUTE` content not backed by a loaded module | ETW Microsoft-Windows-Threat-Intelligence (TI events) |
 | BOF entry-point execution from non-image memory | Defender for Endpoint MsSense |
+| `RtlAddFunctionTable` for a non-image RUNTIME_FUNCTION array (Bundle E) | Niche; few products inspect, but kernel ETW captures the kernel-side registration |
+| `syscall.NewCallback` thunk pages (≈ 28 × 4 KB at first Load) | Small VAD entries with characteristic prologue bytes — same signature any Go program with native callbacks emits |
 
 **D3FEND counters:**
 
-- [D3-PA](https://d3fend.mitre.org/technique/d3f:ProcessAnalysis/) — RWX execute-from-allocation telemetry.
+- [D3-PA](https://d3fend.mitre.org/technique/d3f:ProcessAnalysis/) — execute-from-allocation telemetry (RX-after-flip still trips the more thorough EDRs).
 - [D3-FCA](https://d3fend.mitre.org/technique/d3f:FileContentAnalysis/) — YARA on the loaded bytes.
 
-**Hardening for the operator:**
+**Hardening for the operator (already in the loader by default):**
 
-- Allocate `RW` then `RX` via `VirtualProtect` instead of
-  `RWX` — defeats the simplest RWX-watcher rules.
+- RW → RX flip via `VirtualProtect` after relocations land
+  (loader behaviour since v0.151 — no RWX is ever exposed).
+- `MEM_TOP_DOWN` placement (high-address bias reduces collision
+  with the host's heap + the most naive low-RVA scanner rules).
 - Encrypt the BOF at rest via [`crypto`](../crypto/README.md);
   decrypt + load + immediately re-encrypt the source buffer.
 - Pair with [`evasion/sleepmask`](../evasion/sleep-mask.md)
   for cleartext-at-rest mitigation.
+- Bypass kernel32 userland hooks on the cross-process Beacon API
+  via [`(*BOF).SetCaller`](#setcaller--route-cross-process-beacon-api-via-wsyscallcaller-v01560).
 
 ## MITRE ATT&CK
 
@@ -456,13 +562,14 @@ for _, target := range targets {
 
 - **Execute is amortised, not free (v0.153+).** The first call
   on a `*BOF` runs the full loader pass (parse + `VirtualAlloc` +
-  relocations + RX flip). Subsequent calls reuse the mapping —
-  ideal for callers like `runtime/pe` that load one `.o` and
-  run it many times. **Caller responsibility:** call `Close()`
-  explicitly when done. The `runtime.SetFinalizer` safety net
-  in `Load` will eventually `VirtualFree`, but Go finalizer
-  timing isn't guaranteed; long-lived implants leaking mapped
-  RWX is a real liability.
+  relocations + RW→RX flip + `.pdata` registration). Subsequent
+  calls reuse the mapping — ideal for callers like `runtime/pe`
+  that load one `.o` and run it many times. **Caller
+  responsibility:** call `Close()` explicitly when done. The
+  `runtime.SetFinalizer` safety net in `Load` will eventually
+  `RtlDeleteFunctionTable` + `VirtualFree`, but Go finalizer
+  timing isn't guaranteed; long-lived implants leaking RX
+  mappings is a real liability.
 - **Default Execute is stateless.** Writable sections (`.data`,
   `.bss`, `.rdata-with-writes`) are restored to their initial
   bytes between Execute calls. BOFs that intentionally cache
@@ -595,13 +702,14 @@ for _, target := range targets {
   state coherent without per-call dispatch. Implications:
 
   - **Setters (`SetUserData`, `SetSpawnTo`, `SetSpawnToX86`,
-    `SetCaller`, `SetPersistent`, `SetSacrificialThread`) are
-    NOT lock-protected.** They are safe to call before the
-    first `Execute` or between `Execute` calls; calling them
-    from a host goroutine while a sacrificial-thread Execute
-    is in flight is a race the package does not currently
-    guard against. The future Bundle-C per-`*BOF` mutex will
-    close that gap.
+    `SetCaller`, `SetExecuteAsToken`, `SetPersistent`,
+    `SetSacrificialThread`) are NOT lock-protected.** They are
+    safe to call before the first `Execute` or between
+    `Execute` calls; calling them from a host goroutine while
+    a sacrificial-thread Execute is in flight is a race the
+    package does not currently guard against. Until a per-BOF
+    mutex lands, callers that need to mutate state mid-flight
+    should drive each BOF from a single goroutine.
   - **`Errors()` after `Close()` returns the FINAL Execute's
     buffer**, not nil. The byte buffer is not zeroed at
     teardown — post-mortem inspection works.
@@ -612,24 +720,26 @@ for _, target := range targets {
     show up as small VAD entries with the syscall thunk
     pattern. Identical to every Go program that uses
     `syscall.NewCallback`.
-- **x86 BOFs supported via cross-process reflective load (slice
-  1.d, `-tags=bof_x86_loader`).** An x86 `.o` (`Machine == 0x014c`)
-  is detected as `KindCOFFx86` by `DetectKind` and routed through
-  the `coffX86Loader`. With the `bof_x86_loader` build tag
-  active, the orchestrator manually reflective-loads a small
-  i386 DLL (`runtime/bof/internal/x86loader/bof_x86_loader.x86.dll`,
+- **x86 BOFs supported via cross-process reflective load
+  (`-tags=bof_x86_loader`, v0.155.0+).** An x86 `.o`
+  (`Machine == 0x014c`) is detected as `KindCOFFx86` by
+  `DetectKind` and routed through the `coffX86Loader`. With the
+  `bof_x86_loader` build tag active, the orchestrator manually
+  reflective-loads a small i386 DLL
+  (`runtime/bof/internal/x86loader/bof_x86_loader.x86.dll`,
   ~11 KB) into a freshly-spawned `SysWOW64\rundll32.exe` via
   VirtualAllocEx + WriteProcessMemory + .reloc application +
-  CreateRemoteThread. The loader DLL parses the BOF .o inside
-  the WoW64 helper, implements the full Beacon API surface (24
-  symbols incl. Inject / Spawn / Token / IsAdmin / Format /
-  Data / KV / printf%), and writes captured output into a
-  parent-allocated RW region the parent ReadProcessMemory's
-  back. Zero disk artefacts, zero LoadLibrary call on the
-  loader. Default builds (no tag) surface
-  `bof.ErrCrossArchX86Unsupported` — operators `errors.Is`
-  against it. See `runtime/bof/internal/x86loader/README.md`
-  for the architecture diagram, ABI, and threat-model notes.
+  CreateRemoteThread. The loader DLL parses the BOF `.o` inside
+  the WoW64 helper, implements **25 Beacon API symbols** (full
+  beacon.h Groups 1–6 + `BeaconGetOutputData` + the four
+  Inject/Spawn process-control entries), and writes captured
+  output into a parent-allocated RW region the parent
+  `ReadProcessMemory`'s back. Zero disk artefacts, zero
+  `LoadLibrary` call on the loader. Default builds (no tag)
+  surface `bof.ErrCrossArchX86Unsupported` — operators
+  `errors.Is` against it. See
+  `runtime/bof/internal/x86loader/README.md` for the
+  architecture diagram, ABI, and threat-model notes.
 - **Relocation coverage.** `IMAGE_REL_AMD64_ABSOLUTE` (no-op),
   `_ADDR64`, `_ADDR32` (errors out cleanly when target exceeds
   32-bit range), `_ADDR32NB`, `_REL32`, and the `_REL32_1`
@@ -637,8 +747,12 @@ for _, target := range targets {
   `_SECTION`, `_SECREL`) are not supported — the loader fails
   with `unsupported relocation type: 0xNN` so the failure mode
   is obvious instead of a silent corruption.
-- **RWX allocation is loud.** Hardened EDRs flag RWX from any
-  source; pair with sleep-mask + RW→RX flip.
+- **No RWX is exposed.** The loader allocates `PAGE_READWRITE`
+  then flips exec sections to `PAGE_EXECUTE_READ` after
+  relocations land. Hardened EDRs still flag the
+  `VirtualAlloc` → `VirtualProtect(EXECUTE)` cadence on a fresh
+  mapping — pair with [`evasion/sleepmask`](../evasion/sleep-mask.md)
+  to hide the mapping at rest.
 
 ## See also
 

@@ -224,6 +224,21 @@ func (b *BOF) callEntrySacrificial(argPtr, argLen uintptr) error {
 	sacrificialMap.Store(tid, frame)
 	b.fault = faultRecord{} // clear from any previous call
 
+	// If the operator configured an impersonation token via
+	// SetExecuteAsToken, apply it to the suspended thread BEFORE
+	// ResumeThread so the BOF entry runs under the right identity.
+	// Failure here means the token is invalid / wrong rights / etc.;
+	// tear the thread down rather than launch it under the wrong
+	// security context.
+	if b.executeAsToken != 0 {
+		hThreadHandle := windows.Handle(hThread)
+		if err := windows.SetThreadToken(&hThreadHandle, b.executeAsToken); err != nil {
+			_, _, _ = api.ProcTerminateThread.Call(hThread, 1)
+			sacrificialMap.Delete(tid)
+			return fmt.Errorf("runtime/bof: SetThreadToken: %w", err)
+		}
+	}
+
 	// ResumeThread returns the previous suspend count on success,
 	// 0xFFFFFFFF on failure (x/sys/windows surfaces the latter as
 	// the err return).

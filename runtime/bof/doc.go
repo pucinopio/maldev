@@ -3,11 +3,14 @@
 //
 // A BOF is a relocatable COFF object that runs in the calling
 // process's address space. The loader parses the COFF header,
-// locates the `.text` section, applies relocations
-// (`IMAGE_REL_AMD64_ABSOLUTE` / `_ADDR64` / `_ADDR32` /
-// `_ADDR32NB` / `_REL32` / `_REL32_1` … `_REL32_5`),
-// resolves the entry-point symbol from the symbol table, and
-// jumps into RWX memory. External symbols are resolved via the
+// lays out every section with raw data into a single
+// VirtualAlloc'd region (initially `PAGE_READWRITE`), applies
+// relocations (`IMAGE_REL_AMD64_ABSOLUTE` / `_ADDR64` / `_ADDR32` /
+// `_ADDR32NB` / `_REL32` / `_REL32_1` … `_REL32_5`), flips the
+// executable sections to `PAGE_EXECUTE_READ` via `VirtualProtect`,
+// registers `.pdata` with `RtlAddFunctionTable` so SEH unwinds
+// work, and finally calls the entry-point symbol resolved from
+// the COFF symbol table. External symbols resolve via the
 // Beacon API stub table (`__imp_BeaconXxx`) or by dynamic-link
 // import name (`__imp_<DLL>$<Func>` → PEB walk + ROR13 export
 // match). The same format used by Cobalt Strike's
@@ -22,30 +25,38 @@
 //
 // moderate
 //
-// RWX memory allocation is visible to EDR; the payload never
-// touches disk and runs inside the caller's process so there is
-// no fresh-process telemetry. Behavioural EDRs that watch for
-// `VirtualAlloc(RWX)` + `EXECUTE` from non-text regions flag
-// the loader.
+// The loader allocates `PAGE_READWRITE` then flips to
+// `PAGE_EXECUTE_READ` after relocations — no RWX is ever
+// exposed. Behavioural EDRs still flag the `VirtualAlloc`
+// → `VirtualProtect(EXECUTE)` cadence and execution from
+// non-image memory; the payload never touches disk and runs
+// inside the caller's process so there is no fresh-process
+// telemetry.
 //
 // # Required privileges
 //
-// unprivileged. Loader runs entirely in the calling
-// process's own address space — `VirtualAlloc(RWX)`
-// for the COFF text + Beacon-API stub table, no
-// cross-process work. The privilege requirements
-// of the loaded BOF itself depend on what it does
-// (a `whoami` BOF needs no extra; an LSA secrets
-// BOF needs admin) and route through the same
-// gates as native code at runtime.
+// unprivileged. Loader runs entirely in the calling process's
+// own address space — `VirtualAlloc(RW)` for the COFF text +
+// Beacon-API stub table, then `VirtualProtect` to flip exec
+// sections to RX. No cross-process work for an in-process x64
+// BOF. The privilege requirements of the loaded BOF itself
+// depend on what it does (a `whoami` BOF needs no extra; an
+// LSA secrets BOF needs admin). Sub-features add their own
+// privilege contracts: `SetExecuteAsToken` needs
+// `SeImpersonatePrivilege` (admin or service context);
+// `SetCaller` with a direct/indirect syscall method needs no
+// extra privileges, but routes around userland hooks an
+// operator might rely on.
 //
 // # Platform
 //
-// Windows-only and amd64-only. The COFF format the
-// loader parses targets x64 PE/COFF; the Beacon API
-// stub thunks created via `syscall.NewCallback` are
-// Windows-only. ARM64 BOFs would need a parallel
-// relocation table.
+// Windows-only. The default build covers x64 BOFs in-process.
+// Building with `-tags=bof_x86_loader` adds a cross-process
+// x86 path: an embedded 11 KB i386 DLL is reflectively loaded
+// into a freshly-spawned `SysWOW64\rundll32.exe` helper and
+// drives the 32-bit `.o` from there. ARM64 is not supported —
+// would need a parallel relocation table + an ARM64-side
+// Beacon API host.
 //
 // # Example
 //

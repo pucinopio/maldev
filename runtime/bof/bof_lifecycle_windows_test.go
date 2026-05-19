@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sys/windows"
+
 	"github.com/oioio-space/maldev/testutil"
 )
 
@@ -347,6 +349,144 @@ func TestBOF_SacrificialThread_SharedTrampolineDistinctArgs(t *testing.T) {
 		if !strings.Contains(string(out), s) {
 			t.Errorf("iter %d: output %q does not contain %q", i, out, s)
 		}
+	}
+}
+
+// TestBOF_SetExecuteAsToken_RoundTrip pins the token getter/setter
+// pair. Round-trip with a non-zero windows.Token (a sentinel value
+// is fine — the setter does not dereference, only stores), then
+// clear back to zero. Wire-up is exercised by
+// TestBOF_SacrificialThread_WithCurrentProcessToken below.
+func TestBOF_SetExecuteAsToken_RoundTrip(t *testing.T) {
+	b := &BOF{}
+	if b.executeAsToken != 0 {
+		t.Fatal("fresh *BOF must default to zero token")
+	}
+	b.SetExecuteAsToken(windows.Token(0xDEADBEEF))
+	if b.executeAsToken != 0xDEADBEEF {
+		t.Errorf("setter did not store; got 0x%X", b.executeAsToken)
+	}
+	b.SetExecuteAsToken(0)
+	if b.executeAsToken != 0 {
+		t.Errorf("zero did not clear; got 0x%X", b.executeAsToken)
+	}
+}
+
+// TestBOF_SacrificialThread_WithCurrentProcessToken proves the
+// SetThreadToken plumbing in callEntrySacrificial: with a real
+// impersonation-grade token (the current process's primary token
+// duplicated to impersonation-level) the sacrificial Execute must
+// succeed end-to-end.
+//
+// Gated on IsElevated: `SetThreadToken` requires SeImpersonate-
+// Privilege, which Windows grants by default only to Admin /
+// LocalSystem / Service contexts. Non-admin processes can not
+// self-impersonate via this API even with their own token. The
+// round-trip test above covers the setter; this test exercises
+// the actual SetThreadToken wire-up.
+//
+// Not a behavioural impersonation test — the BOF here is just
+// hello_beacon (no token-aware code). Proving the BOF saw a
+// different identity would require a fixture that calls
+// OpenThreadToken / GetTokenInformation and prints — heavier
+// than this commit's scope.
+func TestBOF_SacrificialThread_WithCurrentProcessToken(t *testing.T) {
+	if !windows.GetCurrentProcessToken().IsElevated() {
+		t.Skip("SetThreadToken requires SeImpersonatePrivilege (run elevated)")
+	}
+
+	var primary windows.Token
+	if err := windows.OpenProcessToken(windows.CurrentProcess(),
+		windows.TOKEN_DUPLICATE|windows.TOKEN_QUERY, &primary); err != nil {
+		t.Fatalf("OpenProcessToken: %v", err)
+	}
+	defer windows.CloseHandle(windows.Handle(primary))
+
+	var impersonation windows.Token
+	// desiredAccess=0 inherits the source token's rights. We opened
+	// primary with TOKEN_DUPLICATE|TOKEN_QUERY which is NOT enough
+	// for SetThreadToken — explicitly request TOKEN_IMPERSONATE +
+	// TOKEN_QUERY on the duplicate.
+	if err := windows.DuplicateTokenEx(primary,
+		windows.TOKEN_IMPERSONATE|windows.TOKEN_QUERY,
+		nil,
+		windows.SecurityImpersonation, windows.TokenImpersonation,
+		&impersonation); err != nil {
+		t.Fatalf("DuplicateTokenEx: %v", err)
+	}
+	defer windows.CloseHandle(windows.Handle(impersonation))
+
+	b, err := Load(loadLifecycleBOF(t, "hello_beacon.o"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	defer b.Close()
+	if err := b.SetSacrificialThread(5 * time.Second); err != nil {
+		t.Fatalf("SetSacrificialThread: %v", err)
+	}
+	b.SetExecuteAsToken(impersonation)
+
+	out, err := b.Execute(nil)
+	if err != nil {
+		t.Fatalf("Execute under SetThreadToken: %v", err)
+	}
+	if len(out) == 0 {
+		t.Errorf("expected hello_beacon output, got empty")
+	}
+}
+
+// TestBOF_SacrificialThread_TokenAccessDeniedSurfaces verifies the
+// error path: when the operator supplies a token the host can't
+// apply (non-admin process trying to SetThreadToken on its own
+// thread, missing SeImpersonatePrivilege), the sacrificial Execute
+// must surface a non-nil error containing "SetThreadToken" and tear
+// down the thread cleanly instead of leaking it.
+//
+// Only runs when NOT elevated — when elevated, SetThreadToken
+// succeeds and this test no longer reproduces the access-denied
+// path. The complement of WithCurrentProcessToken above.
+func TestBOF_SacrificialThread_TokenAccessDeniedSurfaces(t *testing.T) {
+	if windows.GetCurrentProcessToken().IsElevated() {
+		t.Skip("error-surface test only meaningful when SeImpersonatePrivilege is absent")
+	}
+
+	var primary windows.Token
+	if err := windows.OpenProcessToken(windows.CurrentProcess(),
+		windows.TOKEN_DUPLICATE|windows.TOKEN_QUERY, &primary); err != nil {
+		t.Fatalf("OpenProcessToken: %v", err)
+	}
+	defer windows.CloseHandle(windows.Handle(primary))
+
+	var impersonation windows.Token
+	// desiredAccess=0 inherits the source token's rights. We opened
+	// primary with TOKEN_DUPLICATE|TOKEN_QUERY which is NOT enough
+	// for SetThreadToken — explicitly request TOKEN_IMPERSONATE +
+	// TOKEN_QUERY on the duplicate.
+	if err := windows.DuplicateTokenEx(primary,
+		windows.TOKEN_IMPERSONATE|windows.TOKEN_QUERY,
+		nil,
+		windows.SecurityImpersonation, windows.TokenImpersonation,
+		&impersonation); err != nil {
+		t.Fatalf("DuplicateTokenEx: %v", err)
+	}
+	defer windows.CloseHandle(windows.Handle(impersonation))
+
+	b, err := Load(loadLifecycleBOF(t, "hello_beacon.o"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	defer b.Close()
+	if err := b.SetSacrificialThread(5 * time.Second); err != nil {
+		t.Fatalf("SetSacrificialThread: %v", err)
+	}
+	b.SetExecuteAsToken(impersonation)
+
+	_, err = b.Execute(nil)
+	if err == nil {
+		t.Fatal("expected SetThreadToken error path; got nil — is the test running elevated?")
+	}
+	if !strings.Contains(err.Error(), "SetThreadToken") {
+		t.Errorf("error %q does not mention SetThreadToken", err)
 	}
 }
 

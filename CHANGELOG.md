@@ -48,6 +48,13 @@ introduce breaking API changes.
   bounds checks, `RaiseException`) can now unwind into their own
   handler frames instead of aborting. `Close` calls
   `RtlDeleteFunctionTable` before `VirtualFree`.
+- `runtime/bof`: `(*BOF).SetExecuteAsToken(windows.Token)` — pins
+  an impersonation token on the BOF's sacrificial thread via
+  `SetThreadToken` (applied between `CreateThread(SUSPENDED)` and
+  `ResumeThread`). Closes the historical limitation where the
+  sacrificial-thread path started under the host's primary token
+  regardless of what `BeaconUseToken` did inside the BOF. Zero —
+  the default — keeps the host token.
 
 ## v0.155.0 — slice 1.d: x86 BOF cross-process loader (2026-05-18)
 

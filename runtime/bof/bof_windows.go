@@ -137,6 +137,13 @@ type BOF struct {
 	// table entries pointing into it would leak unwind context.
 	pdataTable *windows.RUNTIME_FUNCTION
 	pdataCount uint32
+
+	// executeAsToken is the impersonation token the sacrificial
+	// path applies to the BOF thread (SetThreadToken between
+	// CreateThread+SUSPENDED and ResumeThread). Zero — the
+	// default — keeps the host's primary token. Has no effect on
+	// the inline path (sacrificialTimeout == 0).
+	executeAsToken windows.Token
 }
 
 // SetPersistent toggles state retention across multiple Execute
@@ -268,6 +275,38 @@ func (b *BOF) SetSpawnTo(path string) {
 		return
 	}
 	b.spawnToCStr = append([]byte(path), 0)
+}
+
+// SetExecuteAsToken configures an impersonation token the
+// sacrificial-thread path applies to the BOF thread before
+// ResumeThread (SetThreadToken between CreateThread+SUSPENDED and
+// ResumeThread). The BOF then executes under that identity —
+// closes the historical limitation where BeaconUseToken did not
+// "cross over" into the sacrificial thread (the host could
+// impersonate, but the BOF thread started under the primary
+// token regardless).
+//
+// Zero (default) keeps the host's primary token. Has no effect on
+// the inline Execute path (sacrificialTimeout == 0). The token is
+// caller-owned — the BOF does NOT call CloseHandle on it; the
+// operator who duplicated / opened the token is responsible for
+// its lifetime, which typically outlives many BOFs.
+//
+// Usage:
+//
+//	h, _ := windows.OpenProcessToken(targetProcess,
+//	    windows.TOKEN_DUPLICATE|windows.TOKEN_QUERY, &primaryToken)
+//	var dup windows.Token
+//	windows.DuplicateTokenEx(primaryToken, ...&dup)
+//	defer windows.CloseHandle(windows.Handle(dup))
+//
+//	b, _ := bof.Load(coffBytes)
+//	defer b.Close()
+//	b.SetSacrificialThread(5 * time.Second)
+//	b.SetExecuteAsToken(dup)
+//	_, _ = b.Execute(args)
+func (b *BOF) SetExecuteAsToken(t windows.Token) {
+	b.executeAsToken = t
 }
 
 // SetCaller installs an optional *wsyscall.Caller for the BOF's
