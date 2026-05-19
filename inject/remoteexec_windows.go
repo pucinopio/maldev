@@ -81,16 +81,11 @@ func RemoteExec(hProcess windows.Handle, exePath string, args []string, hidden b
 	}
 
 	// Create remote thread: shellcode at remoteBuf, parameter = command string.
-	threadHandle, _, err := api.ProcCreateRemoteThread.Call(
-		uintptr(hProcess), 0, 0,
-		remoteBuf,           // lpStartAddress
-		remoteBuf+cmdOffset, // lpParameter (command string)
-		0, 0,
-	)
-	if threadHandle == 0 {
-		return fmt.Errorf("CreateRemoteThread: %w", err)
+	threadHandle, err := CreateRemoteThreadWithCaller(hProcess, remoteBuf, remoteBuf+cmdOffset, nil)
+	if err != nil {
+		return err
 	}
-	defer windows.CloseHandle(windows.Handle(threadHandle))
+	defer windows.CloseHandle(threadHandle)
 
 	if waitMs > 0 {
 		windows.WaitForSingleObject(windows.Handle(threadHandle), waitMs)

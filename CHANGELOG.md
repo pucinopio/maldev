@@ -7,6 +7,24 @@ introduce breaking API changes.
 
 ## [Unreleased]
 
+### Added
+
+- `inject.CreateRemoteThreadWithCaller(h, entry, param, caller)` —
+  canonical primitive for "spawn a thread in a remote process via the
+  operator's `*wsyscall.Caller` or the kernel32 fallback". nil caller
+  routes through `kernel32!CreateRemoteThread`; non-nil through
+  `NtCreateThreadEx` (any wsyscall.Method × SSN-resolver combination).
+  Mirrors the existing `inject` Caller convention used by the alloc /
+  write helpers.
+
+### Changed
+
+- `inject/{injector_remote, pipeline, remoteexec, sectionmap}_windows.go`
+  refactored to use `CreateRemoteThreadWithCaller` — collapses ~70 lines
+  of inline `if caller != nil { NtCreateThreadEx } else { CreateRemoteThread }`
+  branches across four sites into single one-liner calls. Same external
+  behaviour; identified by the v0.156.0 reuse review.
+
 ### Fixed
 
 - `runtime/bof`: `BeaconFormatAlloc` buffers are now tracked on the

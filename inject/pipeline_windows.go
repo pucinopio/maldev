@@ -58,28 +58,11 @@ func CreateRemoteThreadExecutor(process windows.Handle, caller *wsyscall.Caller)
 }
 
 func (e *createRemoteThreadExec) Execute(addr uintptr) error {
-	if e.caller != nil {
-		var hThread uintptr
-		r, err := e.caller.Call("NtCreateThreadEx",
-			uintptr(unsafe.Pointer(&hThread)),
-			uintptr(api.ThreadAllAccess),
-			0, uintptr(e.process), addr, 0,
-			0, 0, 0, 0, 0,
-		)
-		if r != 0 {
-			return fmt.Errorf("NtCreateThreadEx: NTSTATUS 0x%X: %w", uint32(r), err)
-		}
-		windows.CloseHandle(windows.Handle(hThread))
-		return nil
+	hThread, err := CreateRemoteThreadWithCaller(e.process, addr, 0, e.caller)
+	if err != nil {
+		return err
 	}
-
-	hThread, _, err := api.ProcCreateRemoteThread.Call(
-		uintptr(e.process), 0, 0, addr, 0, 0, 0,
-	)
-	if hThread == 0 {
-		return fmt.Errorf("CreateRemoteThread failed: %w", err)
-	}
-	windows.CloseHandle(windows.Handle(hThread))
+	windows.CloseHandle(hThread)
 	return nil
 }
 

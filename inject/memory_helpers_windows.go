@@ -48,6 +48,50 @@ func findAllThreads(pid int) ([]uint32, error) {
 
 // --- Memory helpers (Caller-aware, nil falls back to standard WinAPI) ---
 
+// CreateRemoteThreadWithCaller spawns a thread at `entry` in the
+// remote process `h`. Optional *wsyscall.Caller routes through
+// NtCreateThreadEx (Direct / Indirect / IndirectAsm syscalls + the
+// operator's chosen SSN resolver) when non-nil; nil falls back to
+// kernel32!CreateRemoteThread. The lpParameter slot is honoured via
+// `param` so callers driving an entry under the Win64 ABI first-arg
+// convention can hand a remote address in rcx without a separate
+// WriteProcessMemory dance.
+//
+// Returns the thread handle (caller responsible for windows.CloseHandle)
+// or a non-nil error. Replaces ~4 inline copies of this branch across
+// inject/* + the same pattern in runtime/bof/* — every cross-process
+// thread-spawn surface in the repo can route here.
+//
+// Mirrors the inject/* Caller convention: nil caller = kernel32 path,
+// non-nil = Nt-syscall path with full operator control. Same THREAD_ALL_ACCESS
+// (api.ThreadAllAccess = 0x1FFFFF) the kernel32 wrapper requests under
+// the hood — caller observable rights match either path.
+func CreateRemoteThreadWithCaller(h windows.Handle, entry, param uintptr, caller *wsyscall.Caller) (windows.Handle, error) {
+	if caller != nil {
+		var hThread uintptr
+		r, err := caller.Call("NtCreateThreadEx",
+			uintptr(unsafe.Pointer(&hThread)),
+			uintptr(api.ThreadAllAccess),
+			0,
+			uintptr(h),
+			entry,
+			param,
+			0, 0, 0, 0, 0,
+		)
+		if r != 0 {
+			return 0, fmt.Errorf("NtCreateThreadEx: NTSTATUS 0x%X: %w", uint32(r), err)
+		}
+		return windows.Handle(hThread), nil
+	}
+	hThread, _, err := api.ProcCreateRemoteThread.Call(
+		uintptr(h), 0, 0, entry, param, 0, 0,
+	)
+	if hThread == 0 {
+		return 0, fmt.Errorf("CreateRemoteThread failed: %w", err)
+	}
+	return windows.Handle(hThread), nil
+}
+
 // allocateAndWriteMemoryRemoteWithCaller uses NT syscalls via the Caller to
 // allocate, write, and protect remote process memory. If caller is nil it
 // falls back to standard WinAPI (VirtualAllocEx / WriteProcessMemory / VirtualProtectEx).

