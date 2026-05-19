@@ -21,6 +21,16 @@ var (
 	bofMu      sync.Mutex
 	currentBOF *BOF
 
+	// beaconCBs holds one syscall.NewCallback thunk per Beacon API
+	// symbol the loader resolves. Each NewCallback call allocates an
+	// RX page from Go's runtime, so the full set (~28 symbols on the
+	// default build, 25 on the x86 path) costs ≈112 KB of RX pages
+	// at process startup the first time a BOF is Loaded. Pages live
+	// for the process lifetime — Go has no API to release them — and
+	// show up as small VAD entries with the syscall thunk pattern.
+	// OPSEC-visible but identical to every Go program that uses
+	// syscall.NewCallback (it's the same mechanism the standard
+	// library uses for IAT-style callbacks).
 	beaconCBsOnce sync.Once
 	beaconCBs     map[string]uintptr
 )

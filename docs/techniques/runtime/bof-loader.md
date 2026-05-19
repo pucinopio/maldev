@@ -588,10 +588,30 @@ for _, target := range targets {
   particular BOF needs more coverage.
 - **Concurrency: BOF execution is serialised package-wide.** The
   Beacon API stubs read a single `currentBOF` pointer guarded
-  by `bofMu`. Concurrent `Execute` calls block on each other.
-  This matches the CS-compatible loader convention (BOF
-  execution is fundamentally single-threaded) but is worth
-  knowing if a host program runs many BOFs in parallel.
+  by `bofMu`. Concurrent `Execute` calls — including across
+  *different* `*BOF` instances — block on each other. This
+  matches the CS-compatible loader convention (BOF execution is
+  fundamentally single-threaded) and keeps the Beacon callback
+  state coherent without per-call dispatch. Implications:
+
+  - **Setters (`SetUserData`, `SetSpawnTo`, `SetSpawnToX86`,
+    `SetCaller`, `SetPersistent`, `SetSacrificialThread`) are
+    NOT lock-protected.** They are safe to call before the
+    first `Execute` or between `Execute` calls; calling them
+    from a host goroutine while a sacrificial-thread Execute
+    is in flight is a race the package does not currently
+    guard against. The future Bundle-C per-`*BOF` mutex will
+    close that gap.
+  - **`Errors()` after `Close()` returns the FINAL Execute's
+    buffer**, not nil. The byte buffer is not zeroed at
+    teardown — post-mortem inspection works.
+  - **`syscall.NewCallback` cost at first Load.** Resolving
+    the Beacon import map allocates one RX page per callback
+    (~28 symbols on the default build → ≈112 KB of RX pages),
+    via Go's runtime. Pages live for the process lifetime and
+    show up as small VAD entries with the syscall thunk
+    pattern. Identical to every Go program that uses
+    `syscall.NewCallback`.
 - **x86 BOFs supported via cross-process reflective load (slice
   1.d, `-tags=bof_x86_loader`).** An x86 `.o` (`Machine == 0x014c`)
   is detected as `KindCOFFx86` by `DetectKind` and routed through

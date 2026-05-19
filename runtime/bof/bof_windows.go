@@ -306,6 +306,11 @@ func (b *BOF) SetSpawnToX86(path string) {
 // during the last Execute. Returns nil before the first Execute call.
 // The slice is a fresh copy — safe to retain after subsequent Execute
 // calls clear the underlying buffer.
+//
+// After Close, returns whatever the FINAL Execute wrote — the buffer
+// is not zeroed at teardown so post-mortem inspection still works.
+// Callers that re-Load and re-Execute observe a freshly-allocated
+// buffer (Execute resets it via newBeaconOutput).
 func (b *BOF) Errors() []byte {
 	if b.errors == nil {
 		return nil
@@ -499,8 +504,13 @@ func (b *BOF) installStream(out chan<- []byte) {
 	b.pendingStream = out
 }
 
-// syscallN is a thin wrapper around windows.NewCallback-style calling.
-// We use the raw syscall approach to call into the BOF entry.
+// syscallN dispatches to syscall.Syscall with a small arity table.
+// Capped at four arguments — the BOF entry signature is always
+// `void go(char *args, int len)` (2 args). The default branch is a
+// belt-and-braces fallback for future entry shapes, NOT a generic
+// variadic syscall helper; the first three args are passed and the
+// rest are silently dropped. Don't grow the cap unless the BOF
+// calling convention itself grows.
 func syscallN(addr uintptr, args ...uintptr) {
 	switch len(args) {
 	case 0:
