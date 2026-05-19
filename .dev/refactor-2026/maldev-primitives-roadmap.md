@@ -81,11 +81,11 @@ adds orchestration on top.
 | ID | Status | Commit | Scope | Package target |
 |---|---|---|---|---|
 | M9   | 🟦 | — | Browser credential harvest (Chrome SQLite + Local State + DPAPI v10 master key) | `credentials/browser/` — `modernc.org/sqlite` + extend maldev DPAPI from sekurlsa scope to non-LSASS |
-| M10  | 🟦 | — | Lateral PsExec-style SMB | `lateral/psexec` — fork `bishopfox/sliver`'s implementation (BSD) |
-| M11  | 🟦 | — | Lateral WMI exec | `lateral/wmi` — `microsoft/wmi` Go + `go-ole/go-ole` |
-| M12  | 🟦 | — | Lateral WinRM | `lateral/winrm` — `masterzen/winrm` + Kerberos auth wrapper |
-| M13  | 🟦 | — | Lateral DCOM (MMC20.Application / ShellWindows / ExcelDDE) | `lateral/dcom` — port from C# `SharpDCOM` / Impacket `dcomexec.py` (~2 weeks) |
-| M14  | 🟦 | — | NTDS dump (DIT parser + Esent + krbtgt extraction) | `credentials/ntds` — heavy effort, port from `secretsdump.py` |
+| M10  | 🟦 | — | Lateral PsExec-style SMB | `lateral/psexec` — adapt `mandiant/gopacket` SMB layer (impacket-in-Go) |
+| M11  | 🟦 | — | Lateral WMI exec | `lateral/wmi` — adapt `mandiant/gopacket` wmiexec (impacket-in-Go) instead of go-ole port |
+| M12  | 🟦 | — | Lateral WinRM | `lateral/winrm` — `masterzen/winrm` + Kerberos auth wrapper (out of mandiant/gopacket scope) |
+| M13  | 🟦 | — | Lateral DCOM (MMC20.Application / ShellWindows / ExcelDDE) | `lateral/dcom` — check `mandiant/gopacket` dcomexec first; fall back to SharpDCOM port if absent |
+| M14  | 🟦 | — | NTDS dump (DIT parser + Esent + krbtgt extraction) | `credentials/ntds` — adapt `mandiant/gopacket` secretsdump (massive win vs hand-porting from Python) |
 
 ### P1 — Kerberos completion
 
@@ -142,7 +142,8 @@ si nécessaire, pas de solution de lâche"*. Per-row decisions:
 | LDAP | `go-ldap/ldap/v3` | MIT | adopt |
 | Kerberos | `jcmturner/gokrb5/v8` | Apache-2 | adopt (best Go krb5) |
 | BloodHound | nothing in Go | — | **port C# collector JSON format** |
-| TCP raw / SYN | `github.com/mandiant/gopacket` (active fork of google/gopacket — Mandiant keeps it current; the upstream is in maintenance mode) | BSD | adopt |
+| TCP raw / SYN | `github.com/google/gopacket` (upstream, BSD) OR a Mandiant-maintained mirror — **NOT confused with mandiant/gopacket below, which is something else** | BSD | adopt |
+| Impacket-class primitives (WMI exec, SMB client, secretsdump, etc.) | **`github.com/mandiant/gopacket`** — a Go reimplementation of Python Impacket (WMI, SMB, DCERPC, krb5). Despite the package name colliding with google/gopacket, **this is unrelated** — Mandiant's gopacket is the impacket-in-Go effort | BSD-class (verify on add) | **adopt** — covers M10 / M11 / M13 / M14 baselines |
 | SQLite (Chrome creds) | `modernc.org/sqlite` | BSD-3 | adopt (CGO-free) |
 | YAML (sigma) | `goccy/go-yaml` | MIT | adopt |
 | Sigma AST | `bradleyjkemp/sigma-go` | MIT | adopt for AST, custom for emission |
@@ -153,6 +154,18 @@ Reality check on the "no laziness" directive: **Sliver and ligolo
 both have license problems for an MIT-licensed maldev**. We can
 study their architecture freely but can't fork the code. The
 effort estimates assume reimplementation.
+
+**Major library find (operator-flagged 2026-05-19)**:
+`github.com/mandiant/gopacket` is a **Go reimplementation of
+Impacket** — covers WMI exec, SMB client (incl. PsExec patterns),
+DCERPC, krb5 primitives, and secretsdump-style credential
+extraction. The package name collides confusingly with
+`github.com/google/gopacket` (packet capture, unrelated). Adopt
+mandiant/gopacket for M10 / M11 / M13 / M14 baselines instead of
+the Python-port effort estimates that previously sat in those
+rows. Effort drops from "1-3 weeks per technique" to "1-2 weeks
+of integration + maldev-side wrapping for Caller / Opener
+plumbing".
 
 ## Composability principles (carried from current maldev)
 
