@@ -481,10 +481,20 @@ func PackBinary(input []byte, opts PackBinaryOptions) ([]byte, []byte, error) {
 	isPE := transform.DetectFormat(out) == transform.FormatPE
 
 	// Phase 2-B: per-pack random TimeDateStamp.
+	//
+	// Seed != 0 ⇒ bit-for-bit reproducible build: anchor on
+	// deterministicTimestampAnchor so back-to-back packs (and packs
+	// across machines / CI / time) produce identical output. The
+	// "recently linked" window is preserved relative to the anchor.
+	// Seed == 0 ⇒ wall-clock entropy is the right default.
 	if opts.RandomizeTimestamp && isPE {
+		nowEpoch := uint32(time.Now().Unix())
+		if opts.Seed != 0 {
+			nowEpoch = deterministicTimestampAnchor
+		}
 		ts := transform.RandomTimeDateStamp(
 			rand.New(rand.NewSource(masterSeed+seedOffsetTimestamp)),
-			uint32(time.Now().Unix()))
+			nowEpoch)
 		if perr := transform.PatchPETimeDateStamp(out, ts); perr != nil {
 			return nil, nil, fmt.Errorf("packer: patch timestamp: %w", perr)
 		}
@@ -698,6 +708,16 @@ func validatePackBinaryInput(opts PackBinaryOptions, input []byte) error {
 // huge default cmdlines should re-think — most Windows loaders cap
 // CommandLine at hundreds of bytes.
 const maxConvertEXEtoDLLDefaultArgsRunes = 1500
+
+// deterministicTimestampAnchor is the wall-clock substitute used
+// for [PackBinaryOptions.RandomizeTimestamp] when [PackBinaryOptions.Seed]
+// is non-zero. Pinning to a release-stable epoch lets seeded packs
+// reproduce bit-for-bit across machines and across the wall clock,
+// while the "5 years backward" plausibility window stays intact
+// relative to the anchor. Bump at minor-release boundaries so the
+// generated TimeDateStamps remain plausibly recent for fresh
+// shipments. 2026-01-01 00:00:00 UTC.
+const deterministicTimestampAnchor uint32 = 1767225600
 
 // Per-randomiser seed offsets keep each opt-block's math/rand
 // stream independent when multiple Randomize* flags fire on the
