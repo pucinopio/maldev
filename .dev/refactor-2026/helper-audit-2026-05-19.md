@@ -47,7 +47,19 @@ Examples of patterns that LOOK helper-worthy but aren't:
 
 ## Real candidates (3 found, all P3)
 
-### C1 — `inject.AllocRemoteWithCaller` / `WriteRemoteWithCaller` / `CreateRemoteThreadWithCaller`
+### C1 — `inject.CreateRemoteThreadWithCaller` ✅ **shipped commit `bcfcdf6`**
+
+`AllocRemoteWithCaller` / `WriteRemoteWithCaller` are deferred —
+the existing private `allocateAndWriteMemoryRemoteWithCaller`
+(combined alloc+write+protect to RX) covers the shellcode-style
+use cases inject already serves; exporting the three primitives
+separately is a second-order refactor that should land only if a
+real consumer needs the granularity. The `CreateRemoteThread`
+piece, by contrast, was duplicated across 4 inline sites — that's
+the win this commit captured.
+
+### C1 — original scope (kept here for design context)
+
 
 Flagged by the Bundle B reuse reviewer. The current state:
 
