@@ -101,9 +101,8 @@ adds orchestration on top.
 
 | ID | Status | Commit | Scope | Package target |
 |---|---|---|---|---|
-| M20a | 🟦 | — | TCP connect scanner (pure Go, no raw socket) | `recon/scan/connect` — `net.DialTimeout`, no deps, ~100 LOC. Covers 70% of operator needs. |
-| M20b | 🟦 | — | TCP SYN scanner (raw socket, stealth) | `recon/scan/syn` — `syscall.Socket(SOCK_RAW)` + manual IP+TCP header crafting (Linux: CAP_NET_RAW, Windows: SIO_RCVALL). **Pure Go, NO libpcap / Npcap / CGO.** ~300-400 LOC. |
-| M21  | 🟦 | — | Service fingerprinter (banner grab + version detect) | `recon/scan/fingerprint` — pure-Go banner grab + matcher against vendored `nmap-services-probes` corpus. ~200 LOC + matcher. |
+| M20  | 🟦 | — | TCP scanner (SYN + connect + service fingerprint + version detect) | `recon/scan` — wrap `github.com/Ullaakut/nmap/v3`. **Operator stages `nmap.exe` alongside the implant** (or runs the scan server-side). No pure-Go reimplementation — nmap's signature database + probe corpus + OS fingerprinting is too large to maintain ourselves. |
+| M21  | 🟦 | — | Service fingerprinter (version detect) | Covered by M20 — nmap's `-sV` provides this. |
 | M22  | 🟦 | — | LDAP / AD enumerator (users / groups / GPOs / SPNs / delegation) | `recon/ldap` — `go-ldap/ldap/v3` |
 | M23  | 🟦 | — | BloodHound-compatible collector (JSON SharpHound format) | `recon/bloodhound` — port C# collector format |
 | M24  | 🟦 | — | DNS enumerator (subdomain / record types) | `recon/dnsenum` — `miekg/dns` |
@@ -143,8 +142,7 @@ si nécessaire, pas de solution de lâche"*. Per-row decisions:
 | LDAP | `go-ldap/ldap/v3` | MIT | adopt |
 | Kerberos | `jcmturner/gokrb5/v8` | Apache-2 | adopt (best Go krb5) |
 | BloodHound | nothing in Go | — | **port C# collector JSON format** |
-| TCP scan API shape | `github.com/Ullaakut/nmap` — model for the `Scanner` / `Hosts` / `Ports` type surface ONLY. **Do NOT depend on it at runtime** — it shells out to `nmap.exe`, which an implant doesn't have. Re-implement the engine in pure Go (M20a + M20b) keeping a similar API for familiarity. | MIT | API model only |
-| TCP raw socket primitives | Go stdlib `syscall.Socket` + manual IP/TCP header struct packing | — | build in maldev (pure Go, no libpcap / Npcap / CGO) |
+| TCP scanner | `github.com/Ullaakut/nmap/v3` — wrapper around `nmap.exe`. Operator stages the nmap binary alongside the implant (or runs scans server-side). The wrapper itself is pure Go; the nmap binary is the only non-Go dep, but ships standalone. | MIT | adopt as-is |
 | Impacket-class primitives (WMI exec, SMB client, secretsdump, etc.) | **`github.com/mandiant/gopacket`** — a Go reimplementation of Python Impacket (WMI, SMB, DCERPC, krb5). Despite the package name colliding with google/gopacket, **this is unrelated** — Mandiant's gopacket is the impacket-in-Go effort | BSD-class (verify on add) | **adopt** — covers M10 / M11 / M13 / M14 baselines |
 | SQLite (Chrome creds) | `modernc.org/sqlite` | BSD-3 | adopt (CGO-free) |
 | YAML (sigma) | `goccy/go-yaml` | MIT | adopt |
@@ -163,17 +161,14 @@ Impacket** — covers WMI exec, SMB client (incl. PsExec patterns),
 DCERPC, krb5 primitives, and secretsdump-style credential
 extraction.
 
-**Major library decision #2 (operator-flagged 2026-05-19)**:
-For network scanning (M20+), we DO NOT depend on
-`Ullaakut/nmap` at runtime — it's a wrapper that shells out to
-`nmap.exe`, which an implant can't assume. We use its API surface
-(`Scanner` / `Hosts` / `Ports` types) as a familiarity model and
-re-implement the engine in pure Go (no CGO, no libpcap / Npcap).
-Split: M20a (TCP connect, ~100 LOC, covers most ops), M20b
-(SYN raw socket, ~300-400 LOC, stealth tier). OS fingerprinting
-(nmap's `osscan` — 200+ probes against a signature DB) is
-out of scope; NSE scripts are replaced by hand-written Go
-"checks" if a specific protocol probe is needed. The package name collides confusingly with
+**Major library decision #2 (operator-flagged 2026-05-19, REVISED)**:
+For network scanning (M20+), adopt `github.com/Ullaakut/nmap/v3`
+as-is — operator stages `nmap.exe` alongside the implant (or runs
+scans server-side from the teamserver). Re-implementing nmap's
+SYN engine + service probe corpus + OS fingerprinting in pure Go
+is multi-month and pointless when nmap's binary covers everything
+already. The wrapper is pure Go; nmap.exe is the only non-Go
+dependency, and it ships as a standalone executable. The package name collides confusingly with
 `github.com/google/gopacket` (packet capture, unrelated). Adopt
 mandiant/gopacket for M10 / M11 / M13 / M14 baselines instead of
 the Python-port effort estimates that previously sat in those
