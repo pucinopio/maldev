@@ -1,7 +1,5 @@
 ---
 package: github.com/oioio-space/maldev/c2/pivot/socks5
-last_reviewed: 2026-05-19
-reflects_commit: pending
 ---
 
 # SOCKS5 pivoting
