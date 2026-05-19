@@ -101,7 +101,7 @@ adds orchestration on top.
 
 | ID | Status | Commit | Scope | Package target |
 |---|---|---|---|---|
-| M20  | 🟦 | — | TCP SYN scanner (stealth, rate-limited) | `recon/scan/syn` — `gopacket` (Mandiant/Google, BSD) + raw socket |
+| M20  | 🟦 | — | TCP SYN scanner (stealth, rate-limited) | `recon/scan/syn` — `github.com/mandiant/gopacket` (active fork, BSD) + raw socket |
 | M21  | 🟦 | — | Service fingerprinter (banner grab + version detect) | `recon/scan/fingerprint` — custom + nmap-probe corpus |
 | M22  | 🟦 | — | LDAP / AD enumerator (users / groups / GPOs / SPNs / delegation) | `recon/ldap` — `go-ldap/ldap/v3` |
 | M23  | 🟦 | — | BloodHound-compatible collector (JSON SharpHound format) | `recon/bloodhound` — port C# collector format |
@@ -142,7 +142,7 @@ si nécessaire, pas de solution de lâche"*. Per-row decisions:
 | LDAP | `go-ldap/ldap/v3` | MIT | adopt |
 | Kerberos | `jcmturner/gokrb5/v8` | Apache-2 | adopt (best Go krb5) |
 | BloodHound | nothing in Go | — | **port C# collector JSON format** |
-| TCP raw / SYN | `gopacket` | BSD | adopt |
+| TCP raw / SYN | `github.com/mandiant/gopacket` (active fork of google/gopacket — Mandiant keeps it current; the upstream is in maintenance mode) | BSD | adopt |
 | SQLite (Chrome creds) | `modernc.org/sqlite` | BSD-3 | adopt (CGO-free) |
 | YAML (sigma) | `goccy/go-yaml` | MIT | adopt |
 | Sigma AST | `bradleyjkemp/sigma-go` | MIT | adopt for AST, custom for emission |

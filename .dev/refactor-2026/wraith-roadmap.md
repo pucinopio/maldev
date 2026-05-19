@@ -210,7 +210,7 @@ Don't fork — implement the pivoting model fresh on top of
 
 | Need | Library | Status |
 |---|---|---|
-| TCP SYN scanner | `gopacket` (Mandiant/Google, BSD) + raw socket | adopt |
+| TCP SYN scanner | `github.com/mandiant/gopacket` (active fork, BSD) + raw socket | adopt |
 | Service fingerprinter | `projectdiscovery/nuclei` recipes OR custom banner-grab | evaluate |
 | LDAP enumerator | `go-ldap/ldap/v3` | adopt |
 | BloodHound collector | port `BloodHoundAD/SharpHound`'s collector format from C# | **port effort** — JSON spec is public |
