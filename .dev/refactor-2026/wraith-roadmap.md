@@ -1,12 +1,20 @@
 ---
-status: planning — awaiting architectural decision
+status: planning — architectural decision confirmed (sibling module)
 opened: 2026-05-19
 owner: oioio-space
-scope: WRAITH C2 framework + maldev integration points
-companion: docs/conventions/documentation.md (style), CLAUDE.md (discipline)
+scope: WRAITH C2 framework — orchestration layer ONLY
+companion: maldev-primitives-roadmap.md (every primitive lives in maldev, this file plans only what orchestrates them)
+sibling_decision: 2026-05-19 — separate module github.com/oioio-space/wraith
+maldev_pin: v0.156.0+ (track maldev minor bumps as we add primitives)
 ---
 
 # WRAITH roadmap — gap closure from maldev v0.156.0
+
+**Scope clarified 2026-05-19**: this file plans the orchestration
+layer only. **All listeners, forwarders, lateral movement
+primitives, Kerberos primitives, hollowing, browser creds, recon
+primitives, lure generators, format emitters** live in maldev —
+see `maldev-primitives-roadmap.md`. WRAITH consumes them.
 
 > **Read this file first** when resuming WRAITH work on another
 > machine or after a session break. It is the canonical view of
