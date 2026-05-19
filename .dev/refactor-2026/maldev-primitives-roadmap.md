@@ -1,6 +1,8 @@
 ---
-status: planning — ready for execution
+status: execution underway — M8 closed
 opened: 2026-05-19
+last_reviewed: 2026-05-19
+reflects_commit: d675a67
 owner: oioio-space
 scope: maldev — missing primitives for downstream consumers (WRAITH and any other C2 framework)
 companion: wraith-roadmap.md (orchestration layer lives there, NOT here)
@@ -74,7 +76,7 @@ adds orchestration on top.
 
 | ID | Status | Commit | Scope | Package target |
 |---|---|---|---|---|
-| M8  | 🟦 | — | Process hollowing (CreateProcessW SUSPEND + NtUnmapView + WriteProcessMemory + SetContext + Resume) | `inject/hollow_windows.go` (~200 LOC) |
+| M8  | ✅ | `d675a67` | Process hollowing — `inject.Hollow(HollowConfig) (*HollowResult, error)`. PEB-based unmap, fallback alloc, x86 reject, 18/18 VM tests + 14-cell Caller × SSN-resolver matrix. Limitations: no base-reloc (PIE-only without it), no TLS callbacks, PPL targets refuse unmap. | `inject/hollow_windows.go` |
 
 ### P1 — Post-exploitation primitives
 
