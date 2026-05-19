@@ -8,7 +8,52 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/windows"
+
+	wsyscall "github.com/oioio-space/maldev/win/syscall"
 )
+
+// TestBOF_SetCaller_RoundTrip pins the SetCaller getter/setter:
+// stores the supplied *wsyscall.Caller on the *BOF where the
+// cross-process Beacon API helpers (beaconRemoteAlloc / Write /
+// CreateThread) can read it. nil restores the kernel32 path.
+func TestBOF_SetCaller_RoundTrip(t *testing.T) {
+	b := &BOF{}
+	require.Nil(t, b.caller)
+
+	c := wsyscall.New(wsyscall.MethodWinAPI, nil)
+	b.SetCaller(c)
+	assert.Same(t, c, b.caller)
+
+	b.SetCaller(nil)
+	assert.Nil(t, b.caller)
+}
+
+// TestBeaconRemoteAlloc_LocalProcess_RoundTrip exercises the
+// Caller-aware allocator against the current process. With
+// caller=nil the path is kernel32!VirtualAllocEx; with
+// caller=MethodWinAPI the path is also kernel32 (Caller routes
+// "NtAllocateVirtualMemory" to ntdll!NtAllocateVirtualMemory). Both
+// must return a non-zero base, and the allocation must be readable
+// + freeable via the standard windows.VirtualFree.
+func TestBeaconRemoteAlloc_LocalProcess_RoundTrip(t *testing.T) {
+	const size = 4096
+	self := windows.CurrentProcess()
+
+	for _, tc := range []struct {
+		name   string
+		caller *wsyscall.Caller
+	}{
+		{"nil_falls_back_to_kernel32", nil},
+		{"WinAPI_Caller_through_ntdll", wsyscall.New(wsyscall.MethodWinAPI, nil)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			addr := beaconRemoteAlloc(tc.caller, self, size, windows.PAGE_READWRITE)
+			require.NotZero(t, addr, "allocation must succeed")
+			require.NoError(t, windows.VirtualFree(addr, 0, windows.MEM_RELEASE))
+		})
+	}
+}
 
 // TestBOF_SetUserData_RoundTrip — SetUserData copies the slice so callers
 // can mutate the original buffer without disturbing the BOF; clearing

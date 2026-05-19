@@ -505,6 +505,18 @@ for _, target := range targets {
   automatically when the next `Execute` starts and on `Close()`.
   A BOF that crashes mid-call no longer leaks its format buffer
   for the process lifetime.
+- **Cross-process Beacon API routes via optional `*wsyscall.Caller`.**
+  `BeaconInjectProcess` and the spawn/inject combos use
+  `VirtualAllocEx` + `WriteProcessMemory` + `CreateRemoteThread`
+  by default. Operators that need to bypass userland hooks on
+  these kernel32 surfaces call
+  [`(*BOF).SetCaller`](https://pkg.go.dev/github.com/oioio-space/maldev/runtime/bof#BOF.SetCaller)
+  with any `*wsyscall.Caller` (direct / indirect / indirect-asm /
+  hells-gate). The helpers (`beaconRemoteAlloc`,
+  `beaconRemoteWrite`, `beaconRemoteCreateThread`) then route
+  through `NtAllocateVirtualMemory` / `NtWriteVirtualMemory` /
+  `NtCreateThreadEx`. nil Caller keeps the kernel32 path —
+  matches the convention used across [`inject`](../injection/README.md).
 - **Pointer-safety probes on `%s` / Beacon string reads.**
   `BeaconPrintf("%s", p)` (and any callback that dereferences a
   BOF-supplied `char*` / `wchar_t*`) routes through

