@@ -1,10 +1,5 @@
 package license
 
-import (
-	"crypto/sha256"
-	"encoding/hex"
-)
-
 // Domain tags ensure a signature over one message type can never be replayed
 // as a signature over another. Each tag is appended verbatim (with the NUL
 // terminator) to the canonical bytes before Ed25519 signing/verification.
@@ -20,13 +15,4 @@ func signPayload(tag string, canonical []byte) []byte {
 	out = append(out, tag...)
 	out = append(out, canonical...)
 	return out
-}
-
-func sha256Hex(b []byte) string {
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
-}
-
-func hexEncode(b []byte) string {
-	return hex.EncodeToString(b)
 }

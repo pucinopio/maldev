@@ -6,14 +6,19 @@ package seal
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"io"
 
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/curve25519"
+	"golang.org/x/crypto/hkdf"
 )
 
-const ephPubLen = 32
+const (
+	ephPubLen = 32
+	hkdfInfo  = "maldev-seal-v1\x00"
+)
 
 // GenerateRecipient returns a fresh X25519 keypair (pub, priv).
 func GenerateRecipient() ([]byte, []byte, error) {
@@ -28,9 +33,22 @@ func GenerateRecipient() ([]byte, []byte, error) {
 	return pub, priv, nil
 }
 
+// deriveKey turns a raw X25519 shared secret into a uniformly random AEAD key.
+// The ephemeral public key is fed in as salt so the key is bound to this
+// specific exchange.
+func deriveKey(shared, ephPub []byte) ([]byte, error) {
+	r := hkdf.New(sha256.New, shared, ephPub, []byte(hkdfInfo))
+	key := make([]byte, chacha20poly1305.KeySize)
+	if _, err := io.ReadFull(r, key); err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
 // Seal encrypts plaintext to recipientPub using an ephemeral X25519 key exchange
-// and XChaCha20-Poly1305 AEAD. The ephemeral public key is authenticated as AAD
-// so the ciphertext is bound to the specific key exchange.
+// and XChaCha20-Poly1305 AEAD. The ephemeral public key is fed into HKDF as
+// salt and also authenticated as AAD so the ciphertext is bound to the specific
+// key exchange.
 func Seal(recipientPub, plaintext []byte) ([]byte, error) {
 	if len(recipientPub) != 32 {
 		return nil, errors.New("seal: recipientPub must be 32 bytes")
@@ -47,7 +65,11 @@ func Seal(recipientPub, plaintext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	aead, err := chacha20poly1305.NewX(shared)
+	key, err := deriveKey(shared, ephPub)
+	if err != nil {
+		return nil, err
+	}
+	aead, err := chacha20poly1305.NewX(key)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +97,11 @@ func Open(recipientPriv, sealed []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	aead, err := chacha20poly1305.NewX(shared)
+	key, err := deriveKey(shared, ephPub)
+	if err != nil {
+		return nil, err
+	}
+	aead, err := chacha20poly1305.NewX(key)
 	if err != nil {
 		return nil, err
 	}

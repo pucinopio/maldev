@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"time"
+
+	"github.com/oioio-space/maldev/license/internal/fileutil"
 )
 
 // State is the local cross-invocation memory of Verify. Persisted under
@@ -38,7 +39,7 @@ func writeState(path string, key []byte, s State) error {
 	if err != nil {
 		return err
 	}
-	return atomicWriteState(path, raw)
+	return fileutil.AtomicWrite(path, ".state-*.tmp", raw)
 }
 
 func readState(path string, key []byte) (State, error) {
@@ -61,31 +62,6 @@ func readState(path string, key []byte) (State, error) {
 		return s, err
 	}
 	return s, nil
-}
-
-func atomicWriteState(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	f, err := os.CreateTemp(dir, ".state-*.tmp")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
-	defer os.Remove(tmp)
-	if _, err := f.Write(data); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
 }
 
 // deriveStateKey produces a 32-byte HMAC key bound to (license signature ||

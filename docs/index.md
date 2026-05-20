@@ -390,7 +390,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 
 </details>
 
-<details><summary><strong>license</strong> — 10 packages</summary>
+<details><summary><strong>license</strong> — 11 packages</summary>
 
 | Package | Detection | Summary |
 |---|---|---|
@@ -400,6 +400,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 | [`license/hostid`](https://pkg.go.dev/github.com/oioio-space/maldev/license/hostid) | — | produces a 32-byte machine fingerprint by mixing OS-provided identifiers (registry MachineGuid on Windows, /etc/machine-id on Linux, IOPlatformUUID on darwin) through sha256 |
 | [`license/identity`](https://pkg.go.dev/github.com/oioio-space/maldev/license/identity) | — | holds a 32-byte build-time identity registered by the consumer binary (typically via //go:embed identity.bin and a call to Set) |
 | [`license/identity/cmd/gen-identity`](https://pkg.go.dev/github.com/oioio-space/maldev/license/identity/cmd/gen-identity) | — | gen-identity writes 32 random bytes to ./identity.bin if absent |
+| [`license/internal/fileutil`](https://pkg.go.dev/github.com/oioio-space/maldev/license/internal/fileutil) | — | provides shared filesystem helpers for the license package and its sub-packages |
 | [`license/ntp`](https://pkg.go.dev/github.com/oioio-space/maldev/license/ntp) | — | performs a minimal unauthenticated SNTPv4 query suitable as a soft cross-check of the local clock |
 | [`license/revoke`](https://pkg.go.dev/github.com/oioio-space/maldev/license/revoke) | — | _(no doc.go summary)_ |
 | [`license/seal`](https://pkg.go.dev/github.com/oioio-space/maldev/license/seal) | — | encrypts opaque payloads to a recipient identified by an X25519 public key |

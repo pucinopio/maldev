@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/oioio-space/maldev/license/identity"
 )
@@ -23,6 +24,27 @@ func HashFile(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+// selfHash caches the hash of os.Executable for the process lifetime. The
+// running binary cannot change under a live process, so re-reading and
+// re-hashing on every Verify is pure waste.
+var (
+	selfHashOnce sync.Once
+	selfHashVal  string
+	selfHashErr  error
+)
+
+func selfBinaryHash() (string, error) {
+	selfHashOnce.Do(func() {
+		path, err := os.Executable()
+		if err != nil {
+			selfHashErr = err
+			return
+		}
+		selfHashVal, selfHashErr = HashFile(path)
+	})
+	return selfHashVal, selfHashErr
+}
+
 // HashIdentity is a convenience re-export to avoid callers importing the
 // identity sub-package just to compute a hash for License.IdentitySHA256.
 func HashIdentity(b []byte) string { return identity.HashIdentity(b) }
@@ -38,15 +60,8 @@ func checkPinning(lic License, s *verifyState) cause {
 		return causeOK
 	}
 	if haveDisk {
-		path, err := os.Executable()
-		if err != nil {
-			return causeBinaryHashMismatch
-		}
-		got, err := HashFile(path)
-		if err != nil {
-			return causeBinaryHashMismatch
-		}
-		if got != lic.BinarySHA256 {
+		got, err := selfBinaryHash()
+		if err != nil || got != lic.BinarySHA256 {
 			return causeBinaryHashMismatch
 		}
 	}

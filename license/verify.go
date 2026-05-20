@@ -139,8 +139,11 @@ func Verify(data []byte, trusted Trusted, opts ...VerifyOption) (*Verified, erro
 		}
 	}
 
-	// 10. Heartbeat.
-	if state.heartbeatClient != nil {
+	// 10. Heartbeat. Skip the ping if a successful one happened within
+	// heartbeatInterval — turns the option into a rate-limit rather than a
+	// per-Verify round-trip.
+	if state.heartbeatClient != nil &&
+		(state.heartbeatInterval <= 0 || now.Sub(st.LastHeartbeatOk) >= state.heartbeatInterval) {
 		nonce := make([]byte, 16)
 		_, _ = rand.Read(nonce)
 		reply, raw, herr := state.heartbeatClient.Ping(state.ctx, w.License.ID, nonce)

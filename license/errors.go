@@ -1,9 +1,6 @@
 package license
 
-import (
-	"errors"
-	"fmt"
-)
+import "errors"
 
 // ErrLicenseInvalid is the single public error returned by Verify and related
 // entry points. Detailed causes are logged via the injected slog.Logger but
@@ -75,8 +72,8 @@ func (c cause) String() string {
 	}
 }
 
-// invalid wraps ErrLicenseInvalid with an internal cause for logging without
-// leaking the cause to the caller's error string.
-func invalid(c cause) error {
-	return fmt.Errorf("%w (%s)", ErrLicenseInvalid, c)
-}
+// invalid returns the opaque public sentinel. The cause is intentionally not
+// embedded in the returned error: an attacker reading err.Error() must not
+// learn which check failed. Causes are routed to slog separately via
+// verifyState.fail.
+func invalid(_ cause) error { return ErrLicenseInvalid }

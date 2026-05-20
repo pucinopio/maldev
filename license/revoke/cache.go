@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/oioio-space/maldev/license/internal/fileutil"
 )
 
 // cacheMu guards monotonic sequence updates across concurrent Verify calls.
@@ -27,7 +28,7 @@ func StoreCache(path string, signed []byte, seq uint64) error {
 		return fmt.Errorf("revoke: sequence regression (%d < %d)", seq, cur)
 	}
 	minStore[path] = seq
-	return atomicWrite(path, signed)
+	return fileutil.AtomicWrite(path, ".cache-*.tmp", signed)
 }
 
 // LoadCache reads, verifies, and returns the cached list. Errors if the cache
@@ -56,27 +57,3 @@ func LoadCache(path string, pub ed25519.PublicKey, kid string, now time.Time) (*
 	return l, nil
 }
 
-func atomicWrite(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	f, err := os.CreateTemp(dir, ".cache-*.tmp")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
-	defer os.Remove(tmp)
-	if _, err := f.Write(data); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
-}
