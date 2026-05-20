@@ -21,6 +21,7 @@ require (
 	github.com/refraction-networking/utls v1.6.7
 	github.com/saferwall/pe v1.5.6
 	github.com/secDre4mer/pkcs7 v0.0.0-20240322103146-665324a4461d
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/stretchr/testify v1.11.1
 	github.com/tc-hib/winres v0.2.1
 	github.com/twitchyliquid64/golang-asm v0.15.1
@@ -39,10 +40,9 @@ require (
 	github.com/cloudflare/circl v1.3.7 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/edsrzf/mmap-go v1.1.0 // indirect
-	github.com/google/uuid v1.2.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e // indirect
 	golang.org/x/image v0.12.0 // indirect
 )
