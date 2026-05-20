@@ -134,31 +134,22 @@ func (t *UTLS) Connect(ctx context.Context) error {
 		sni = host
 	}
 
-	dialer := &net.Dialer{Timeout: t.timeout}
-	rawConn, err := dialer.DialContext(ctx, "tcp", t.address)
-	if err != nil {
-		return fmt.Errorf("TCP dial: %w", err)
-	}
-
-	tlsConfig := &utls.Config{
+	cfg := &utls.Config{
 		ServerName:         sni,
 		InsecureSkipVerify: t.insecure,
 	}
-
 	if t.fingerprint != "" {
-		tlsConfig.InsecureSkipVerify = true
-		tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+		cfg.InsecureSkipVerify = true
+		cfg.VerifyPeerCertificate = func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 			return verifyFP(rawCerts, t.fingerprint)
 		}
 	}
 
-	tlsConn := utls.UClient(rawConn, tlsConfig, t.profile.helloID())
-	if err := tlsConn.HandshakeContext(ctx); err != nil {
-		rawConn.Close()
-		return fmt.Errorf("uTLS handshake (%s): %w", t.profile, err)
+	conn, err := UTLSDialer(cfg, t.profile.helloID(), t.timeout)(ctx, "tcp", t.address)
+	if err != nil {
+		return fmt.Errorf("uTLS dial (%s): %w", t.profile, err)
 	}
-
-	t.conn = tlsConn
+	t.conn = conn
 	return nil
 }
 
