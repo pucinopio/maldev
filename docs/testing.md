@@ -587,6 +587,23 @@ tests continue to PASS.
   multi-package runs must pass a single `./...` glob, commas, or invoke
   the runner once per package.
 
+## License (`license/`)
+
+VM-tagged tests in the license package run only with `-tags vmtest`. They are skipped on the host suite to avoid relying on machine-id files or per-OS storage.
+
+| Test | VM | What it verifies |
+|---|---|---|
+| `TestHostIDLocal_Real` | windows, linux | Real read of MachineGuid / /etc/machine-id |
+| `TestBinaryPinning_HashFileStable` | windows, linux | HashFile is deterministic across two reads |
+| `TestIdentityPinning_RoundTrip` | windows, linux | Full identity-pinning Verify path |
+
+Run from the host:
+
+```
+./scripts/vm-run-tests.sh windows "./license/..." "-v -count=1 -tags vmtest"
+./scripts/vm-run-tests.sh linux "./license/..." "-count=1 -tags vmtest"
+```
+
 ## Known Limitations
 
 | Issue | Impact | Workaround |
