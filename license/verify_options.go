@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/oioio-space/maldev/license/heartbeat"
 	"github.com/oioio-space/maldev/license/revoke"
 )
 
@@ -34,6 +35,9 @@ type verifyState struct {
 	revokeRefresh   time.Duration
 	revokeCachePath string
 	gracePeriod     time.Duration
+
+	heartbeatClient   heartbeat.Client
+	heartbeatInterval time.Duration
 
 	warnings []string
 }
@@ -126,4 +130,11 @@ func WithRevocation(src revoke.RevocationSource, refresh time.Duration, cachePat
 
 func WithGracePeriod(d time.Duration) VerifyOption {
 	return func(s *verifyState) { s.gracePeriod = d }
+}
+
+func WithHeartbeat(c heartbeat.Client, interval time.Duration) VerifyOption {
+	return func(s *verifyState) {
+		s.heartbeatClient = c
+		s.heartbeatInterval = interval
+	}
 }

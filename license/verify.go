@@ -2,11 +2,14 @@ package license
 
 import (
 	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/pem"
 	"time"
 
 	"github.com/oioio-space/maldev/license/canonical"
+	"github.com/oioio-space/maldev/license/heartbeat"
 	"github.com/oioio-space/maldev/license/revoke"
 )
 
@@ -131,6 +134,33 @@ func Verify(data []byte, trusted Trusted, opts ...VerifyOption) (*Verified, erro
 				if list.Sequence > st.LastSeenSequence {
 					st.LastSeenSequence = list.Sequence
 				}
+			}
+		}
+	}
+
+	// 10. Heartbeat.
+	if state.heartbeatClient != nil {
+		nonce := make([]byte, 16)
+		_, _ = rand.Read(nonce)
+		reply, raw, herr := state.heartbeatClient.Ping(state.ctx, w.License.ID, nonce)
+		if herr != nil {
+			if state.gracePeriod == 0 || (now.Sub(st.LastHeartbeatOk) > state.gracePeriod) {
+				return nil, state.fail(causeHeartbeatFailed)
+			}
+			state.logger.Warn("heartbeat fetch failed; using grace", "err", herr)
+		} else {
+			if _, vErr := heartbeat.VerifyReply(raw, pub, w.License.KeyID); vErr != nil {
+				return nil, state.fail(causeHeartbeatFailed)
+			}
+			if subtle.ConstantTimeCompare(reply.NonceEcho, nonce) != 1 {
+				return nil, state.fail(causeHeartbeatFailed)
+			}
+			if !reply.Ok {
+				return nil, state.fail(causeHeartbeatFailed)
+			}
+			st.LastHeartbeatOk = now
+			if reply.ServerTime.After(st.TrustedFloor) {
+				st.TrustedFloor = reply.ServerTime
 			}
 		}
 	}
