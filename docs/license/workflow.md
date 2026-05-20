@@ -7,14 +7,29 @@ package: github.com/oioio-space/maldev/license
 Copy-paste programmes complets. Chaque recette compile telle quelle après
 `go get github.com/oioio-space/maldev@latest`.
 
+> **Nouveau dans ce domaine ?** Lis d'abord [concepts.md](./concepts.md) — explique le vocabulaire et le cycle de vie sans jargon crypto. Pour les questions ponctuelles, va voir la [FAQ](./faq.md).
+
+**Recettes "essentielles" :**
 - [Recette 1 — Hello license en 15 lignes](#recette-1)
 - [Recette 2 — Émettre depuis un CLI, vérifier depuis un binaire](#recette-2)
 - [Recette 3 — Binding multi-machines + mot de passe](#recette-3)
+
+**Recettes "production" :**
 - [Recette 4 — Pinning d'identité qui survit au `cmd/packer`](#recette-4)
 - [Recette 5 — Serveur de révocation HTTP minimal](#recette-5)
 - [Recette 6 — Verify complet avec révocation + heartbeat + state file](#recette-6)
 - [Recette 7 — Rotation de clé sans casser les licences existantes](#recette-7)
+- [Recette 7-bis — Payload applicatif typé](#recette-7-bis--payload-applicatif-typé)
 - [Recette 8 — Payload chiffré dans une licence (sealed payload)](#recette-8)
+
+**Recettes "scénarios métier" :**
+- [Recette 9 — Période d'essai gratuite limitée à 14 jours](#recette-9)
+- [Recette 10 — Niveaux de licence (basic / pro / enterprise)](#recette-10)
+- [Recette 11 — Distribuer 50 licences en batch à partir d'un CSV](#recette-11)
+- [Recette 12 — Inspecter une licence sans l'accepter (diagnostic)](#recette-12)
+- [Recette 13 — Tests unitaires : générer des licences à la volée](#recette-13)
+- [Recette 14 — Plusieurs binaires partageant la même paire de clés](#recette-14)
+- [Recette 15 — Logger les causes d'échec pour le support](#recette-15)
 
 ---
 
@@ -511,6 +526,305 @@ fmt.Println("config:", string(config))
 
 Sous le capot : X25519 ECDH → HKDF-SHA256 → XChaCha20-Poly1305 AEAD avec
 l'ephemeral public key comme AAD.
+
+---
+
+## Recette 9
+
+**Période d'essai gratuite de 14 jours, une par utilisateur.**
+
+L'idée : émettre une licence à durée fixe avec un payload qui marque le début de l'essai. Le binaire lit le payload et adapte ses fonctionnalités (ou refuse certaines actions) en fonction.
+
+```go
+type Trial struct {
+	StartedAt time.Time `json:"started_at"`
+	Plan      string    `json:"plan"`
+}
+
+raw, _ := license.MarshalPayload(Trial{StartedAt: time.Now(), Plan: "trial-14d"})
+data, _ := license.Issue(license.IssueOptions{
+	PrivateKey: priv, KeyID: "k1",
+	Subject:    "tester@example.com",
+	NotAfter:   time.Now().Add(14 * 24 * time.Hour),
+	Payload:    raw,
+})
+license.SaveLicense(fmt.Sprintf("./trials/%s.license", "tester@example.com"), data)
+```
+
+Côté binaire :
+
+```go
+v, err := license.Verify(data, trusted)
+if err != nil {
+	if isExpiredCause(err) { // log analysis
+		fmt.Println("Votre période d'essai est terminée.")
+	}
+	os.Exit(1)
+}
+trial, _ := license.PayloadAs[Trial](v)
+fmt.Printf("Essai démarré le %s — plan %s\n", trial.StartedAt.Format("2006-01-02"), trial.Plan)
+```
+
+---
+
+## Recette 10
+
+**Niveaux de licence (basic / pro / enterprise).**
+
+```go
+type Tier struct {
+	Level       string   `json:"level"`        // "basic" | "pro" | "enterprise"
+	Features    []string `json:"features"`     // ex: ["export", "api", "advanced-recon"]
+	MaxParallel int      `json:"max_parallel"` // ex: limite de jobs concurrents
+}
+
+func issueProTier(priv ed25519.PrivateKey, sub string) []byte {
+	raw, _ := license.MarshalPayload(Tier{
+		Level:       "pro",
+		Features:    []string{"export", "api"},
+		MaxParallel: 8,
+	})
+	data, _ := license.Issue(license.IssueOptions{
+		PrivateKey: priv, KeyID: "k1", Subject: sub,
+		NotAfter: time.Now().Add(365 * 24 * time.Hour),
+		Payload:  raw,
+	})
+	return data
+}
+```
+
+Côté binaire :
+
+```go
+v, _ := license.Verify(data, trusted)
+tier, err := license.PayloadAs[Tier](v)
+if err != nil {
+	log.Fatal("licence sans tier")
+}
+
+if !slices.Contains(tier.Features, "export") {
+	return errors.New("export non disponible dans votre licence — passez à un plan supérieur")
+}
+limiter := semaphore.NewWeighted(int64(tier.MaxParallel))
+```
+
+Le `Tier` est signé : impossible pour l'utilisateur de modifier son plan sans casser la signature.
+
+---
+
+## Recette 11
+
+**Distribuer 50 licences en batch à partir d'un CSV.**
+
+```go
+package main
+
+import (
+	"encoding/csv"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/oioio-space/maldev/license"
+)
+
+func main() {
+	priv, _ := license.LoadPrivateKey("/etc/maldev/issuer.key")
+
+	f, _ := os.Open("subscribers.csv")
+	defer f.Close()
+	rows, _ := csv.NewReader(f).ReadAll()
+
+	_ = os.MkdirAll("./out", 0o755)
+
+	for _, row := range rows[1:] { // skip header
+		email, plan := row[0], row[1]
+		ttl := 365 * 24 * time.Hour
+		if plan == "trial" {
+			ttl = 14 * 24 * time.Hour
+		}
+
+		data, err := license.Issue(license.IssueOptions{
+			PrivateKey: priv, KeyID: "k1",
+			Subject:  email,
+			NotAfter: time.Now().Add(ttl),
+			Audience: []string{"rshell"},
+		})
+		if err != nil {
+			log.Printf("[skip] %s: %v", email, err)
+			continue
+		}
+
+		// Slug-safe filename à partir de l'email.
+		slug := strings.ReplaceAll(email, "@", "_at_")
+		out := filepath.Join("out", slug+".license")
+		if err := license.SaveLicense(out, data); err != nil {
+			log.Printf("[skip] %s: %v", email, err)
+			continue
+		}
+		log.Printf("[ok] %s → %s", email, out)
+	}
+}
+```
+
+Format attendu de `subscribers.csv` :
+
+```
+email,plan
+alice@example.com,pro
+bob@example.com,trial
+```
+
+---
+
+## Recette 12
+
+**Inspecter une licence sans la valider — pour le diagnostic.**
+
+```go
+data, _ := os.ReadFile("./alice.license")
+lic, err := license.Inspect(data)
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Printf("Subject:  %s\n", lic.Subject)
+fmt.Printf("Issuer:   %s\n", lic.Issuer)
+fmt.Printf("KeyID:    %s\n", lic.KeyID)
+fmt.Printf("NotAfter: %s\n", lic.NotAfter.Format(time.RFC3339))
+fmt.Printf("Audience: %v\n", lic.Audience)
+fmt.Printf("Bindings: %d\n", len(lic.Bindings))
+for _, b := range lic.Bindings {
+	fmt.Printf("  - type=%s, values=%v\n", b.Type, b.Value)
+}
+```
+
+`Inspect` lit le contenu **sans vérifier la signature**. À utiliser uniquement pour le diagnostic — jamais pour autoriser une action.
+
+---
+
+## Recette 13
+
+**Tests unitaires : générer des licences à la volée dans un `testing.T`.**
+
+```go
+func TestMyTool_RefusesExpiredLicense(t *testing.T) {
+	pub, priv, _ := license.GenerateKey()
+	expired, _ := license.Issue(license.IssueOptions{
+		PrivateKey: priv, KeyID: "k1", Subject: "test",
+		NotAfter: time.Now().Add(-time.Hour), // expirée
+	})
+
+	myTool := NewTool(WithTrusted(license.Trusted{Keys: license.SingleKey("k1", pub)}))
+	if err := myTool.Run(expired); err == nil {
+		t.Fatal("expected refusal on expired license")
+	}
+}
+
+func TestMyTool_AcceptsValidLicense(t *testing.T) {
+	pub, priv, _ := license.GenerateKey()
+	valid, _ := license.New(priv, "test", time.Hour)
+
+	myTool := NewTool(WithTrusted(license.Trusted{Keys: license.SingleKey("k1", pub)}))
+	if err := myTool.Run(valid); err != nil {
+		t.Fatalf("expected accept, got %v", err)
+	}
+}
+```
+
+Pour injecter une horloge déterministe :
+
+```go
+clk := &license.FakeClock{T: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+license.Verify(data, trusted, license.WithClock(clk))
+```
+
+---
+
+## Recette 14
+
+**Plusieurs binaires partageant la même paire de clés, scopés par `Audience`.**
+
+### Émission
+
+```go
+priv, _ := license.LoadPrivateKey("./issuer.key")
+
+// Une seule licence pour Alice, vaut pour rshell + memscan :
+licMulti, _ := license.Issue(license.IssueOptions{
+	PrivateKey: priv, KeyID: "k1",
+	Subject:    "alice",
+	Audience:   []string{"rshell", "memscan-server"},
+	NotAfter:   time.Now().Add(90 * 24 * time.Hour),
+})
+
+// Une licence séparée pour Bob, uniquement memscan :
+licMemOnly, _ := license.Issue(license.IssueOptions{
+	PrivateKey: priv, KeyID: "k1",
+	Subject:    "bob",
+	Audience:   []string{"memscan-server"},
+	NotAfter:   time.Now().Add(90 * 24 * time.Hour),
+})
+```
+
+### Côté chaque binaire
+
+```go
+// cmd/rshell/main.go
+license.Verify(data, trusted, license.WithAudience("rshell"))
+
+// cmd/memscan/main.go
+license.Verify(data, trusted, license.WithAudience("memscan-server"))
+```
+
+La licence de Bob (Audience=`memscan-server`) est refusée par `rshell` avec `causeAudienceMismatch`. La licence d'Alice fonctionne pour les deux.
+
+---
+
+## Recette 15
+
+**Logger les causes d'échec en production pour le support.**
+
+```go
+import (
+	"log/slog"
+	"os"
+)
+
+func main() {
+	// Logueur JSON structuré → pipe vers Loki/ELK/etc.
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+
+	pub, kid, _ := license.LoadPublicKey("issuer.pub")
+	v, err := license.VerifyFile("./user.license",
+		license.Trusted{Keys: license.SingleKey(kid, pub)},
+		license.WithLogger(logger),
+	)
+	if err != nil {
+		// Le logueur a déjà émis un WARN avec la cause précise.
+		// Le message rendu à l'utilisateur reste opaque.
+		fmt.Fprintln(os.Stderr, "Cette licence n'est pas valide. Contactez le support avec votre ID.")
+		os.Exit(1)
+	}
+
+	logger.Info("license accepted",
+		"subject", v.Subject,
+		"key_used", v.KeyUsed,
+		"warnings", v.Warnings,
+	)
+}
+```
+
+Exemple de sortie sur un échec :
+
+```json
+{"time":"2026-05-20T10:00:00Z","level":"WARN","msg":"license verify failed","cause":"binding-machine-mismatch"}
+```
+
+À pipe vers ton stack d'observabilité. Alertes utiles : `clock-rollback` ou `binding-password-mismatch` répétés sur un même `subject` (indice de brute-force ou tampering).
 
 ---
 

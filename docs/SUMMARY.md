@@ -142,7 +142,9 @@
 # Defensive primitives
 
 - [License framing](techniques/license-framing.md)
-  - [Operator workflow](license/workflow.md)
+  - [Concepts](license/concepts.md)
+  - [Cookbook](license/workflow.md)
+  - [FAQ](license/faq.md)
   - [Threat model](license/threat-model.md)
 
 # Cookbook
