@@ -1,0 +1,44 @@
+name: mermaid-check
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "docs/**/*.md"
+      - "scripts/mermaid-check/**"
+      - ".github/workflows/mermaid-check.yml"
+  pull_request:
+    paths:
+      - "docs/**/*.md"
+      - "scripts/mermaid-check/**"
+      - ".github/workflows/mermaid-check.yml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate Mermaid diagrams
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Headless Chromium (used by puppeteer inside mmdc) needs a few system
+      # libraries on the GitHub Actions runner image.
+      - name: Install Chromium system libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libgbm1 \
+            libnspr4 libnss3 libxcomposite1 libxdamage1 libxfixes3 \
+            libxkbcommon0 libxrandr2 libpangocairo-1.0-0 libpango-1.0-0 \
+            libcairo2 libasound2t64 fonts-liberation
+
+      - name: Install mermaid-cli
+        run: npm install -g @mermaid-js/mermaid-cli@10.9.1
+
+      - name: Validate diagrams
+        run: python3 scripts/mermaid-check/validate.py --root docs
