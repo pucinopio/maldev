@@ -390,11 +390,12 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 
 </details>
 
-<details><summary><strong>license</strong> — 1 package</summary>
+<details><summary><strong>license</strong> — 2 packages</summary>
 
 | Package | Detection | Summary |
 |---|---|---|
 | [`license`](https://pkg.go.dev/github.com/oioio-space/maldev/license) | — | provides a defensive framing primitive for maldev research binaries: signed, structured license tokens that constrain who may run a given binary, on which machines, with which secrets, until when, and against which revocation/heartbeat policy |
+| [`license/canonical`](https://pkg.go.dev/github.com/oioio-space/maldev/license/canonical) | — | encodes Go values to a deterministic JSON form suitable for signing: object keys are recursively sorted, no insignificant whitespace is emitted, HTML characters are not escaped, and time.Time values are rendered in RFC3339Nano UTC |
 
 </details>
 
