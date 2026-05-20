@@ -390,7 +390,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 
 </details>
 
-<details><summary><strong>license</strong> — 7 packages</summary>
+<details><summary><strong>license</strong> — 8 packages</summary>
 
 | Package | Detection | Summary |
 |---|---|---|
@@ -401,6 +401,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 | [`license/identity`](https://pkg.go.dev/github.com/oioio-space/maldev/license/identity) | — | holds a 32-byte build-time identity registered by the consumer binary (typically via //go:embed identity.bin and a call to Set) |
 | [`license/identity/cmd/gen-identity`](https://pkg.go.dev/github.com/oioio-space/maldev/license/identity/cmd/gen-identity) | — | gen-identity writes 32 random bytes to ./identity.bin if absent |
 | [`license/revoke`](https://pkg.go.dev/github.com/oioio-space/maldev/license/revoke) | — | _(no doc.go summary)_ |
+| [`license/seal`](https://pkg.go.dev/github.com/oioio-space/maldev/license/seal) | — | encrypts opaque payloads to a recipient identified by an X25519 public key |
 
 </details>
 
