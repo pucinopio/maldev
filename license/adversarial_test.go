@@ -9,6 +9,8 @@ import (
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/oioio-space/maldev/license/canonical"
 )
 
 func TestAdversarial_SingleBitFlipRejected(t *testing.T) {
@@ -51,9 +53,9 @@ func TestAdversarial_SwappedKeyIDRejected(t *testing.T) {
 
 func TestAdversarial_RandomByteMutation(t *testing.T) {
 	data, pub, _ := issueFor(t, IssueOptions{NotAfter: time.Now().Add(time.Hour)})
-	origInner, ok := decodeInnerForTest(data)
+	origBody, ok := decodeBodyForTest(data)
 	if !ok {
-		t.Fatal("could not decode original PEM")
+		t.Fatal("could not decode original license body")
 	}
 
 	rng := rand.New(rand.NewSource(42))
@@ -67,10 +69,15 @@ func TestAdversarial_RandomByteMutation(t *testing.T) {
 		}
 		cp[start+rng.Intn(end-start)] ^= byte(1 << uint(rng.Intn(8)))
 
-		// Mutations that hit a PEM newline get absorbed by pem.Decode, and
-		// some base64 quantisations are no-ops. These produce the same inner
-		// bytes as the original — they are not real attacks, so skip them.
-		if newInner, ok := decodeInnerForTest(cp); ok && bytes.Equal(newInner, origInner) {
+		// A "real" mutation changes the canonical License body — the bytes
+		// the signature actually covers. Mutations that only touch wrapper
+		// fields (outer sig, outer kid) or that are absorbed by the PEM/JSON
+		// parsers leave the signed body unchanged; whether Verify accepts or
+		// rejects those is decided by other checks (KeyID match, signature
+		// verify on the mutated wrapper sig, etc.) and is not what this test
+		// is asserting.
+		newBody, ok := decodeBodyForTest(cp)
+		if ok && bytes.Equal(newBody, origBody) {
 			continue
 		}
 		evaluated++
@@ -86,7 +93,11 @@ func TestAdversarial_RandomByteMutation(t *testing.T) {
 	}
 }
 
-func decodeInnerForTest(data []byte) ([]byte, bool) {
+// decodeBodyForTest returns the canonical License body that the Ed25519
+// signature covers, or (nil, false) if the PEM/JSON layers can't decode the
+// input. Used by adversarial tests to distinguish mutations that change the
+// signed payload from those that only touch wrapper bytes.
+func decodeBodyForTest(data []byte) ([]byte, bool) {
 	blk, _ := pem.Decode(data)
 	if blk == nil || blk.Type != pemLicense {
 		return nil, false
@@ -95,5 +106,13 @@ func decodeInnerForTest(data []byte) ([]byte, bool) {
 	if err != nil {
 		return nil, false
 	}
-	return raw, true
+	var w signedLicense
+	if err := jsonUnmarshalStrict(raw, &w); err != nil {
+		return nil, false
+	}
+	body, err := canonical.Marshal(w.License)
+	if err != nil {
+		return nil, false
+	}
+	return body, true
 }
