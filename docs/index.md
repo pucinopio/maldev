@@ -390,7 +390,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 
 </details>
 
-<details><summary><strong>license</strong> — 5 packages</summary>
+<details><summary><strong>license</strong> — 6 packages</summary>
 
 | Package | Detection | Summary |
 |---|---|---|
@@ -399,6 +399,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 | [`license/hostid`](https://pkg.go.dev/github.com/oioio-space/maldev/license/hostid) | — | produces a 32-byte machine fingerprint by mixing OS-provided identifiers (registry MachineGuid on Windows, /etc/machine-id on Linux, IOPlatformUUID on darwin) through sha256 |
 | [`license/identity`](https://pkg.go.dev/github.com/oioio-space/maldev/license/identity) | — | holds a 32-byte build-time identity registered by the consumer binary (typically via //go:embed identity.bin and a call to Set) |
 | [`license/identity/cmd/gen-identity`](https://pkg.go.dev/github.com/oioio-space/maldev/license/identity/cmd/gen-identity) | — | gen-identity writes 32 random bytes to ./identity.bin if absent |
+| [`license/revoke`](https://pkg.go.dev/github.com/oioio-space/maldev/license/revoke) | — | _(no doc.go summary)_ |
 
 </details>
 
