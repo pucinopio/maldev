@@ -45,6 +45,9 @@ A single Go module covering the chain end-to-end:
   transports, JA3 fingerprint (uTLS), N-channel fallback Router
   with exponential backoff + operator kill switch, Meterpreter
   staging, multi-session listener, beacon-side SOCKS5 pivot.
+- **License framing** — Ed25519-signed authorisation tokens for research
+  binaries; multi-binding (machine, password, custom), revocation,
+  heartbeat, identity pinning, clock-tamper detection.
 - **BYOVD / kernel** — RTCore64 (CVE-2019-16098) R/W primitive.
 - **Privesc** — 4 UAC bypasses, CVE-2024-30088 LPE, DLL-hijack helpers.
 

@@ -75,6 +75,12 @@ reflects_commit: a705c32
 | T1573.002 | Asymmetric Cryptography | `c2/transport` (TLS, uTLS) | D3-DNSTA (DNS Traffic Analysis) |
 | T1622 | Debugger Evasion | `recon/antidebug`, `recon/hwbp` | D3-DICA (Debug Instruction Analysis) |
 
+## Defensive Primitives (N/A — no ATT&CK technique)
+
+| ATT&CK ID | Role | Package(s) | Notes |
+|-----------|------|------------|-------|
+| N/A | Defensive framing | `license/` | Ed25519-signed authorisation gate — restricts which binaries run, by whom, on which machines. No attack technique exercised; no on-host artefacts emitted. |
+
 ## D3FEND Defensive Techniques
 
 The D3FEND column above indicates which defensive technique a blue team would use to detect each maldev capability. This helps red teamers understand what they're evading and blue teamers understand what to implement.

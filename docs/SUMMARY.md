@@ -139,6 +139,12 @@
   - [Domain membership](techniques/win/domain.md)
   - [Version + UBR probe](techniques/win/version.md)
 
+# Defensive primitives
+
+- [License framing](techniques/license-framing.md)
+  - [Operator workflow](license/workflow.md)
+  - [Threat model](license/threat-model.md)
+
 # Cookbook
 
 > Task-oriented recipes. Each page chains a few `maldev` packages
