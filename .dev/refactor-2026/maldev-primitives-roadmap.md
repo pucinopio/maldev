@@ -1,8 +1,8 @@
 ---
-status: execution underway — M4 + M5 + M8 closed
+status: execution underway — M3 + M4 + M5 + M8 closed
 opened: 2026-05-19
-last_reviewed: 2026-05-19
-reflects_commit: a110c89
+last_reviewed: 2026-05-20
+reflects_commit: 97745e2
 owner: oioio-space
 scope: maldev — missing primitives for downstream consumers (WRAITH and any other C2 framework)
 companion: wraith-roadmap.md (orchestration layer lives there, NOT here)
@@ -60,7 +60,7 @@ adds orchestration on top.
 |---|---|---|---|---|
 | M1  | 🟦 | — | DNS listener (TXT/A/CNAME server-side, slow-exfil capable) | `c2/transport` extension OR new `c2/listener/dns` |
 | M2  | 🟦 | — | SMB named pipe server primitive | `c2/listener/smbpipe` — needs server-side work on top of `hirochachacha/go-smb2` (client-only) or port from Impacket |
-| M3  | 🟦 | — | WebSocket listener | `c2/listener/ws` via `coder/websocket` |
+| M3  | ✅ | `f25b95b` | WebSocket transport — `NewWebSocket` (dial-side `Transport` composable with `Router`) + `NewListener` / `NewServer` / `Handler` (accept-side, supports co-hosting with decoy paths). `WithUTLSConfig` plugs in `transport.UTLSDialer` for JA3=Chrome JA3 spoofing on the TLS underneath the WS handshake. 12 tests under `-race`, signalConn pattern keeps the http handler alive for the conn's lifetime. Tech md: `docs/techniques/c2/websocket.md`. Roadmap layout corrected: lives at `c2/transport/websocket` (sibling of `namedpipe`), not the speculative `c2/listener/ws`. | `c2/transport/websocket` |
 | M4  | ✅ | `a110c89` | Multi-channel router (`Transport` interface chain w/ fallback + backoff). `Router` itself implements `Transport` (nestable tiers). Serial fallback + exponential backoff per channel + operator `KillSwitch` + `ErrChannelLost` sentinel for clean re-Connect. 14 tests under `-race`, lock held only across pointer writes (Close runs unlocked), `time.NewTimer`/`Stop` instead of `time.After`. Tech md: `docs/techniques/c2/multi-channel-router.md`. | `c2/transport.Router` |
 | M28 | 🟦 | — | Chunked file transfer protocol (resume-capable) | `c2/transport/chunked` |
 

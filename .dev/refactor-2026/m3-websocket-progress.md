@@ -1,10 +1,11 @@
 ---
 item: M3 — WebSocket transport primitive
-status: spec written — awaiting user review + implementation plan
+status: closed
 spec: docs/superpowers/specs/2026-05-19-c2-transport-websocket-design.md
 opened: 2026-05-19
-last_reviewed: 2026-05-19
-reflects_commit: pending
+closed: 2026-05-20
+last_reviewed: 2026-05-20
+reflects_commit: 97745e2
 ---
 
 # M3 progress tracker — WebSocket primitive
@@ -21,33 +22,32 @@ reflects_commit: pending
 - [x] Listener: standalone (`NewListener`) + handler hook (`Handler` / `NewServer`) for co-hosting
 - [x] Section 1-4 design approved
 - [x] Spec written: `docs/superpowers/specs/2026-05-19-c2-transport-websocket-design.md`
-- [ ] User reviews spec
-- [ ] Implementation plan written via writing-plans skill
+- [x] User reviews spec (approved, "go en autonomie")
+- [x] Implementation plan written: `docs/superpowers/plans/2026-05-19-m3-websocket-plan.md`
 
 ## Phase 2 — Implementation (4 commits, queued)
 
-- [ ] **Commit #1** — `refactor(c2/transport): extract UTLSDialer helper`
-  - File: `c2/transport/utls_dialer.go` (new), `c2/transport/tls.go` (edit)
-  - Gate: `go test ./c2/transport/...` unchanged-pass
-  - Commit hash: —
+- [x] **Commit #1** — `refactor(c2/transport): extract UTLSDialer helper`
+  - File: `c2/transport/utls_dialer.go` (new), `c2/transport/ja3.go` (edit — UTLS.Connect rewired)
+  - Gate: `go test ./c2/transport/...` unchanged-pass ✓
+  - Commit hash: `046ad5d`
 
-- [ ] **Commit #2** — `feat(c2/transport/websocket): M3 — WS listener + dialer with uTLS composition`
+- [x] **Commit #2** — `feat(c2/transport/websocket): M3 — WS listener + dialer with uTLS composition`
   - Files: `c2/transport/websocket/{doc,dial,listen,dial_test,listen_test,router_integration_test}.go`
-  - Add `coder/websocket` to `go.mod` pinned version
-  - 13 tests pass
-  - `/simplify` run + clean
-  - Commit hash: —
+  - `coder/websocket` v1.8.14 pinned (Go directive bumped 1.21 → 1.23)
+  - 12 tests pass under `-race`
+  - Self-review done (agent quota was hit; key checks: mutex-before-close, signalConn pattern documented, compile-time interface assertion)
+  - Commit hash: `f25b95b`
 
-- [ ] **Commit #3** — `docs(c2): websocket tech-md + mitre + README`
+- [x] **Commit #3** — `docs(c2): websocket tech-md + mitre + README`
   - Files: `docs/techniques/c2/websocket.md` (new, minimal frontmatter), `docs/mitre.md`, `README.md`
-  - `go run ./internal/tools/docgen --check-template` passes
-  - Commit hash: —
+  - `go run ./internal/tools/docgen --check-template` passes ✓
+  - Commit hash: `97745e2`
 
-- [ ] **Commit #4** — `docs(.dev): M3 ✅ — WebSocket primitive closed`
-  - File: `.dev/refactor-2026/maldev-primitives-roadmap.md`
-  - Tick M3 row, bump `reflects_commit`
-  - This tracker file marked closed; reflects_commit set to commit #4 hash
-  - Commit hash: —
+- [x] **Commit #4** — `docs(.dev): M3 ✅ — WebSocket primitive closed`
+  - File: `.dev/refactor-2026/maldev-primitives-roadmap.md`, this tracker
+  - M3 row ticked, `reflects_commit` bumped on both files
+  - Commit hash: (this commit)
 
 ## Cross-machine resumption
 
