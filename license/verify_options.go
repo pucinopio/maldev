@@ -39,6 +39,10 @@ type verifyState struct {
 	heartbeatClient   heartbeat.Client
 	heartbeatInterval time.Duration
 
+	ntpServer   string
+	ntpMaxDrift time.Duration
+	ntpStrict   bool
+
 	warnings []string
 }
 
@@ -136,5 +140,27 @@ func WithHeartbeat(c heartbeat.Client, interval time.Duration) VerifyOption {
 	return func(s *verifyState) {
 		s.heartbeatClient = c
 		s.heartbeatInterval = interval
+	}
+}
+
+// WithNTPCheck adds a soft NTP cross-check. If the local clock drifts more
+// than maxDrift from the server's time a warning is appended but Verify still
+// succeeds. Network errors are also non-fatal.
+func WithNTPCheck(server string, maxDrift time.Duration) VerifyOption {
+	return func(s *verifyState) {
+		s.ntpServer = server
+		s.ntpMaxDrift = maxDrift
+		s.ntpStrict = false
+	}
+}
+
+// WithNTPCheckStrict adds a hard NTP cross-check. Drift exceeding maxDrift
+// causes Verify to return ErrLicenseInvalid with causeClockRollback.
+// Network errors are still non-fatal (appended as warnings).
+func WithNTPCheckStrict(server string, maxDrift time.Duration) VerifyOption {
+	return func(s *verifyState) {
+		s.ntpServer = server
+		s.ntpMaxDrift = maxDrift
+		s.ntpStrict = true
 	}
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/oioio-space/maldev/license/canonical"
 	"github.com/oioio-space/maldev/license/heartbeat"
+	"github.com/oioio-space/maldev/license/ntp"
 	"github.com/oioio-space/maldev/license/revoke"
 )
 
@@ -162,6 +163,25 @@ func Verify(data []byte, trusted Trusted, opts ...VerifyOption) (*Verified, erro
 			if reply.ServerTime.After(st.TrustedFloor) {
 				st.TrustedFloor = reply.ServerTime
 			}
+		}
+	}
+
+	// 11. NTP cross-check.
+	if state.ntpServer != "" {
+		serverT, _, err := ntp.Query(state.ntpServer, 3*time.Second)
+		if err == nil {
+			drift := now.Sub(serverT)
+			if drift < 0 {
+				drift = -drift
+			}
+			if drift > state.ntpMaxDrift {
+				if state.ntpStrict {
+					return nil, state.fail(causeClockRollback)
+				}
+				state.warnings = append(state.warnings, "ntp drift exceeds threshold")
+			}
+		} else {
+			state.warnings = append(state.warnings, "ntp query failed")
 		}
 	}
 
