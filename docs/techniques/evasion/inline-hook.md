@@ -126,7 +126,7 @@ sequenceDiagram
     Note over Target: Prologue patched with JMP rel32
     Caller->>Target: Call function
     Target->>Relay: JMP rel32 (5 bytes)
-    Relay->>Callback: MOV R10, addr; JMP R10
+    Relay->>Callback: MOV R10 addr then JMP R10
     Callback->>Trampoline: syscall.SyscallN(h.Trampoline(), ...)
     Trampoline->>Target: Stolen bytes + JMP back past patch
     Target-->>Trampoline: Returns

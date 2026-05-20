@@ -40,15 +40,15 @@ sequenceDiagram
     participant Caller
     participant COM as "STA apartment"
     participant Shell as "WScript.Shell"
-    participant Link as "IWshShortcut"
+    participant Sc as "IWshShortcut"
 
     Caller->>COM: CoInitializeEx STA
     Caller->>Shell: CoCreateInstance WScript.Shell
     Caller->>Shell: CreateShortcut path
-    Shell-->>Link: IWshShortcut dispatch
-    Caller->>Link: PutProperty TargetPath, Arguments, Icon, Style, Desc, WorkDir
-    Caller->>Link: Save
-    Link-->>Caller: lnk on disk
+    Shell-->>Sc: IWshShortcut dispatch
+    Caller->>Sc: PutProperty TargetPath, Arguments, Icon, Style, Desc, WorkDir
+    Caller->>Sc: Save
+    Sc-->>Caller: lnk on disk
     Caller->>COM: Release then CoUninitialize
 ```
 
@@ -59,15 +59,15 @@ automation actors for a direct IShellLinkW + IPersistStream chain:
 sequenceDiagram
     participant Caller
     participant COM as "STA apartment"
-    participant Link as "IShellLinkW"
+    participant Sl as "IShellLinkW"
     participant PS as "IPersistStream"
     participant Stream as "IStream on HGLOBAL"
 
     Caller->>COM: CoInitializeEx STA
-    Caller->>Link: CoCreateInstance CLSID_ShellLink
-    Caller->>Link: SetPath, SetArguments, SetIconLocation, SetShowCmd, SetHotkey
-    Caller->>Link: QueryInterface IID_IPersistStream
-    Link-->>PS: IPersistStream pointer
+    Caller->>Sl: CoCreateInstance CLSID_ShellLink
+    Caller->>Sl: SetPath, SetArguments, SetIconLocation, SetShowCmd, SetHotkey
+    Caller->>Sl: QueryInterface IID_IPersistStream
+    Sl-->>PS: IPersistStream pointer
     Caller->>Stream: CreateStreamOnHGlobal NULL TRUE
     Caller->>PS: Save Stream TRUE
     PS-->>Stream: bytes written into HGLOBAL
@@ -75,7 +75,7 @@ sequenceDiagram
     Stream-->>Caller: byte slice
     Caller->>Stream: Release
     Caller->>PS: Release
-    Caller->>Link: Release
+    Caller->>Sl: Release
     Caller->>COM: CoUninitialize
 ```
 

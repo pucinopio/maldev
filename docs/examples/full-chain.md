@@ -45,7 +45,7 @@ What changed since the v0.16-era version of this example:
 
 ```mermaid
 flowchart TD
-    BT[BUILD TIME<br>masquerade.Build to .syso] --> RT[RUNTIME]
+    BT["BUILD TIME<br/>masquerade.Build to .syso"] --> RT[RUNTIME]
     RT --> A{Hypervisor?}
     A -->|yes| Z[Exit silently]
     A -->|no| B{IsSandboxed?}
@@ -53,10 +53,10 @@ flowchart TD
     B -->|no| C[hwbp.ClearAll]
     C --> D[Caller: IndirectAsm + FNV-1a]
     D --> E[preset.Stealth + CETOptOut]
-    E --> F[Decrypt → Cross-process inject<br>via SectionMap]
+    E --> F["Decrypt → Cross-process inject<br/>via SectionMap"]
     F --> G[Wipe local shellcode buffer]
     G --> H[Beacon loop]
-    H --> I[sleepmask.Sleep<br>Ekko strategy]
+    H --> I["sleepmask.Sleep<br/>Ekko strategy"]
     I --> J{Beacon work due?}
     J -->|yes| K[Do C2 work]
     J -->|no| I
@@ -277,7 +277,7 @@ graph LR
     end
     subgraph "Runtime — Code"
         R1[MethodIndirectAsm syscalls]
-        R2[ResolveByHash (FNV-1a, not ROR13)]
+        R2["ResolveByHash (FNV-1a, not ROR13)"]
         R3[hwbp.ClearAll]
         R4[preset.Stealth + CETOptOut]
     end
