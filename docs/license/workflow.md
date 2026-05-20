@@ -414,6 +414,69 @@ _, err := license.VerifyFile("./client.license", trusted, /* options */)
 
 ---
 
+## Recette 7-bis — Payload applicatif typé
+
+**Embarquer un struct Go arbitraire dans la licence et le récupérer typé après vérification.**
+
+Le champ `License.Payload` est du JSON arbitraire signé en clair. Tu fournis n'importe quel objet sérialisable, et tu le récupères au choix avec `(*Verified).Decode(&target)` (style stdlib) ou `PayloadAs[T](v)` (générique).
+
+### Émission
+
+```go
+type Config struct {
+	Endpoint string   `json:"endpoint"`
+	Tier     int      `json:"tier"`
+	Tags     []string `json:"tags,omitempty"`
+}
+
+cfg := Config{Endpoint: "https://c2.example.com", Tier: 3, Tags: []string{"redteam"}}
+raw, err := license.MarshalPayload(cfg)
+if err != nil {
+	log.Fatal(err)
+}
+
+data, _ := license.Issue(license.IssueOptions{
+	PrivateKey: priv, KeyID: "k1", Subject: "alice",
+	NotAfter: time.Now().Add(24 * time.Hour),
+	Payload:  raw,
+})
+```
+
+### Vérification — style stdlib
+
+```go
+v, err := license.Verify(data, trusted)
+if err != nil {
+	log.Fatal(err)
+}
+var cfg Config
+if err := v.Decode(&cfg); err != nil {
+	if errors.Is(err, license.ErrNoPayload) {
+		log.Print("licence sans payload — j'utilise la config par défaut")
+	} else {
+		log.Fatalf("payload corrompu: %v", err)
+	}
+}
+fmt.Println(cfg.Endpoint)
+```
+
+### Vérification — style générique
+
+```go
+v, _ := license.Verify(data, trusted)
+cfg, err := license.PayloadAs[Config](v)
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(cfg.Endpoint) // *Config typé, prêt à l'emploi
+```
+
+Le payload peut être n'importe quel type marshalable JSON : `struct`, `map[string]any`, `[]string`, primitives. Le contenu est signé par l'émetteur — toute altération entre émission et vérification fait échouer `Verify` avec `ErrLicenseInvalid`.
+
+> **Différence avec `SealedPayload`** : `Payload` est **signé en clair** (lisible par n'importe qui qui détient la licence). `SealedPayload` est **chiffré pour un destinataire spécifique** (Recette 8) — utile pour des secrets sensibles.
+
+---
+
 ## Recette 8
 
 **Payload chiffré pour un destinataire — sealed payload.**
@@ -471,6 +534,10 @@ l'ephemeral public key comme AAD.
 | `license.Inspect(data)` | Parse sans signature — **diagnostic uniquement**. |
 | `license.HashFile(path)` | sha256 hex d'un fichier (→ `BinarySHA256`). |
 | `license.HashIdentity(b)` | sha256 hex d'octets (→ `IdentitySHA256`). |
+| `license.MarshalPayload(v)` | Encode n'importe quel objet Go en JSON pour `IssueOptions.Payload`. |
+| `(*Verified).Decode(target)` | Désérialise le payload dans `*target` (style `json.Unmarshal`). |
+| `license.PayloadAs[T](v)` | Désérialise le payload en `*T` typé (générique). |
+| `license.ErrNoPayload` | Sentinel retourné si la licence n'a pas de payload. |
 | `license.BindMachineIDs(...)` | Binding liste OU. |
 | `license.BindPassword(p)` | Binding password (argon2id). |
 | `license.BindCustom(name, v...)` | Binding custom k/v. |
