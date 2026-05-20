@@ -19,6 +19,11 @@ const (
 )
 
 // List is the body of a revocation publication. Signed under tagRevokeV1.
+//
+// Revoked is the canonical, wire-compatible flat ID list. Entries carries
+// the same IDs plus optional Reason / RevokedAt metadata that issuers can
+// use to surface "why" to operators and audit pipelines. When both are set,
+// Revoked is the authoritative ID set — Entries is read-only context.
 type List struct {
 	Version    int       `json:"v"`
 	KeyID      string    `json:"kid"`
@@ -28,8 +33,23 @@ type List struct {
 	ExpiresAt  time.Time `json:"exp"`
 	ServerTime time.Time `json:"st"`
 	Revoked    []string  `json:"rev"`
+	Entries    []Entry   `json:"ent,omitempty"`
 }
 
+// Entry is the richer per-revocation record. Reason is free-form admin text
+// (e.g. "refunded", "fraud", "key compromised"). RevokedAt is a pointer so
+// the zero time.Time is genuinely omitted from the wire (json's
+// omitempty does not suppress zero time.Time values).
+type Entry struct {
+	ID        string     `json:"id"`
+	Reason    string     `json:"r,omitempty"`
+	RevokedAt *time.Time `json:"at,omitempty"`
+}
+
+// IsRevoked reports whether id is on the list. The lookup is a linear scan
+// — fine for the operational expectation (handful of revocations) and
+// timing-side-channel exposure here is negligible since the caller is the
+// verifying binary on a machine it already owns.
 func (l *List) IsRevoked(id string) bool {
 	for _, r := range l.Revoked {
 		if r == id {
@@ -37,6 +57,19 @@ func (l *List) IsRevoked(id string) bool {
 		}
 	}
 	return false
+}
+
+// LookupEntry returns the detailed record for id if Entries was populated.
+// Returns (nil, false) if id is not present or if the publisher did not
+// include extended metadata. Callers should still consult IsRevoked for the
+// authoritative accept/refuse decision.
+func (l *List) LookupEntry(id string) (*Entry, bool) {
+	for i := range l.Entries {
+		if l.Entries[i].ID == id {
+			return &l.Entries[i], true
+		}
+	}
+	return nil, false
 }
 
 type signedList struct {

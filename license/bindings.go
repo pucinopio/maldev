@@ -19,8 +19,12 @@ const (
 	bindingCustom   = "custom:" // prefix
 )
 
-// Argon2id parameters chosen for ~100 ms on a 2024-era laptop CPU. Stored
-// next to salt/hash in the binding so future tuning is forward compatible.
+// Default argon2id parameters chosen for ~100 ms on a 2024-era laptop CPU.
+// Any BindPassword call without an explicit override uses these. The chosen
+// values are also stamped into Binding.Params at issue time so a future
+// retuning is a non-breaking change: licences carry their own parameters
+// and Verify uses what the binding stores, not what the verifying binary
+// happens to have hardcoded.
 const (
 	argonTime    = 3
 	argonMemory  = 64 * 1024
@@ -28,6 +32,43 @@ const (
 	argonKeyLen  = 32
 	saltLen      = 16
 )
+
+// DefaultArgon2idParams returns a copy of the package defaults. Use as a
+// starting point when overriding with BindPasswordWithParams.
+func DefaultArgon2idParams() BindingParams {
+	return BindingParams{
+		ArgonTime:    argonTime,
+		ArgonMemory:  argonMemory,
+		ArgonThreads: argonThreads,
+		ArgonKeyLen:  argonKeyLen,
+	}
+}
+
+// resolveArgonParams returns p with any zero field filled by the package
+// defaults. Shared by BindPasswordWithParams (stamping at issue) and the
+// verify path (reading from the binding) so the two cannot drift.
+func resolveArgonParams(p BindingParams) BindingParams {
+	if p.ArgonTime == 0 {
+		p.ArgonTime = argonTime
+	}
+	if p.ArgonMemory == 0 {
+		p.ArgonMemory = argonMemory
+	}
+	if p.ArgonThreads == 0 {
+		p.ArgonThreads = argonThreads
+	}
+	if p.ArgonKeyLen == 0 {
+		p.ArgonKeyLen = argonKeyLen
+	}
+	return p
+}
+
+func argonParamsFor(b Binding) BindingParams {
+	if b.Params == nil {
+		return DefaultArgon2idParams()
+	}
+	return resolveArgonParams(*b.Params)
+}
 
 // BindMachineIDs builds a binding accepting any of the listed machine ids.
 func BindMachineIDs(ids ...string) Binding {
@@ -50,18 +91,28 @@ func BindTOTP(secret string) Binding {
 	return Binding{Type: bindingTOTP, Value: []string{secret}}
 }
 
-// BindPassword derives argon2id(salt, password). The plaintext is never
-// retained.
+// BindPassword derives argon2id(salt, password) with the package defaults
+// and stamps those defaults into Binding.Params. Verification uses the
+// stored parameters, not the verifier's current defaults, so the issuer can
+// retune later without breaking existing licences.
 func BindPassword(password string) (Binding, error) {
+	return BindPasswordWithParams(password, DefaultArgon2idParams())
+}
+
+// BindPasswordWithParams is like BindPassword but lets the issuer override
+// the argon2id parameters. Useful for stronger settings on long-lived
+// licences or for downgrading the cost on resource-constrained verifiers.
+func BindPasswordWithParams(password string, p BindingParams) (Binding, error) {
 	if password == "" {
 		return Binding{}, errors.New("license: empty password")
 	}
+	p = resolveArgonParams(p)
 	salt := make([]byte, saltLen)
 	if _, err := rand.Read(salt); err != nil {
 		return Binding{}, err
 	}
-	hash := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
-	return Binding{Type: bindingPassword, Hash: hash, Salt: salt}, nil
+	hash := argon2.IDKey([]byte(password), salt, p.ArgonTime, p.ArgonMemory, p.ArgonThreads, p.ArgonKeyLen)
+	return Binding{Type: bindingPassword, Hash: hash, Salt: salt, Params: &p}, nil
 }
 
 // VerifierFunc lets callers register custom binding types. Return true to
@@ -119,7 +170,8 @@ func checkBinding(b Binding, s *verifyState) bool {
 		if s.password == "" {
 			return false
 		}
-		got := argon2.IDKey([]byte(s.password), b.Salt, argonTime, argonMemory, argonThreads, argonKeyLen)
+		p := argonParamsFor(b)
+		got := argon2.IDKey([]byte(s.password), b.Salt, p.ArgonTime, p.ArgonMemory, p.ArgonThreads, p.ArgonKeyLen)
 		return subtle.ConstantTimeCompare(got, b.Hash) == 1
 	case b.Type == bindingTOTP:
 		if s.totpCode == "" || len(b.Value) == 0 {

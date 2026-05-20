@@ -24,7 +24,7 @@ Copy-paste programmes complets. Chaque recette compile telle quelle après
 
 **Recettes "scénarios métier" :**
 - [Recette 9 — Période d'essai gratuite limitée à 14 jours](#recette-9)
-- [Recette 10 — Niveaux de licence (basic / pro / enterprise)](#recette-10)
+- [Recette 10 — Niveaux de licence (basic / pro / enterprise) avec `Features`](#recette-10)
 - [Recette 11 — Distribuer 50 licences en batch à partir d'un CSV](#recette-11)
 - [Recette 12 — Inspecter une licence sans l'accepter (diagnostic)](#recette-12)
 - [Recette 13 — Tests unitaires : générer des licences à la volée](#recette-13)
@@ -572,46 +572,50 @@ fmt.Printf("Essai démarré le %s — plan %s\n", trial.StartedAt.Format("2006-0
 
 ## Recette 10
 
-**Niveaux de licence (basic / pro / enterprise).**
+**Niveaux de licence (basic / pro / enterprise) avec `Features` first-class.**
+
+Le champ `License.Features` est signé au niveau racine — lisible par
+`Verified.HasFeature(name)` sans désérialisation. Pour les paramètres
+qui ne sont pas des booléens (quotas, identifiants), `Payload` reste
+disponible.
 
 ```go
-type Tier struct {
-	Level       string   `json:"level"`        // "basic" | "pro" | "enterprise"
-	Features    []string `json:"features"`     // ex: ["export", "api", "advanced-recon"]
-	MaxParallel int      `json:"max_parallel"` // ex: limite de jobs concurrents
-}
-
-func issueProTier(priv ed25519.PrivateKey, sub string) []byte {
-	raw, _ := license.MarshalPayload(Tier{
-		Level:       "pro",
-		Features:    []string{"export", "api"},
-		MaxParallel: 8,
-	})
-	data, _ := license.Issue(license.IssueOptions{
-		PrivateKey: priv, KeyID: "k1", Subject: sub,
-		NotAfter: time.Now().Add(365 * 24 * time.Hour),
-		Payload:  raw,
-	})
-	return data
-}
+data, _ := license.Issue(license.IssueOptions{
+	PrivateKey: priv, KeyID: "k1", Subject: "client",
+	NotAfter: time.Now().Add(365 * 24 * time.Hour),
+	Features: []string{"export", "api", "advanced-recon"},
+})
 ```
 
 Côté binaire :
 
 ```go
-v, _ := license.Verify(data, trusted)
-tier, err := license.PayloadAs[Tier](v)
+v, err := license.Verify(data, trusted)
 if err != nil {
-	log.Fatal("licence sans tier")
+	log.Fatal(err)
 }
-
-if !slices.Contains(tier.Features, "export") {
+if !v.HasFeature("export") {
 	return errors.New("export non disponible dans votre licence — passez à un plan supérieur")
 }
-limiter := semaphore.NewWeighted(int64(tier.MaxParallel))
 ```
 
-Le `Tier` est signé : impossible pour l'utilisateur de modifier son plan sans casser la signature.
+Pour combiner avec des quotas :
+
+```go
+type Quota struct {
+	MaxParallel int `json:"max_parallel"`
+}
+raw, _ := license.MarshalPayload(Quota{MaxParallel: 8})
+data, _ := license.Issue(license.IssueOptions{
+	PrivateKey: priv, KeyID: "k1", Subject: "client",
+	NotAfter: time.Now().Add(365 * 24 * time.Hour),
+	Features: []string{"export", "api"},   // booléens : HasFeature
+	Payload:  raw,                          // chiffres et autres : PayloadAs[T]
+})
+```
+
+`Features` et `Payload` sont tous deux signés : impossible pour
+l'utilisateur de modifier son plan sans casser la signature.
 
 ---
 
@@ -1116,7 +1120,11 @@ L'attaquant doit avoir : la licence, le mot de passe (non stocké côté disque)
 | `license.PayloadAs[T](v)` | Désérialise le payload en `*T` typé (générique). |
 | `license.ErrNoPayload` | Sentinel retourné si la licence n'a pas de payload. |
 | `license.BindMachineIDs(...)` | Binding liste OU. |
-| `license.BindPassword(p)` | Binding password (argon2id). |
+| `license.BindPassword(p)` | Binding password (argon2id, params défauts). |
+| `license.BindPasswordWithParams(p, params)` | Binding password avec paramètres argon2id explicites. |
+| `license.DefaultArgon2idParams()` | Copie des params argon2id par défaut, prête à override. |
+| `(*Verified).HasFeature(name)` | Vérifie un entitlement de `License.Features`. |
+| `hostid.Composite()` | Fingerprint multi-sources (Local() + CPU brand + MAC primaire). |
 | `license.BindTOTP(secret)` | Binding RFC 6238 TOTP (6 chiffres, ±30 s). |
 | `license.BindCustom(name, v...)` | Binding custom k/v. |
 | `license.RegisterVerifier(name, fn)` | Hook pour types de binding custom. |

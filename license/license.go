@@ -23,6 +23,11 @@ type License struct {
 
 	Bindings []Binding `json:"bnd,omitempty"`
 
+	// Features is a flat list of entitlement names signed at the top level
+	// of the license body. Tools that gate behaviour by tier/feature can
+	// check it with Verified.HasFeature without deserialising Payload.
+	Features []string `json:"feat,omitempty"`
+
 	BinarySHA256   string `json:"bin,omitempty"`
 	IdentitySHA256 string `json:"id_sha,omitempty"`
 
@@ -37,6 +42,21 @@ type Binding struct {
 	Value []string `json:"v,omitempty"`
 	Hash  []byte   `json:"h,omitempty"`
 	Salt  []byte   `json:"s,omitempty"`
+	// Params carries algorithm parameters embedded next to the binding so
+	// the issuer can re-tune (e.g. argon2id time/memory/threads) without a
+	// flag day for existing licences. Nil = use the package defaults.
+	Params *BindingParams `json:"p,omitempty"`
+}
+
+// BindingParams stores algorithm tuning next to a Binding. Only the fields
+// relevant to the Binding.Type are populated. Forward-compatible: unknown
+// fields are ignored.
+type BindingParams struct {
+	// Argon2id parameters for Type=="password".
+	ArgonTime    uint32 `json:"at,omitempty"`
+	ArgonMemory  uint32 `json:"am,omitempty"`
+	ArgonThreads uint8  `json:"ap,omitempty"`
+	ArgonKeyLen  uint32 `json:"akl,omitempty"`
 }
 
 // Verified is the result of a successful Verify.
@@ -45,6 +65,19 @@ type Verified struct {
 	Payload  []byte
 	KeyUsed  string
 	Warnings []string
+}
+
+// HasFeature reports whether the licence grants name. Comparison is
+// case-sensitive — pick a convention at issue time (kebab-case is common).
+// Defined on License (rather than Verified) so callers inspecting a parsed
+// licence without going through Verify can use the same lookup.
+func (l *License) HasFeature(name string) bool {
+	for _, f := range l.Features {
+		if f == name {
+			return true
+		}
+	}
+	return false
 }
 
 // signedLicense is the wire wrapper PEM-encoded on disk. KeyID is duplicated
@@ -71,6 +104,10 @@ type IssueOptions struct {
 	NotAfter  time.Time
 
 	Bindings []Binding
+
+	// Features is signed into the license body at the top level. See
+	// Verified.HasFeature for verification-side lookup.
+	Features []string
 
 	BinarySHA256   string
 	IdentitySHA256 string

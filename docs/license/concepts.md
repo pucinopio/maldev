@@ -104,6 +104,30 @@ flowchart LR
 
 La clé privée est le seul secret du système. Tant qu'elle reste privée, personne ne peut émettre de licence valide en ton nom. La clé publique est, comme son nom l'indique, publique : elle se distribue avec le binaire.
 
+## `Local()` vs `Composite()` pour le machine binding
+
+Le sous-package `license/hostid` expose deux fingerprints :
+
+| Fonction | Sources mixées | Stable à travers… | Sensible à… |
+|---|---|---|---|
+| `Local()` | identifiant canonique de l'OS uniquement (MachineGuid / `/etc/machine-id` / `IOPlatformUUID`) | reboots, mises à jour applicatives, ajout/retrait d'interfaces réseau | réinstallation d'OS, machine entièrement neuve |
+| `Composite()` | `Local()` + CPU brand string + MAC du premier réseau physique (DMI product UUID en bonus sur Linux) | reboots, mises à jour applicatives | changement de CPU, échange de carte mère, swap de NIC, déplacement vers une VM différente |
+
+Quand utiliser quoi :
+
+- **`Local()`** quand tu veux dire "même installation, même utilisateur". Plus permissif aux changements hardware légitimes (NIC remplacée, ajout de RAM). Une réinstallation d'OS le change.
+- **`Composite()`** quand tu veux dire "même machine physique". Plus résistant au spoofing de `/etc/machine-id` ou d'une seule source — un attaquant doit aligner CPU brand + MAC + machine-id pour faire passer une autre machine. Plus sensible aux changements hardware.
+
+```go
+// Permissif :
+me, _ := hostid.Local()
+
+// Strict :
+me, _ := hostid.Composite()
+```
+
+Les deux retournent 32 octets ; passe l'un à `WithMachineID(me)` au verify. Évidemment, émets la licence avec la même variante que celle que tu vérifies.
+
 ## Vocabulaire
 
 | Terme | Définition |

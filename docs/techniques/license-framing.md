@@ -111,6 +111,7 @@ Le corps signé d'une licence. Tous les champs sont couverts par la signature.
 | `NotBefore` | `nbf` | `time.Time` UTC | Avant cette date, refus `causeNotYetValid` (avec `MaxClockSkew`). | jamais "pas encore valide" |
 | `NotAfter` | `exp` | `time.Time` UTC | Après cette date, refus `causeExpired`. Zéro = jamais expirer. | jamais expirer |
 | `Bindings` | `bnd` | `[]Binding` | Contraintes à matcher avec des évidences à `Verify`. | pas de contraintes spécifiques |
+| `Features` | `feat` | `[]string` | Liste d'entitlements signée au niveau racine. Lue via `Verified.HasFeature(name)` sans désérialiser `Payload`. | aucun entitlement |
 | `BinarySHA256` | `bin` | `string` (hex) | Hash SHA-256 du fichier `os.Executable()` autorisé. | pas de pinning disque |
 | `IdentitySHA256` | `id_sha` | `string` (hex) | Hash SHA-256 de l'identité embarquée via `//go:embed`. Survit au packer. | pas de pinning identité |
 | `Payload` | `pld` | `json.RawMessage` | Données libres signées en clair pour usage applicatif. Accessibles via `Verified.Payload`. | aucune métadonnée applicative |
@@ -122,12 +123,13 @@ Le corps signé d'une licence. Tous les champs sont couverts par la signature.
 
 | Champ | JSON | Type | Sens |
 |---|---|---|---|
-| `Type` | `t` | `string` | Une parmi : `"machine"`, `"password"`, ou `"custom:<name>"` |
-| `Value` | `v` | `[]string` | Pour `machine` ou `custom:*` : liste de valeurs acceptées (OR-match). Vide pour `password`. |
-| `Hash` | `h` | `[]byte` | Pour `password` : hash argon2id du mot de passe (32 octets). Vide pour les autres types. |
+| `Type` | `t` | `string` | Une parmi : `"machine"`, `"password"`, `"totp"`, ou `"custom:<name>"` |
+| `Value` | `v` | `[]string` | Pour `machine`/`custom:*` : liste de valeurs acceptées (OR-match). Pour `totp` : `[secret_base32]`. Vide pour `password`. |
+| `Hash` | `h` | `[]byte` | Pour `password` : hash argon2id du mot de passe. Vide pour les autres types. |
 | `Salt` | `s` | `[]byte` | Pour `password` : sel de 16 octets random. Vide pour les autres types. |
+| `Params` | `p` | `*BindingParams` | Pour `password` : paramètres argon2id stampés à l'émission (`time`, `memory`, `threads`, `keylen`). Permet de re-tuner sans casser les licences existantes. Nil = défauts du package. |
 
-Les helpers `BindMachineIDs(ids...)`, `BindPassword(p)`, `BindCustom(name, vals...)` construisent ces bindings correctement.
+Les helpers `BindMachineIDs(ids...)`, `BindPassword(p)`, `BindPasswordWithParams(p, params)`, `BindTOTP(secret)`, `BindCustom(name, vals...)` construisent ces bindings correctement.
 
 ### `type IssueOptions`
 

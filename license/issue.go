@@ -48,6 +48,7 @@ func Issue(opts IssueOptions) ([]byte, error) {
 		NotBefore:      opts.NotBefore.UTC(),
 		NotAfter:       opts.NotAfter.UTC(),
 		Bindings:       opts.Bindings,
+		Features:       opts.Features,
 		BinarySHA256:   opts.BinarySHA256,
 		IdentitySHA256: opts.IdentitySHA256,
 		Payload:        opts.Payload,
