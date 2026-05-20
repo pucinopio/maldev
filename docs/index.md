@@ -390,7 +390,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 
 </details>
 
-<details><summary><strong>license</strong> — 11 packages</summary>
+<details><summary><strong>license</strong> — 12 packages</summary>
 
 | Package | Detection | Summary |
 |---|---|---|
@@ -405,6 +405,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 | [`license/revoke`](https://pkg.go.dev/github.com/oioio-space/maldev/license/revoke) | — | _(no doc.go summary)_ |
 | [`license/seal`](https://pkg.go.dev/github.com/oioio-space/maldev/license/seal) | — | encrypts opaque payloads to a recipient identified by an X25519 public key |
 | [`license/server`](https://pkg.go.dev/github.com/oioio-space/maldev/license/server) | — | _(no doc.go summary)_ |
+| [`license/totp`](https://pkg.go.dev/github.com/oioio-space/maldev/license/totp) | — | implements RFC 6238 time-based one-time passwords (TOTP) with helpers for QR-code provisioning (PNG and ASCII) |
 
 </details>
 

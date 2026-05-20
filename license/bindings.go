@@ -8,11 +8,14 @@ import (
 	"sync"
 
 	"golang.org/x/crypto/argon2"
+
+	"github.com/oioio-space/maldev/license/totp"
 )
 
 const (
 	bindingMachine  = "machine"
 	bindingPassword = "password"
+	bindingTOTP     = "totp"
 	bindingCustom   = "custom:" // prefix
 )
 
@@ -34,6 +37,17 @@ func BindMachineIDs(ids ...string) Binding {
 // BindCustom builds a typed custom binding. Multiple values accept any-match.
 func BindCustom(name string, values ...string) Binding {
 	return Binding{Type: bindingCustom + name, Value: append([]string(nil), values...)}
+}
+
+// BindTOTP creates a binding requiring a current RFC 6238 TOTP code at Verify
+// time. The base32-encoded secret is stored in the binding (signed but
+// readable by anyone who holds the license — see docs for the security
+// trade-off). Pair with WithTOTPCode at the verification site.
+//
+// Provision the user's authenticator app once with totp.QRImagePNG or
+// totp.QRImageASCII using the same secret.
+func BindTOTP(secret string) Binding {
+	return Binding{Type: bindingTOTP, Value: []string{secret}}
 }
 
 // BindPassword derives argon2id(salt, password). The plaintext is never
@@ -84,6 +98,8 @@ func checkBindings(lic License, s *verifyState) cause {
 				return causeBindingMachineMismatch
 			case b.Type == bindingPassword:
 				return causeBindingPasswordMismatch
+			case b.Type == bindingTOTP:
+				return causeBindingTOTPMismatch
 			default:
 				return causeBindingCustomMismatch
 			}
@@ -105,6 +121,11 @@ func checkBinding(b Binding, s *verifyState) bool {
 		}
 		got := argon2.IDKey([]byte(s.password), b.Salt, argonTime, argonMemory, argonThreads, argonKeyLen)
 		return subtle.ConstantTimeCompare(got, b.Hash) == 1
+	case b.Type == bindingTOTP:
+		if s.totpCode == "" || len(b.Value) == 0 {
+			return false
+		}
+		return totp.Verify(b.Value[0], s.totpCode, 1)
 	case strings.HasPrefix(b.Type, bindingCustom):
 		name := strings.TrimPrefix(b.Type, bindingCustom)
 		verifierMu.RLock()

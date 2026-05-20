@@ -23,6 +23,7 @@ type verifyState struct {
 
 	machineID  []byte
 	password   string
+	totpCode   string
 	customVals map[string]string
 
 	statePath     string
@@ -97,6 +98,13 @@ func WithMachineID(id []byte) VerifyOption {
 
 func WithPassword(p string) VerifyOption {
 	return func(s *verifyState) { s.password = p }
+}
+
+// WithTOTPCode provides the user's current 6-digit TOTP code as evidence for
+// a BindTOTP binding. The code is verified against the secret stored in the
+// binding with ±1 30-second window of clock skew tolerance.
+func WithTOTPCode(code string) VerifyOption {
+	return func(s *verifyState) { s.totpCode = code }
 }
 
 func WithCustom(name, value string) VerifyOption {

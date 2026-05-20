@@ -30,6 +30,9 @@ Copy-paste programmes complets. Chaque recette compile telle quelle après
 - [Recette 13 — Tests unitaires : générer des licences à la volée](#recette-13)
 - [Recette 14 — Plusieurs binaires partageant la même paire de clés](#recette-14)
 - [Recette 15 — Logger les causes d'échec pour le support](#recette-15)
+- [Recette 16 — Embarquer la clé publique avec `//go:embed`](#recette-16)
+- [Recette 17 — Générer un `MALDEV_ADMIN_TOKEN`](#recette-17)
+- [Recette 18 — TOTP comme second facteur, QR code PNG ou ASCII](#recette-18)
 
 ---
 
@@ -828,6 +831,266 @@ Exemple de sortie sur un échec :
 
 ---
 
+## Recette 16
+
+**Embarquer la clé publique dans le binaire — pas de fichier externe à packager.**
+
+Le pattern : tu commit `issuer.pub` à côté du `main.go` du binaire consommateur. La directive `//go:embed` injecte son contenu dans une variable `[]byte` au moment du `go build`. Tu parses ensuite ces bytes avec `ParsePublicKey([]byte)` — qui est la variante bytes-in de `LoadPublicKey(path)`.
+
+```go
+package main
+
+import (
+	_ "embed"
+	"log"
+
+	"github.com/oioio-space/maldev/license"
+)
+
+//go:embed issuer.pub
+var issuerPub []byte
+
+func main() {
+	pub, kid, err := license.ParsePublicKey(issuerPub)
+	if err != nil {
+		log.Fatalf("issuer.pub corrompue ou absente : %v", err)
+	}
+
+	if _, err := license.VerifyFile("./user.license",
+		license.Trusted{Keys: license.SingleKey(kid, pub)}); err != nil {
+		log.Fatal("ACCESS DENIED")
+	}
+}
+```
+
+Variante : embarquer **plusieurs** clés (pour la rotation, ou pour accepter des licences de plusieurs émetteurs).
+
+```go
+//go:embed issuer-2026-05.pub issuer-2026-11.pub
+var pubFiles embed.FS
+
+func loadTrusted() license.Trusted {
+	keys := map[string]ed25519.PublicKey{}
+	entries, _ := pubFiles.ReadDir(".")
+	for _, e := range entries {
+		data, _ := pubFiles.ReadFile(e.Name())
+		pub, kid, err := license.ParsePublicKey(data)
+		if err != nil {
+			log.Printf("[skip] %s: %v", e.Name(), err)
+			continue
+		}
+		keys[kid] = pub
+	}
+	return license.Trusted{Keys: keys}
+}
+```
+
+> **Rappel** : la clé **publique** se distribue sans risque (commit, embed, README). La clé **privée** ne quitte jamais le poste de l'émetteur. Voir [concepts.md](./concepts.md#quelle-clé-distribuer).
+
+---
+
+## Recette 17
+
+**Générer un `MALDEV_ADMIN_TOKEN`.**
+
+Ce token est un **secret partagé** entre toi et ton serveur de révocation (Recette 5). Il authentifie les requêtes `POST /revoked.pem` qui ajoutent ou retirent des IDs. Sans token côté serveur, le endpoint POST est désactivé (read-only).
+
+### Caractéristiques attendues
+
+- Entropie ≥ 128 bits (~22 caractères base64 url-safe, ou 32 hex)
+- Stocké côté serveur **en clair** via variable d'environnement, ou dans un secrets manager (Vault, AWS Secrets Manager, sealed-secrets…)
+- Jamais committé, jamais loggué
+- Rotation périodique recommandée (annuelle, ou immédiate si compromission soupçonnée)
+
+### Génération en une commande
+
+```bash
+# Linux / macOS / Git Bash :
+openssl rand -base64 32
+
+# PowerShell :
+[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Max 256 } | ForEach-Object { [byte]$_ }))
+
+# Avec Python :
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+
+# Avec Go (le plus simple si tu veux scripter) :
+go run -exec=- - <<'EOF'
+package main
+import ("crypto/rand"; "encoding/base64"; "fmt")
+func main() { b := make([]byte, 32); rand.Read(b); fmt.Println(base64.URLEncoding.EncodeToString(b)) }
+EOF
+```
+
+Résultat : une chaîne du genre `cVnGEjRSdM2GR1Mxz5lFt-fOpkqsr8YgVRJP7H2ID5g`.
+
+### Mise en place côté serveur
+
+```bash
+# Stockage local (acceptable en dev) :
+export MALDEV_ADMIN_TOKEN="cVnGEjRSdM2GR1Mxz5lFt-fOpkqsr8YgVRJP7H2ID5g"
+./mon-serveur-revocation
+
+# systemd unit :
+[Service]
+Environment="MALDEV_ADMIN_TOKEN=…"
+ExecStart=/usr/local/bin/mon-serveur-revocation
+
+# Docker / Kubernetes : via secret monté en env var, pas dans l'image.
+```
+
+### Utilisation pour révoquer / annuler une révocation
+
+```bash
+TOKEN="cVnGEjRSdM2GR1Mxz5lFt-fOpkqsr8YgVRJP7H2ID5g"
+
+# Révoquer une licence :
+curl -X POST https://lic.example.com/revoked.pem \
+     -H "Authorization: Bearer $TOKEN" \
+     -d '{"add":["73f56081-5cce-4073-9632-..."]}'
+
+# Annuler :
+curl -X POST https://lic.example.com/revoked.pem \
+     -H "Authorization: Bearer $TOKEN" \
+     -d '{"remove":["73f56081-5cce-4073-9632-..."]}'
+```
+
+### Sécurité
+
+Le check côté handler utilise `subtle.ConstantTimeCompare` indirectement (via `strings.HasPrefix` + comparaison) — un attaquant qui brute-force ne peut pas exploiter de timing. Mais c'est juste un Bearer token : ne le laisse pas fuiter dans des logs HTTP, des screenshots, ou un repo public.
+
+---
+
+## Recette 18
+
+**TOTP comme second facteur — provisioning QR code + vérification.**
+
+Le binding `BindTOTP` ajoute une exigence "code à 6 chiffres" au démarrage du binaire. L'utilisateur scanne un QR code une fois (avec Google Authenticator, Authy, Yubico Authenticator, 1Password, etc.), puis tape le code courant à chaque démarrage.
+
+### a. Provisionnement (côté émetteur)
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+	"os"
+	"time"
+
+	"github.com/oioio-space/maldev/license"
+	"github.com/oioio-space/maldev/license/totp"
+)
+
+func main() {
+	priv, _ := license.LoadPrivateKey("./issuer.key")
+
+	// 1. Génère un secret 20 octets (format authenticator standard).
+	secret, err := totp.NewSecret()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// 2. Émet la licence avec le binding TOTP.
+	data, err := license.Issue(license.IssueOptions{
+		PrivateKey: priv, KeyID: "k1",
+		Subject:    "alice@example.com",
+		NotAfter:   time.Now().Add(90 * 24 * time.Hour),
+		Bindings:   []license.Binding{license.BindTOTP(secret)},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	license.SaveLicense("./alice.license", data)
+
+	// 3. Affiche le QR code en ASCII dans le terminal pour scan immédiat.
+	ascii, _ := totp.QRImageASCII(secret, "alice@example.com", "rshell")
+	fmt.Println("Scanne ce QR avec ton authenticator (Google Authenticator, Authy, etc.):")
+	fmt.Println()
+	fmt.Println(ascii)
+
+	// 4. Ou sauvegarde en PNG pour envoi sécurisé une seule fois.
+	_ = totp.WriteQRImagePNG("./alice-totp.png", secret, "alice@example.com", "rshell", 256)
+	fmt.Println("PNG aussi écrit dans ./alice-totp.png (à transmettre par canal sécurisé, à détruire après scan).")
+
+	// 5. (Optionnel) imprime le secret en clair pour saisie manuelle si le scan échoue.
+	fmt.Printf("\nSecret (à saisir manuellement si le scan ne marche pas) : %s\n", secret)
+
+	_ = os.Stdin // hint au compilateur que os est utilisé
+}
+```
+
+Sortie attendue (le QR fait ~50×50 caractères "█" et espaces, lisible sur un terminal large) :
+
+```
+Scanne ce QR avec ton authenticator (Google Authenticator, Authy, etc.):
+
+████████████████████  ██  ██████      ██████████████
+██          ██  ████  ████    ██  ████          ██████
+██  ██████  ████  ██  ██  ██    ████  ██████  ██
+...
+```
+
+### b. Vérification (côté binaire)
+
+```go
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"log"
+	"os"
+	"strings"
+
+	"github.com/oioio-space/maldev/license"
+)
+
+func main() {
+	pub, kid, _ := license.LoadPublicKey("issuer.pub")
+
+	// Demande le code à l'utilisateur.
+	fmt.Print("Code TOTP (6 chiffres) : ")
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Scan()
+	code := strings.TrimSpace(scanner.Text())
+
+	_, err := license.VerifyFile("./alice.license",
+		license.Trusted{Keys: license.SingleKey(kid, pub)},
+		license.WithTOTPCode(code),
+	)
+	if err != nil {
+		log.Fatal("ACCESS DENIED — code incorrect ou licence invalide")
+	}
+	fmt.Println("Autorisé.")
+}
+```
+
+### Garanties et limites — sois transparent
+
+| Garantie | Détail |
+|---|---|
+| ✅ Le code change toutes les 30 secondes | Un screenshot ou un copier-coller a une durée de vie courte. |
+| ✅ Tolérance ±1 fenêtre (30s) | Absorbe une légère désynchronisation d'horloge. |
+| ✅ Comparaison en temps constant | Pas de timing leak. |
+| ⚠️ Le secret est dans la licence | Quelqu'un qui détient le fichier `.license` peut extraire le secret et reproduire les codes. C'est un **speed bump**, pas une vraie 2FA. |
+| ⚠️ Pas de protection contre le partage volontaire | Si l'utilisateur scanne **et** donne son authenticator à un tiers, le tiers peut générer des codes. |
+
+**Quand utiliser** : ajouter une friction supplémentaire en plus de `BindPassword`. Un attaquant qui obtient seulement le fichier `.license` doit encore extraire le secret et le saisir dans son propre authenticator avant de produire un code — l'utilisateur légitime ne fait que taper 6 chiffres.
+
+**Quand ne pas utiliser** : si la menace inclut un attaquant qui a déjà la licence (vol de fichier), TOTP seul ne change rien. Combine alors avec :
+
+```go
+pwBinding, _ := license.BindPassword("strong-passphrase-known-only-by-user")
+totpBinding := license.BindTOTP(secret) // secret stocké dans la licence MAIS le code change
+
+Bindings: []license.Binding{pwBinding, totpBinding}
+```
+
+L'attaquant doit avoir : la licence, le mot de passe (non stocké côté disque), ET un authenticator configuré avec le secret.
+
+---
+
 ## API helpers (cheatsheet)
 
 | Fonction | Quand l'utiliser |
@@ -854,8 +1117,19 @@ Exemple de sortie sur un échec :
 | `license.ErrNoPayload` | Sentinel retourné si la licence n'a pas de payload. |
 | `license.BindMachineIDs(...)` | Binding liste OU. |
 | `license.BindPassword(p)` | Binding password (argon2id). |
+| `license.BindTOTP(secret)` | Binding RFC 6238 TOTP (6 chiffres, ±30 s). |
 | `license.BindCustom(name, v...)` | Binding custom k/v. |
 | `license.RegisterVerifier(name, fn)` | Hook pour types de binding custom. |
+| `license.WithTOTPCode(code)` | Évidence pour `BindTOTP`. |
+| `totp.NewSecret()` | Nouveau secret 20 octets base32. |
+| `totp.Code(secret, t)` | Calcule un code à une date donnée. |
+| `totp.Verify(secret, code, skew)` | Vérifie un code avec tolérance. |
+| `totp.URI(secret, account, issuer)` | Construit l'URI `otpauth://`. |
+| `totp.QRImagePNG(secret, ...)` | Image PNG du QR. |
+| `totp.QRImageASCII(secret, ...)` | Représentation ASCII (terminal). |
+| `totp.WriteQRImagePNG(path, ...)` | Écrit le QR PNG sur disque. |
+| `license.ParsePublicKey([]byte)` | Variante "bytes-in" pour `//go:embed`. |
+| `license.ParsePrivateKey([]byte)` | Variante "bytes-in". |
 
 ---
 

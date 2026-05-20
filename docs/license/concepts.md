@@ -44,6 +44,49 @@ Une fois décodé en base64, c'est du JSON :
 
 La **signature** (`sig`) couvre tous les champs de `lic`. Modifier un seul octet de `lic` invalide la signature : le binaire détectera la modification et refusera.
 
+## Quelle clé distribuer
+
+Le système repose sur **deux** clés liées mathématiquement par Ed25519. Elles n'ont absolument pas le même statut :
+
+| Clé | Statut | À faire | À ne pas faire |
+|---|---|---|---|
+| **Privée** (`MALDEV PRIVATE KEY`, 64 octets) | Secret absolu | La garder hors-ligne, idéalement sur un poste dédié ou un HSM. Sauvegarder chiffré. Permissions `0600`. | Ne **jamais** la committer, la pusher sur un repo, l'envoyer par email, la stocker dans un container CI, l'embarquer dans un binaire. Si elle fuite, **tout est compromis** : il faut rotation immédiate. |
+| **Publique** (`MALDEV PUBLIC KEY`, 32 octets) | Information publique | La distribuer avec chaque binaire, la committer, la mettre dans un README, l'embarquer en dur via `//go:embed`. | Rien d'interdit. Ce qu'on craint avec la clé privée (forger des licences) est impossible avec la publique. |
+
+> En cas de doute : la **publique** se reconnaît à son en-tête `-----BEGIN MALDEV PUBLIC KEY-----` ; la **privée** à `-----BEGIN MALDEV PRIVATE KEY-----`. La privée fait ~115 octets en PEM, la publique ~80 octets.
+
+### Embarquer la clé publique avec `//go:embed`
+
+Le pattern recommandé pour les binaires distribués : commit `issuer.pub` à côté du `main.go`, embarque-le à la compilation, parse-le au démarrage. Aucun fichier externe à packager.
+
+```go
+package main
+
+import (
+	_ "embed"
+	"log"
+
+	"github.com/oioio-space/maldev/license"
+)
+
+//go:embed issuer.pub
+var issuerPub []byte
+
+func main() {
+	pub, kid, err := license.ParsePublicKey(issuerPub) // []byte → ed25519.PublicKey + KID
+	if err != nil {
+		log.Fatalf("clé publique corrompue : %v", err)
+	}
+	trusted := license.Trusted{Keys: license.SingleKey(kid, pub)}
+
+	if _, err := license.VerifyFile("user.license", trusted); err != nil {
+		log.Fatal("ACCESS DENIED")
+	}
+}
+```
+
+Toutes les fonctions de chargement existent en deux variantes : **file-based** (`LoadPublicKey`, `LoadPrivateKey`, `LoadLicense`, `VerifyFile`) qui prennent un chemin, et **bytes-based** (`ParsePublicKey`, `ParsePrivateKey`, `Verify`) qui prennent un `[]byte` directement utilisable avec `//go:embed`.
+
 ## Trois rôles, deux clés
 
 ```mermaid

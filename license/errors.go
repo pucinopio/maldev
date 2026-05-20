@@ -22,6 +22,7 @@ const (
 	causeIssuerMismatch
 	causeBindingMachineMismatch
 	causeBindingPasswordMismatch
+	causeBindingTOTPMismatch
 	causeBindingCustomMismatch
 	causeBinaryHashMismatch
 	causeIdentityMismatch
@@ -53,6 +54,8 @@ func (c cause) String() string {
 		return "binding-machine-mismatch"
 	case causeBindingPasswordMismatch:
 		return "binding-password-mismatch"
+	case causeBindingTOTPMismatch:
+		return "binding-totp-mismatch"
 	case causeBindingCustomMismatch:
 		return "binding-custom-mismatch"
 	case causeBinaryHashMismatch:

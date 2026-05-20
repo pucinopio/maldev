@@ -104,6 +104,51 @@ if !slices.Contains(tier.Features, "export") {
 
 Voir [Recette 10](./workflow.md#recette-10).
 
+### Embarquer la clé publique dans le binaire
+
+Utilise `//go:embed` + `license.ParsePublicKey([]byte)`. Toutes les fonctions de chargement ont une variante bytes-in :
+
+```go
+//go:embed issuer.pub
+var issuerPub []byte
+
+pub, kid, _ := license.ParsePublicKey(issuerPub)
+```
+
+Recette complète : [Recette 16](./workflow.md#recette-16).
+
+### Que distribuer, que garder secret
+
+| Clé | Statut | Distribuer ? |
+|---|---|---|
+| **Privée** (`MALDEV PRIVATE KEY`) | Secret absolu | **Jamais.** Hors-ligne, HSM si possible. |
+| **Publique** (`MALDEV PUBLIC KEY`) | Information publique | **Oui** — commit, embed, README. |
+
+Détails : [concepts.md § Quelle clé distribuer](./concepts.md#quelle-clé-distribuer).
+
+### Comment générer un `MALDEV_ADMIN_TOKEN` ?
+
+C'est un Bearer token aléatoire (≥ 128 bits) qui authentifie les requêtes admin du serveur de révocation.
+
+```bash
+openssl rand -base64 32
+```
+
+Stockage via variable d'environnement ou secrets manager. Recette complète avec PowerShell / Python / Go : [Recette 17](./workflow.md#recette-17).
+
+### Ajouter un second facteur TOTP
+
+```go
+secret, _ := totp.NewSecret()
+data, _ := license.Issue(license.IssueOptions{
+    Bindings: []license.Binding{license.BindTOTP(secret)},
+    ...
+})
+fmt.Println(totp.QRImageASCII(secret, "alice", "rshell"))
+```
+
+Au verify, l'utilisateur fournit le code courant via `WithTOTPCode("123456")`. Le secret est stocké dans la licence (speed bump, pas vraie 2FA — voir [Recette 18](./workflow.md#recette-18) pour les détails).
+
 ### Plusieurs binaires partagent la même clé publique
 
 C'est le cas typique. Une seule paire de clés émet pour `rshell`, `memscan`, etc. Utilise `Audience` pour scoper :
