@@ -81,13 +81,14 @@ OPSEC / MITRE / Limitations / See also).
 | [T1070](https://attack.mitre.org/techniques/T1070/) | [`cleanup`](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup) · [`cleanup/memory`](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/memory) |
 | [T1070.004](https://attack.mitre.org/techniques/T1070/004/) | [`cleanup`](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup) · [`cleanup/selfdelete`](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/selfdelete) · [`cleanup/wipe`](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/wipe) |
 | [T1070.006](https://attack.mitre.org/techniques/T1070/006/) | [`cleanup`](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup) · [`cleanup/timestomp`](https://pkg.go.dev/github.com/oioio-space/maldev/cleanup/timestomp) |
-| [T1071](https://attack.mitre.org/techniques/T1071/) | [`c2`](https://pkg.go.dev/github.com/oioio-space/maldev/c2) · [`c2/transport`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport) · [`evasion/hook/bridge`](https://pkg.go.dev/github.com/oioio-space/maldev/evasion/hook/bridge) |
+| [T1071](https://attack.mitre.org/techniques/T1071/) | [`c2`](https://pkg.go.dev/github.com/oioio-space/maldev/c2) · [`c2/transport`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport) · [`c2/transport/websocket`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport/websocket) · [`evasion/hook/bridge`](https://pkg.go.dev/github.com/oioio-space/maldev/evasion/hook/bridge) |
 | [T1071.001](https://attack.mitre.org/techniques/T1071/001/) | [`c2`](https://pkg.go.dev/github.com/oioio-space/maldev/c2) · [`c2/meterpreter`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/meterpreter) · [`c2/transport/namedpipe`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport/namedpipe) · [`useragent`](https://pkg.go.dev/github.com/oioio-space/maldev/useragent) |
 | [T1078](https://attack.mitre.org/techniques/T1078/) | [`win/privilege`](https://pkg.go.dev/github.com/oioio-space/maldev/win/privilege) |
 | [T1082](https://attack.mitre.org/techniques/T1082/) | [`win/domain`](https://pkg.go.dev/github.com/oioio-space/maldev/win/domain) · [`win/version`](https://pkg.go.dev/github.com/oioio-space/maldev/win/version) |
 | [T1083](https://attack.mitre.org/techniques/T1083/) | [`recon/drive`](https://pkg.go.dev/github.com/oioio-space/maldev/recon/drive) · [`recon/folder`](https://pkg.go.dev/github.com/oioio-space/maldev/recon/folder) |
 | [T1090](https://attack.mitre.org/techniques/T1090/) | [`c2/pivot/socks5`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/pivot/socks5) |
 | [T1090.001](https://attack.mitre.org/techniques/T1090/001/) | [`c2/pivot/socks5`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/pivot/socks5) |
+| [T1090.004](https://attack.mitre.org/techniques/T1090/004/) | [`c2/transport/websocket`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport/websocket) |
 | [T1095](https://attack.mitre.org/techniques/T1095/) | [`c2`](https://pkg.go.dev/github.com/oioio-space/maldev/c2) · [`c2/meterpreter`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/meterpreter) · [`c2/transport`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport) |
 | [T1098](https://attack.mitre.org/techniques/T1098/) | [`persistence/account`](https://pkg.go.dev/github.com/oioio-space/maldev/persistence/account) |
 | [T1106](https://attack.mitre.org/techniques/T1106/) | [`pe`](https://pkg.go.dev/github.com/oioio-space/maldev/pe) · [`pe/imports`](https://pkg.go.dev/github.com/oioio-space/maldev/pe/imports) · [`win/api`](https://pkg.go.dev/github.com/oioio-space/maldev/win/api) · [`win/ntapi`](https://pkg.go.dev/github.com/oioio-space/maldev/win/ntapi) · [`win/syscall`](https://pkg.go.dev/github.com/oioio-space/maldev/win/syscall) |
@@ -335,7 +336,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 
 </details>
 
-<details><summary><strong>C2 — `c2/*`</strong> — 8 packages</summary>
+<details><summary><strong>C2 — `c2/*`</strong> — 9 packages</summary>
 
 | Package | Detection | Summary |
 |---|---|---|
@@ -347,6 +348,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 | [`c2/shell`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/shell) | noisy | provides a reverse shell with automatic reconnection, PTY support, and optional Windows evasion integration |
 | [`c2/transport`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport) | moderate | provides pluggable network transport implementations for C2 communication: plain TCP, TLS with optional certificate pinning, and uTLS for JA3/JA4 fingerprint randomisation |
 | [`c2/transport/namedpipe`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport/namedpipe) | quiet | provides a Windows named-pipe transport implementing the [github.com/oioio-space/maldev/c2/transport] `Transport` and `Listener` interfaces |
+| [`c2/transport/websocket`](https://pkg.go.dev/github.com/oioio-space/maldev/c2/transport/websocket) | moderate | implements a WebSocket [transport.Transport] (dial side) and [transport.Listener] (accept side) for C2 channels that ride HTTP/1.1 + WS upgrade |
 
 </details>
 

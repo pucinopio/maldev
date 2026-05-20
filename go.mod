@@ -1,10 +1,11 @@
 module github.com/oioio-space/maldev
 
-go 1.21
+go 1.23
 
 require (
 	github.com/Binject/go-donut v0.0.0-20220908180326-fcdcc35d591c
 	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
+	github.com/coder/websocket v1.8.14
 	github.com/creack/pty v1.1.24
 	github.com/ebitengine/purego v0.8.2
 	github.com/glaslos/ssdeep v1.0.0
@@ -25,6 +26,7 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1
 	golang.org/x/arch v0.14.0
 	golang.org/x/crypto v0.33.0
+	golang.org/x/net v0.23.0
 	golang.org/x/sync v0.11.0
 	golang.org/x/sys v0.30.0
 	golang.org/x/text v0.22.0
@@ -42,5 +44,4 @@ require (
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	golang.org/x/image v0.12.0 // indirect
-	golang.org/x/net v0.23.0 // indirect
 )
