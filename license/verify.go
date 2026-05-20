@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/oioio-space/maldev/license/canonical"
+	"github.com/oioio-space/maldev/license/revoke"
 )
 
 // Verify parses, authenticates, and authorises a license. The single returned
@@ -107,6 +108,33 @@ func Verify(data []byte, trusted Trusted, opts ...VerifyOption) (*Verified, erro
 		return nil, state.fail(c)
 	}
 
+	// 9. Revocation.
+	if state.revokeSource != nil {
+		list, fetched, ferr := loadOrFetchRevocation(state, pub, w.License.KeyID, now)
+		if ferr != nil {
+			if !st.LastFetchOk.IsZero() && now.Sub(st.LastFetchOk) > state.gracePeriod {
+				return nil, state.fail(causeRevocationStale)
+			}
+			if st.LastFetchOk.IsZero() && state.gracePeriod == 0 {
+				return nil, state.fail(causeRevocationStale)
+			}
+			state.logger.Warn("revocation fetch failed; using grace", "err", ferr)
+		} else if list != nil {
+			if list.IsRevoked(w.License.ID) {
+				return nil, state.fail(causeRevoked)
+			}
+			if fetched {
+				st.LastFetchOk = now
+				if list.ServerTime.After(st.TrustedFloor) {
+					st.TrustedFloor = list.ServerTime
+				}
+				if list.Sequence > st.LastSeenSequence {
+					st.LastSeenSequence = list.Sequence
+				}
+			}
+		}
+	}
+
 	// 12. Persist state.
 	if state.statePath != "" && stateKey != nil {
 		st.LastSeenLocal = maxTime(st.LastSeenLocal, now)
@@ -144,4 +172,22 @@ func (s *verifyState) fail(c cause) error {
 	return invalid(c)
 }
 
-var _ = time.Second // import retention for future time-based steps
+func loadOrFetchRevocation(s *verifyState, pub ed25519.PublicKey, kid string, now time.Time) (*revoke.List, bool, error) {
+	if s.revokeCachePath != "" {
+		if l, err := revoke.LoadCache(s.revokeCachePath, pub, kid, now); err == nil {
+			return l, false, nil
+		}
+	}
+	raw, err := s.revokeSource.Fetch(s.ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	l, err := revoke.VerifyBytes(raw, pub, kid)
+	if err != nil {
+		return nil, false, err
+	}
+	if s.revokeCachePath != "" {
+		_ = revoke.StoreCache(s.revokeCachePath, raw, l.Sequence)
+	}
+	return l, true, nil
+}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"time"
+
+	"github.com/oioio-space/maldev/license/revoke"
 )
 
 // VerifyOption configures Verify. See WithAudience, WithIssuer, etc.
@@ -27,6 +29,11 @@ type verifyState struct {
 
 	binaryPinning bool
 	identityBytes []byte
+
+	revokeSource    revoke.RevocationSource
+	revokeRefresh   time.Duration
+	revokeCachePath string
+	gracePeriod     time.Duration
 
 	warnings []string
 }
@@ -107,4 +114,16 @@ func WithBinaryPinning() VerifyOption {
 
 func WithIdentityBytes(b []byte) VerifyOption {
 	return func(s *verifyState) { s.identityBytes = append([]byte(nil), b...) }
+}
+
+func WithRevocation(src revoke.RevocationSource, refresh time.Duration, cachePath string) VerifyOption {
+	return func(s *verifyState) {
+		s.revokeSource = src
+		s.revokeRefresh = refresh
+		s.revokeCachePath = cachePath
+	}
+}
+
+func WithGracePeriod(d time.Duration) VerifyOption {
+	return func(s *verifyState) { s.gracePeriod = d }
 }
