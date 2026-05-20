@@ -51,8 +51,13 @@ func TestAdversarial_SwappedKeyIDRejected(t *testing.T) {
 
 func TestAdversarial_RandomByteMutation(t *testing.T) {
 	data, pub, _ := issueFor(t, IssueOptions{NotAfter: time.Now().Add(time.Hour)})
+	origInner, ok := decodeInnerForTest(data)
+	if !ok {
+		t.Fatal("could not decode original PEM")
+	}
+
 	rng := rand.New(rand.NewSource(42))
-	accepted := 0
+	accepted, evaluated := 0, 0
 	for i := 0; i < 100; i++ {
 		cp := append([]byte(nil), data...)
 		start := bytes.Index(cp, []byte("\n")) + 1
@@ -61,11 +66,34 @@ func TestAdversarial_RandomByteMutation(t *testing.T) {
 			t.Fatal("bad PEM")
 		}
 		cp[start+rng.Intn(end-start)] ^= byte(1 << uint(rng.Intn(8)))
+
+		// Mutations that hit a PEM newline get absorbed by pem.Decode, and
+		// some base64 quantisations are no-ops. These produce the same inner
+		// bytes as the original — they are not real attacks, so skip them.
+		if newInner, ok := decodeInnerForTest(cp); ok && bytes.Equal(newInner, origInner) {
+			continue
+		}
+		evaluated++
 		if _, err := Verify(cp, trustedFor(pub, "k1")); err == nil {
 			accepted++
 		}
 	}
 	if accepted > 0 {
-		t.Fatalf("%d/100 mutations accepted — signature/format check too lax", accepted)
+		t.Fatalf("%d/%d real mutations accepted — signature/format check too lax", accepted, evaluated)
 	}
+	if evaluated == 0 {
+		t.Fatal("no real mutations evaluated — test loop is not exercising the signature path")
+	}
+}
+
+func decodeInnerForTest(data []byte) ([]byte, bool) {
+	blk, _ := pem.Decode(data)
+	if blk == nil || blk.Type != pemLicense {
+		return nil, false
+	}
+	raw, err := base64.StdEncoding.DecodeString(string(blk.Bytes))
+	if err != nil {
+		return nil, false
+	}
+	return raw, true
 }
