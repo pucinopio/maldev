@@ -32,17 +32,18 @@ def find_blocks(root: pathlib.Path):
             yield md, i, m.group(1)
 
 
+PUPPETEER_CONFIG = pathlib.Path(__file__).parent / "puppeteer-config.json"
+
+
 def render(mmdc: str, source: str) -> tuple[bool, str]:
     with tempfile.TemporaryDirectory() as td:
         inp = pathlib.Path(td) / "in.mmd"
         out = pathlib.Path(td) / "out.svg"
         inp.write_text(source, encoding="utf-8")
-        proc = subprocess.run(
-            [mmdc, "-i", str(inp), "-o", str(out), "--quiet"],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
+        cmd = [mmdc, "-i", str(inp), "-o", str(out), "--quiet"]
+        if PUPPETEER_CONFIG.exists():
+            cmd += ["--puppeteerConfigFile", str(PUPPETEER_CONFIG)]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         if proc.returncode != 0 or not out.exists():
             return False, (proc.stderr or proc.stdout).strip()
         return True, ""
