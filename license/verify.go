@@ -73,7 +73,12 @@ func Verify(data []byte, trusted Trusted, opts ...VerifyOption) (*Verified, erro
 		return nil, state.fail(causeIssuerMismatch)
 	}
 
-	// 7-12. Wired in later tasks.
+	// 7. Bindings.
+	if c := checkBindings(w.License, state); c != causeOK {
+		return nil, state.fail(c)
+	}
+
+	// 8-12. Wired in later tasks.
 
 	return &Verified{
 		License:  w.License,

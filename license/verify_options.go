@@ -18,6 +18,10 @@ type verifyState struct {
 	audience []string
 	issuer   string
 
+	machineID  []byte
+	password   string
+	customVals map[string]string
+
 	warnings []string
 }
 
@@ -64,4 +68,21 @@ func WithAudience(aud ...string) VerifyOption {
 
 func WithIssuer(iss string) VerifyOption {
 	return func(s *verifyState) { s.issuer = iss }
+}
+
+func WithMachineID(id []byte) VerifyOption {
+	return func(s *verifyState) { s.machineID = append([]byte(nil), id...) }
+}
+
+func WithPassword(p string) VerifyOption {
+	return func(s *verifyState) { s.password = p }
+}
+
+func WithCustom(name, value string) VerifyOption {
+	return func(s *verifyState) {
+		if s.customVals == nil {
+			s.customVals = map[string]string{}
+		}
+		s.customVals[name] = value
+	}
 }
