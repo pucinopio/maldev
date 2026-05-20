@@ -102,6 +102,11 @@ func Verify(data []byte, trusted Trusted, opts ...VerifyOption) (*Verified, erro
 		return nil, state.fail(c)
 	}
 
+	// 8. Binary / Identity pinning.
+	if c := checkPinning(w.License, state); c != causeOK {
+		return nil, state.fail(c)
+	}
+
 	// 12. Persist state.
 	if state.statePath != "" && stateKey != nil {
 		st.LastSeenLocal = maxTime(st.LastSeenLocal, now)

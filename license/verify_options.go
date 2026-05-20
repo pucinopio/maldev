@@ -25,6 +25,9 @@ type verifyState struct {
 	statePath     string
 	stateHostIDFn func() ([]byte, error)
 
+	binaryPinning bool
+	identityBytes []byte
+
 	warnings []string
 }
 
@@ -96,4 +99,12 @@ func WithStateFile(path string) VerifyOption {
 
 func WithStateHostID(fn func() ([]byte, error)) VerifyOption {
 	return func(s *verifyState) { s.stateHostIDFn = fn }
+}
+
+func WithBinaryPinning() VerifyOption {
+	return func(s *verifyState) { s.binaryPinning = true }
+}
+
+func WithIdentityBytes(b []byte) VerifyOption {
+	return func(s *verifyState) { s.identityBytes = append([]byte(nil), b...) }
 }
