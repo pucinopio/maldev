@@ -50,11 +50,35 @@ func Verify(data []byte, trusted Trusted, opts ...VerifyOption) (*Verified, erro
 		return nil, state.fail(causeBadSignature)
 	}
 
-	// 4. State file — wired in a later task.
+	// 4. State file: read if configured, detect rollback.
+	var (
+		st       State
+		stateKey []byte
+	)
+	if state.statePath != "" {
+		var hostFP []byte
+		if state.stateHostIDFn != nil {
+			hostFP, _ = state.stateHostIDFn()
+		}
+		if hostFP == nil {
+			hostFP = make([]byte, 32)
+		}
+		stateKey = deriveStateKey(w.Signature, hostFP)
+		if loaded, err := readState(state.statePath, stateKey); err == nil {
+			st = loaded
+		} else {
+			state.logger.Warn("license state unreadable; resetting", "err", err)
+		}
+	}
 
 	// 5. Time.
 	now := state.clock.Now()
 	skew := state.maxClockSkew
+	floor := maxTime(st.TrustedFloor, st.LastSeenLocal)
+	if !floor.IsZero() && now.Before(floor.Add(-state.maxClockSkew)) {
+		return nil, state.fail(causeClockRollback)
+	}
+
 	if !w.License.NotBefore.IsZero() && w.License.NotBefore.After(now.Add(skew)) {
 		return nil, state.fail(causeNotYetValid)
 	}
@@ -78,7 +102,13 @@ func Verify(data []byte, trusted Trusted, opts ...VerifyOption) (*Verified, erro
 		return nil, state.fail(c)
 	}
 
-	// 8-12. Wired in later tasks.
+	// 12. Persist state.
+	if state.statePath != "" && stateKey != nil {
+		st.LastSeenLocal = maxTime(st.LastSeenLocal, now)
+		if err := writeState(state.statePath, stateKey, st); err != nil {
+			state.logger.Warn("license state write failed", "err", err)
+		}
+	}
 
 	return &Verified{
 		License:  w.License,

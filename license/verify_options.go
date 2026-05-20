@@ -22,6 +22,9 @@ type verifyState struct {
 	password   string
 	customVals map[string]string
 
+	statePath     string
+	stateHostIDFn func() ([]byte, error)
+
 	warnings []string
 }
 
@@ -85,4 +88,12 @@ func WithCustom(name, value string) VerifyOption {
 		}
 		s.customVals[name] = value
 	}
+}
+
+func WithStateFile(path string) VerifyOption {
+	return func(s *verifyState) { s.statePath = path }
+}
+
+func WithStateHostID(fn func() ([]byte, error)) VerifyOption {
+	return func(s *verifyState) { s.stateHostIDFn = fn }
 }
