@@ -91,16 +91,11 @@ Toutes les fonctions de chargement existent en deux variantes : **file-based** (
 
 ```mermaid
 flowchart LR
-    A["Toi
-(émetteur)"] -- "signe avec
-clé privée" --> L["licence.pem"]
+    A["Toi<br/>(émetteur)"] -- "signe avec<br/>clé privée" --> L["licence.pem"]
     L --> U["Utilisateur"]
-    U --> B["Binaire
-(consommateur)"]
-    A -. "distribue
-clé publique" .-> B
-    B -- "vérifie avec
-clé publique" --> R["accepte / refuse"]
+    U --> B["Binaire<br/>(consommateur)"]
+    A -. "distribue<br/>clé publique" .-> B
+    B -- "vérifie avec<br/>clé publique" --> R["accepte / refuse"]
 ```
 
 - L'**émetteur** détient la clé privée. Il signe les licences.
@@ -130,8 +125,7 @@ sequenceDiagram
     autonumber
     participant You as "Émetteur"
     participant Bin as "Binaire"
-    participant Srv as "Serveur révocation
-(optionnel)"
+    participant Srv as "Serveur révocation (optionnel)"
 
     You->>You: GenerateAndSave(dir, kid)
     Note over You: une fois par rotation
