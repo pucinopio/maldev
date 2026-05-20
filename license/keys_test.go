@@ -61,6 +61,14 @@ func TestParseRejectsWrongBlock(t *testing.T) {
 	}
 }
 
+func TestSingleKey(t *testing.T) {
+	pub, _, _ := GenerateKey()
+	m := SingleKey("k1", pub)
+	if len(m) != 1 || !bytes.Equal(m["k1"], pub) {
+		t.Fatal("SingleKey did not build the expected map")
+	}
+}
+
 func TestTrustedLookup(t *testing.T) {
 	pub, _, _ := GenerateKey()
 	tr := Trusted{Keys: map[string]ed25519.PublicKey{"k1": pub}}

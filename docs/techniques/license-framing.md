@@ -3,337 +3,254 @@ package: github.com/oioio-space/maldev/license
 mitre: N/A
 ---
 
-# License framing for authorised tooling
+# License framing — primitive défensive
 
-> Defensive primitive that frames which binaries are allowed to run, by whom,
-> on which machines, until when, under what bindings. Cryptographically signed;
-> offline-verifiable; optional online revocation and heartbeat.
+> Cadre cryptographiquement signé qui décide **qui** peut exécuter **quel binaire**, **sur quelles machines**, **avec quels secrets**, **jusqu'à quand**, sous **quelle politique de révocation**.
 
-## TL;DR
+Hors-ligne par défaut, en-ligne en option. Aucun artefact réseau ou disque
+émis côté détection (le binaire n'envoie rien, sauf si l'opérateur active
+explicitement `WithRevocation` ou `WithHeartbeat`).
 
-| Aspect | Value |
-|:---|:---|
-| Package | `github.com/oioio-space/maldev/license` |
-| Role | Defensive — authorisation gate inside research binaries |
-| MITRE ATT&CK | N/A (no attack technique exercised) |
-| Detection level | N/A (no on-host artefacts emitted) |
-| Signing | Ed25519, PEM-armored canonical JSON |
-| Bindings | machine ID (list), password (argon2id), custom k/v (extensible) |
-| Online checks | Pluggable revocation + heartbeat (both optional) |
+## TL;DR — règles du jeu en une page
 
-## What it does
+| Aspect | Valeur |
+|---|---|
+| Import path | `github.com/oioio-space/maldev/license` |
+| Rôle | Gate d'autorisation **défensive** à l'intérieur des binaires de recherche |
+| Signature | Ed25519, déterministe, 64 octets, pas d'algorithm-confusion |
+| Format | PEM-armé `MALDEV LICENSE` enveloppant un JSON canonique base64 |
+| Bindings | machine (liste), password (argon2id), custom (k/v + extensible) |
+| En-ligne | RevocationSource pluggable + heartbeat avec nonce echo (tous optionnels) |
+| Pinning | SHA-256 du binaire sur disque + SHA-256 d'une identité embarquée (les deux optionnels) |
+| Anti-tamper d'horloge | Plancher signé `trusted_floor` + last-seen monotone, stocké dans un fichier HMAC |
+| Erreur publique | `ErrLicenseInvalid` opaque ; la cause précise va dans `slog`, jamais dans `err.Error()` |
+| Couches dépendances | Layer 1 — `crypto/ed25519` stdlib + `golang.org/x/crypto/{argon2,hkdf,chacha20poly1305,curve25519}` |
+| Tag Go | `v0.157.0+` |
 
-The `license` package lets an operator issue a signed token that authorises a
-specific binary — for a named subject, on a list of machines, behind a
-passphrase, until a given date — and verifies that token at runtime inside the
-binary. The signed body covers every authorisation field: subject, audience,
-expiry, bindings, binary hash, and an optional embedded identity digest. A
-single `Verify` call enforces all constraints in a cheap-to-expensive order and
-returns an opaque `ErrLicenseInvalid` on any failure.
+## Vocabulaire
 
-The package is entirely defensive: it restricts what authorised binaries can do
-and who may run them, rather than enabling any offensive technique.
+| Terme | Signification |
+|---|---|
+| **License** | Le token signé qui autorise un binaire. Sérialisé en PEM `MALDEV LICENSE`. |
+| **KeyID** (`kid`) | Identifiant texte de la clé qui a signé. Permet la rotation : un binaire peut accepter plusieurs `kid` simultanément. |
+| **Issuer** (`iss`) | Texte libre désignant l'autorité émettrice (ex. `"lab-eu"`). Le binaire peut whitelist. |
+| **Subject** (`sub`) | À qui la licence est délivrée (email, hostname, nom d'agent…). Libre. |
+| **Audience** (`aud`) | Liste des binaires autorisés (ex. `["rshell", "memscan"]`). Vide = wildcard avec warning. |
+| **Binding** | Une contrainte signée à l'intérieur de la licence. Trois types builtin (`machine`, `password`, `custom:*`) + extensible via `RegisterVerifier`. |
+| **Evidence** | Valeur fournie au moment de `Verify` qui doit matcher un binding (ex. `WithMachineID(...)` apporte l'évidence pour un binding `machine`). |
+| **Trusted** | `struct{Keys map[KeyID]ed25519.PublicKey}` que le binaire connaît à la compilation. Contient une ou plusieurs clés acceptées. |
+| **RevocationSource** | Interface `Fetch(ctx) ([]byte, error)` — d'où le binaire récupère la liste de révocation signée. Builtins : HTTP, File, Embed, Multi, + custom. |
+| **Identity** | 32 octets aléatoires embarqués dans le binaire au build (via `//go:embed`). Survit au `cmd/packer` parce qu'il ne supprime pas les données embarquées. |
+| **TrustedFloor** | Le plus grand `server_time` jamais observé via revocation ou heartbeat. Stocké dans le state file. Un `time.Now()` inférieur déclenche `causeClockRollback`. |
+| **MaxClockSkew** | Tolérance d'horloge (5 min par défaut) appliquée à `NotBefore`/`NotAfter`/`TrustedFloor`. |
+| **GracePeriod** | Combien de temps un binaire reste autorisé sans pouvoir joindre la revocation source ou le heartbeat. 0 = pas de tolérance. |
 
-## Vocabulary
-
-| Term | Meaning |
-|:---|:---|
-| **License** | A signed token that authorises one binary. PEM-armored canonical JSON on disk. |
-| **KeyID (kid)** | Short identifier that names the signing key. Enables key rotation without re-issuing all licenses. |
-| **Binding** | A constraint embedded in the license. At `Verify` time each binding must have matching caller-provided evidence. |
-| **Audience (aud)** | List of binary names the license permits. An empty audience is a wildcard (with a warning). |
-| **Trusted** | The map of `kid → ed25519.PublicKey` a verifier accepts. New keys can be added without removing old ones. |
-| **RevocationSource** | Pluggable interface (`Fetch(ctx) ([]byte, error)`) delivering signed revocation lists. Builtins: `HTTPSource`, `FileSource`, `EmbedSource`, `MultiSource`. |
-| **Identity** | Optional 32-byte build-time blob embedded in the binary via `//go:embed`. Survives `cmd/packer` transformations. |
-| **TrustedFloor** | The highest server timestamp ever observed (heartbeat or revocation list). Rejects local clock rollback below this floor. |
-| **State file** | HMAC-protected JSON file persisting `TrustedFloor`, `LastSeenLocal`, and the last successful fetch timestamps. HMAC key is derived from the license signature and the host fingerprint. |
-
-## How it works
-
-### Issuing flow
-
-1. The operator calls `GenerateKey()` once per key rotation period and saves
-   `MarshalPrivateKey` / `MarshalPublicKey` to disk.
-2. `Issue(IssueOptions{...})` builds a `License` struct, canonically marshals
-   it (deterministic, sorted-key JSON), signs it as
-   `ed25519.Sign(priv, "maldev-license-v1\x00" || canonical(License))`,
-   wraps the signed body in a `signedLicense`, and encodes the whole thing as
-   a PEM block of type `MALDEV LICENSE`.
-3. The resulting `.pem` file is distributed out-of-band to the licensee.
-
-### Verification flow
+## Flow de vérification
 
 ```mermaid
 sequenceDiagram
-    participant Op as "Operator (issuer)"
-    participant Bin as "Binary (verifier)"
-    participant Srv as "Revocation server (optional)"
-    participant NTP as "NTP server (optional)"
+    autonumber
+    participant Op as "Opérateur (issuer)"
+    participant Bin as "Binaire (verifier)"
+    participant Rev as "Revocation server (opt)"
+    participant Hb as "Heartbeat server (opt)"
+    participant NTP as "NTP (opt)"
 
-    Op->>Op: GenerateKey()
-    Op->>Bin: ship signed license.pem
-    Bin->>Bin: 1. Format + size check
-    Bin->>Bin: 2. Key resolution (kid -> Trusted.Keys)
-    Bin->>Bin: 3. Ed25519 signature verify
-    Bin->>Bin: 4. State file HMAC check + clock rollback detection
-    Bin->>Bin: 5. Time window (nbf / exp + clock skew)
-    Bin->>Bin: 6. Audience + issuer match
-    Bin->>Bin: 7. Binding checks (machine / password / custom)
-    Bin->>Bin: 8. Binary + identity pinning
-    Bin->>Srv: GET /revoked.pem (if WithRevocation configured)
-    Srv-->>Bin: signed RevocationList (PEM)
-    Bin->>Bin: 9. Revocation: sequence monotonic + license.ID not in list
-    Bin->>Srv: POST /heartbeat (if WithHeartbeat configured)
-    Srv-->>Bin: signed HeartbeatReply (nonce echo + ok)
-    Bin->>NTP: SNTPv4 query (if WithNTPCheck configured)
-    NTP-->>Bin: server time
-    Bin->>Bin: 10-11. Update TrustedFloor, write state file
-    Bin-->>Op: *Verified | ErrLicenseInvalid
+    Op->>Op: GenerateKey + SavePrivateKey
+    Op->>Bin: distribute issuer.pub + license.pem
+
+    Note over Bin: license.Verify(data, trusted, opts...)
+
+    Bin->>Bin: 1. parse PEM + size guard
+    Bin->>Bin: 2. resolve KeyID → public key
+    Bin->>Bin: 3. ed25519.Verify(domain_tag || body)
+    Bin->>Bin: 4. read HMAC state file
+    Bin->>Bin: 5. NotBefore / NotAfter (with skew)
+    Bin->>Bin: 6. audience / issuer match
+    Bin->>Bin: 7. bindings (machine, password, custom)
+    Bin->>Bin: 8. pinning (BinarySHA256 / IdentitySHA256)
+    Bin->>Rev: 9a. fetch signed revocation list (or cache)
+    Rev-->>Bin: signed list + serverTime
+    Bin->>Bin: 9b. check sequence ≥ last, IsRevoked(lic.ID)
+    Bin->>Hb: 10a. POST heartbeat {license_id, nonce}
+    Hb-->>Bin: signed reply
+    Bin->>Bin: 10b. verify signature, nonce echo, ok==true
+    Bin->>NTP: 11. SNTPv4 query (soft warning)
+    Bin->>Bin: 12. atomic write state file
+    Bin-->>Op: Verified{License, Payload, Warnings} | ErrLicenseInvalid
 ```
 
-Each step fails fast and returns the opaque `ErrLicenseInvalid`. The internal
-cause (one of 17 enum values) is only emitted to the injected `slog.Logger`,
-never to the caller, so an attacker cannot distinguish which constraint failed.
-
-## Usage
-
-### Minimal offline
+## Quick start
 
 ```go
-package main
-
-import (
-    "fmt"
-    "log"
-    "time"
-
-    "github.com/oioio-space/maldev/license"
-)
-
-func main() {
-    // Operator side: generate key and issue license.
-    pub, priv, err := license.GenerateKey()
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    data, err := license.New(priv, "alice@example.com", 6*30*24*time.Hour)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // Binary side: verify with the matching public key.
-    v, err := license.Verify(data, license.Trusted{
-        Keys: map[string]ed25519.PublicKey{"default": pub},
-    })
-    if err != nil {
-        log.Fatal("access denied")
-    }
-    fmt.Println("licensed to:", v.Subject)
-}
+pub, priv, _ := license.GenerateKey()
+data, _ := license.New(priv, "alice@example.com", 24*time.Hour)
+v, err := license.Verify(data, license.Trusted{Keys: license.SingleKey("default", pub)})
 ```
 
-### Full options issue + verify
+Voir le [cookbook](../license/workflow.md) pour 8 recettes complètes
+copier-coller.
 
-```go
-package main
+---
 
-import (
-    "context"
-    "crypto/ed25519"
-    "log/slog"
-    "os"
-    "time"
+## Référence des champs
 
-    "github.com/oioio-space/maldev/license"
-    "github.com/oioio-space/maldev/license/hostid"
-    "github.com/oioio-space/maldev/license/revoke"
-)
+### `type License`
 
-func main() {
-    // Operator: load private key from disk.
-    privPEM, _ := os.ReadFile("issuer-priv.pem")
-    priv, _ := license.ParsePrivateKey(privPEM)
+Le corps signé d'une licence. Tous les champs sont couverts par la signature.
 
-    // Operator: load machine fingerprint for the target machine.
-    mid, _ := hostid.Local()
+| Champ | JSON | Type | Sens | Vide ⇒ |
+|---|---|---|---|---|
+| `Version` | `v` | `int` | Toujours `1` en v1. | refus (causeBadFormat) |
+| `ID` | `id` | `string` | UUIDv4 random au moment de l'émission. Identifie la licence dans les revocation lists. | jamais vide |
+| `KeyID` | `kid` | `string` | Identifiant texte de la clé qui a signé. Doit figurer dans `Trusted.Keys`. | refus (causeUnknownKey) |
+| `Issuer` | `iss` | `string` | Émetteur. Comparé à `WithIssuer(...)` si l'option est passée. | l'option `WithIssuer` rejette toujours dans ce cas |
+| `Subject` | `sub` | `string` | Bénéficiaire (email, agent, …). Libre. Logué et présent dans `Verified.Subject`. | acceptable mais inutile |
+| `Audience` | `aud` | `[]string` | Liste des binaires autorisés. Vide = wildcard (warning à `Verify`). | warning |
+| `IssuedAt` | `iat` | `time.Time` UTC | Horodatage d'émission. Pas vérifié à `Verify` mais loguable. | non bloquant |
+| `NotBefore` | `nbf` | `time.Time` UTC | Avant cette date, refus `causeNotYetValid` (avec `MaxClockSkew`). | jamais "pas encore valide" |
+| `NotAfter` | `exp` | `time.Time` UTC | Après cette date, refus `causeExpired`. Zéro = jamais expirer. | jamais expirer |
+| `Bindings` | `bnd` | `[]Binding` | Contraintes à matcher avec des évidences à `Verify`. | pas de contraintes spécifiques |
+| `BinarySHA256` | `bin` | `string` (hex) | Hash SHA-256 du fichier `os.Executable()` autorisé. | pas de pinning disque |
+| `IdentitySHA256` | `id_sha` | `string` (hex) | Hash SHA-256 de l'identité embarquée via `//go:embed`. Survit au packer. | pas de pinning identité |
+| `Payload` | `pld` | `json.RawMessage` | Données libres signées en clair pour usage applicatif. Accessibles via `Verified.Payload`. | aucune métadonnée applicative |
+| `SealedPayload` | `spld` | `[]byte` | Payload chiffré par `seal.Seal(recipientPub, ...)`. Signature publique mais contenu lisible seulement avec `recipientPriv`. | pas de scellé |
 
-    // Operator: build a password binding.
-    pwBind, _ := license.BindPassword("s3cr3t-phrase")
+> **Note règle de pinning** : si **les deux** `BinarySHA256` et `IdentitySHA256` sont définis ET que `WithBinaryPinning()` est passé, **les deux** doivent matcher (AND). Définir un seul des deux ne vérifie que celui-là. Aucun = warning sans refus.
 
-    // Operator: issue a constrained license.
-    data, _ := license.Issue(license.IssueOptions{
-        PrivateKey: priv,
-        KeyID:      "k2026-05",
-        Subject:    "alice@example.com",
-        Issuer:     "maldev-lab-eu",
-        Audience:   []string{"rshell", "memscan-server"},
-        NotAfter:   time.Now().AddDate(0, 6, 0),
-        Bindings: []license.Binding{
-            license.BindMachineIDs(string(mid)),
-            pwBind,
-            license.BindCustom("project", "WRAITH-2026"),
-        },
-    })
-    _ = os.WriteFile("license.pem", data, 0o600)
+### `type Binding`
 
-    // Binary side: load the public key and verify.
-    pubPEM, _ := os.ReadFile("issuer-pub.pem")
-    pub, kid, _ := license.ParsePublicKey(pubPEM)
+| Champ | JSON | Type | Sens |
+|---|---|---|---|
+| `Type` | `t` | `string` | Une parmi : `"machine"`, `"password"`, ou `"custom:<name>"` |
+| `Value` | `v` | `[]string` | Pour `machine` ou `custom:*` : liste de valeurs acceptées (OR-match). Vide pour `password`. |
+| `Hash` | `h` | `[]byte` | Pour `password` : hash argon2id du mot de passe (32 octets). Vide pour les autres types. |
+| `Salt` | `s` | `[]byte` | Pour `password` : sel de 16 octets random. Vide pour les autres types. |
 
-    localMID, _ := hostid.Local()
+Les helpers `BindMachineIDs(ids...)`, `BindPassword(p)`, `BindCustom(name, vals...)` construisent ces bindings correctement.
 
-    v, err := license.Verify(data,
-        license.Trusted{Keys: map[string]ed25519.PublicKey{kid: pub}},
-        license.WithAudience("rshell"),
-        license.WithIssuer("maldev-lab-eu"),
-        license.WithMachineID(localMID),
-        license.WithPassword("s3cr3t-phrase"),
-        license.WithCustom("project", "WRAITH-2026"),
-        license.WithBinaryPinning(),
-        license.WithRevocation(
-            revoke.HTTPSource("https://lic.example.test/revoked.pem", nil),
-            24*time.Hour,
-            "~/.maldev/revoke-cache.pem",
-        ),
-        license.WithGracePeriod(7*24*time.Hour),
-        license.WithStateFile("~/.maldev/license-state.json"),
-        license.WithStateHostID(hostid.Local),
-        license.WithMaxClockSkew(5*time.Minute),
-        license.WithNTPCheck("pool.ntp.org", 10*time.Minute),
-        license.WithLogger(slog.Default()),
-        license.WithContext(context.Background()),
-    )
-    if err != nil {
-        slog.Error("license check failed", "err", err)
-        os.Exit(1)
-    }
-    _ = v // use v.Subject, v.Payload, v.Warnings, etc.
-}
-```
+### `type IssueOptions`
 
-### Server-side revocation + heartbeat
+Tous les champs sauf `PrivateKey` et `Subject` sont **optionnels**.
 
-```go
-package main
+| Champ | Type | Sens | Défaut |
+|---|---|---|---|
+| `PrivateKey` | `ed25519.PrivateKey` | Clé qui signe. **Requise.** | — |
+| `KeyID` | `string` | Identifiant de la clé de signature. | `"default"` |
+| `Issuer` | `string` | Émetteur (`iss`). | vide |
+| `Subject` | `string` | À qui (`sub`). **Requise.** | — |
+| `Audience` | `[]string` | Binaires autorisés. | vide (wildcard) |
+| `NotBefore` | `time.Time` | Date d'activation. | maintenant |
+| `NotAfter` | `time.Time` | Date d'expiration. | jamais (déconseillé) |
+| `Bindings` | `[]Binding` | Contraintes. | aucune |
+| `BinarySHA256` | `string` (hex) | Hash binaire requis. | pas de pinning disque |
+| `IdentitySHA256` | `string` (hex) | Hash identité requis. | pas de pinning identité |
+| `Payload` | `json.RawMessage` | Données applicatives signées en clair. | aucune |
+| `SealedPayload` | `[]byte` | Données scellées avec `seal.Seal`. | aucune |
 
-import (
-    "log/slog"
-    "net/http"
-    "os"
+### `type Verified` (retour de `Verify`)
 
-    "github.com/oioio-space/maldev/license"
-    "github.com/oioio-space/maldev/license/server"
-)
+| Champ | Type | Sens |
+|---|---|---|
+| `License` | embedded | Le corps vérifié, en lecture seule. |
+| `Payload` | `[]byte` | Le `Payload` clair (=`v.License.Payload`). |
+| `KeyUsed` | `string` | Le `KeyID` qui a effectivement validé (utile en rotation). |
+| `Warnings` | `[]string` | Avertissements non bloquants (audience vide, NTP drift, pinning sans champs, etc.). |
 
-func main() {
-    privPEM, _ := os.ReadFile("issuer-priv.pem")
-    priv, _ := license.ParsePrivateKey(privPEM)
+### Options `VerifyOption`
 
-    mux := http.NewServeMux()
+Toutes les options sont des fonctions `func(*verifyState)` à passer en variadique à `Verify`. Plusieurs options peuvent se combiner librement.
 
-    // GET /revoked.pem    — serve signed revocation list
-    // POST /revoked.pem   — admin: add/remove IDs (Bearer token)
-    mux.Handle("/revoked.pem", server.NewRevocationHandler(server.RevocationOptions{
-        PrivateKey: priv,
-        KeyID:      "k2026-05",
-        Store:      server.FileStore("./revoked.json"),
-        ValidFor:   7 * 24 * time.Hour,
-        AdminToken: os.Getenv("MALDEV_ADMIN"),
-        Logger:     slog.Default(),
-    }))
+| Option | Type | Effet |
+|---|---|---|
+| `WithContext(ctx)` | `context.Context` | Propage timeout/cancel aux appels réseau (revocation, heartbeat, NTP). Défaut : `context.Background()`. |
+| `WithClock(c)` | `Clock` | Horloge injectable. Pour tests ou usage avancé. Défaut : horloge système UTC. |
+| `WithLogger(l)` | `*slog.Logger` | Logueur pour les causes d'échec. Défaut : `slog.Default()`. |
+| `WithMaxClockSkew(d)` | `time.Duration` | Tolérance appliquée à `NotBefore`/`NotAfter`/`TrustedFloor`. Défaut : 5 min. |
+| `WithAudience(aud...)` | `...string` | Le binaire déclare son nom. Doit appartenir à `License.Audience`. |
+| `WithIssuer(iss)` | `string` | Émetteur attendu. Doit matcher `License.Issuer`. |
+| `WithMachineID(id)` | `[]byte` | Évidence pour un binding `machine`. Typiquement `hostid.Local()`. |
+| `WithPassword(p)` | `string` | Évidence pour un binding `password`. |
+| `WithCustom(name, value)` | `string, string` | Évidence pour un binding `custom:<name>`. |
+| `WithBinaryPinning()` | — | Active le check de `BinarySHA256` et/ou `IdentitySHA256` si présents. |
+| `WithIdentityBytes(b)` | `[]byte` | Override les bytes d'identité (autrement lus via `identity.Read()`). |
+| `WithRevocation(src, refresh, cachePath)` | `RevocationSource, Duration, string` | Active la révocation. Fetch refresh max toutes les `refresh`, cache local signé. |
+| `WithGracePeriod(d)` | `time.Duration` | Tolérance offline (revocation + heartbeat). |
+| `WithHeartbeat(client, interval)` | `heartbeat.Client, Duration` | Active le heartbeat ; skip si une réponse OK a été obtenue depuis moins de `interval`. |
+| `WithStateFile(path)` | `string` | Chemin du state file HMAC pour anti-rollback d'horloge. |
+| `WithStateHostID(fn)` | `func() ([]byte, error)` | Source du fingerprint machine pour dériver la clé HMAC du state file. Typiquement `hostid.Local`. |
+| `WithNTPCheck(server, maxDrift)` | `string, Duration` | NTP cross-check soft (warning si drift > seuil). |
+| `WithNTPCheckStrict(server, maxDrift)` | `string, Duration` | NTP strict : refus si drift > seuil. |
 
-    // POST /heartbeat — nonce echo + signed reply
-    mux.Handle("/heartbeat", server.NewHeartbeatHandler(server.HeartbeatOptions{
-        PrivateKey: priv,
-        KeyID:      "k2026-05",
-        Store:      server.FileStore("./licenses.json"),
-        ValidFor:   1 * time.Hour,
-    }))
+### Sous-packages
 
-    _ = http.ListenAndServe(":8080", mux)
-}
-```
+| Package | Quand l'utiliser |
+|---|---|
+| `license` | Surface API principale. `Issue`, `Verify`, `GenerateKey`, options. |
+| `license/canonical` | JSON canonique pour signature reproductible. Utilisé en interne, exposé pour usage avancé. |
+| `license/hostid` | Fingerprint machine cross-platform (Windows MachineGuid, Linux /etc/machine-id, Darwin IOPlatformUUID). |
+| `license/identity` | Identité embarquée 32 octets. Inclure `//go:embed identity.bin` + `identity.Set(bytes)` au boot. |
+| `license/identity/cmd/gen-identity` | Outil `go run` qui génère `identity.bin`. Idempotent. |
+| `license/revoke` | Types et primitives de revocation list ; sources HTTP/File/Embed/Multi pluggables ; cache local signé. |
+| `license/heartbeat` | Client HTTP pour ping serveur ; signature des réponses ; nonce echo. |
+| `license/seal` | Sealed payload X25519 + HKDF-SHA256 + XChaCha20-Poly1305. |
+| `license/ntp` | SNTPv4 query minimaliste. |
+| `license/server` | `http.Handler` builders pour servir révocation + heartbeat ; `FileStore` builtin ; interfaces `RevocationStore`/`LicenseStore` pour persistance custom. |
+| `license/internal/fileutil` | Helper `AtomicWrite`, interne uniquement. |
 
-## Non-obvious behaviour
+### Erreurs
 
-- **Empty audience = wildcard with warning.** A license with no `aud` field
-  satisfies any `WithAudience(...)` check, but `Verify` appends a warning in
-  `Verified.Warnings`. Production licenses should carry explicit audiences.
-- **Password binding is irreversible.** `BindPassword` derives argon2id and
-  discards the plaintext. Losing the passphrase means re-issuing the license.
-- **Binary pinning AND semantics.** If both `BinarySHA256` and `IdentitySHA256`
-  are set, both must match. If neither is set and `WithBinaryPinning()` is
-  requested, `Verify` warns but does not reject.
-- **State file is optional but required for clock-rollback protection.** Without
-  `WithStateFile`, the `TrustedFloor` check is skipped.
-- **Grace period governs offline tolerance.** `WithGracePeriod(7*24*time.Hour)`
-  allows the binary to run for 7 days if the revocation server is unreachable,
-  provided the last successful fetch was within that window.
-- **Revocation list sequence is monotonic.** A cache holding a newer sequence
-  than the freshly-fetched list causes `Verify` to reject the fetched list as
-  a replay attempt.
-- **Key rotation does not invalidate old licenses.** Keep old public keys in
-  `Trusted.Keys` until all licenses signed under them expire.
-- **`ErrLicenseInvalid` is the only exported error.** Use
-  `errors.Is(err, license.ErrLicenseInvalid)`. Internal causes are available
-  only via the slog logger.
+`ErrLicenseInvalid` est la **seule** erreur publique. Discrimination via `errors.Is(err, ErrLicenseInvalid)`. La cause précise (signature, expired, binding mismatch, etc.) part vers le logueur ; elle est volontairement absente de `err.Error()` pour ne pas guider un attaquant.
 
-## OPSEC and detection
+Causes internes loguées (non exportées) :
+`bad-format`, `bad-signature`, `unknown-key`, `not-yet-valid`, `expired`,
+`clock-rollback`, `audience-mismatch`, `issuer-mismatch`,
+`binding-machine-mismatch`, `binding-password-mismatch`,
+`binding-custom-mismatch`, `binary-hash-mismatch`, `identity-mismatch`,
+`revoked`, `revocation-stale`, `heartbeat-failed`, `state-corrupted`.
 
-This package is a defensive control inside an authorised binary. It emits no
-network traffic, registry writes, file system artefacts, or ETW events unless
-explicitly configured (revocation fetch, heartbeat POST, NTP query, state file
-write).
+---
 
-| Action | Artefact | Notes |
-|:---|:---|:---|
-| `Verify` (offline-only) | None | Pure in-process computation |
-| `Verify` with revocation | HTTP GET to configured URL | Indistinguishable from any HTTPS health-check |
-| `Verify` with heartbeat | HTTP POST to configured URL | POST body is nonce + license ID |
-| `Verify` with NTP | UDP/123 to configured NTP pool | One packet per verify call |
-| State file write | File under `~/.maldev/` or operator path | HMAC-protected JSON, no PII |
+## OPSEC & détection
 
-## MITRE ATT&CK
+| Aspect | Comportement |
+|---|---|
+| Bruit disque | `Verify` lit la licence et (si configuré) écrit le state file HMAC + le cache de révocation. Pas d'autres écritures. |
+| Bruit réseau | Aucun par défaut. `WithRevocation` → 1 GET / `refresh`. `WithHeartbeat` → 1 POST / `interval`. `WithNTPCheck` → 1 query UDP. |
+| Surface AV/EDR | Le binaire de vérification embarque seulement la stdlib + `x/crypto`. Aucun artefact RWX, aucun syscall direct, aucun import suspect. |
+| Logs | Tous les échecs partent dans `slog.Default()` (ou logueur custom via `WithLogger`). Le format est structuré, prêt pour pipeline d'audit. |
+| Signature binaire | Le package ne signe pas son propre binaire ; combiner avec `cmd/packer` + Authenticode pour résistance au reverse. |
 
-N/A. This is a defensive primitive. No MITRE ATT&CK technique applies.
+---
 
 ## Limitations
 
-**Resists:**
+### Résiste à
 
-- Ed25519 signature forgery (256-bit security, deterministic, no nonce reuse).
-- License field tampering after issuance (signature covers the canonical body).
-- Replay across different audiences (`aud` field + `WithAudience` check).
-- Cross-binary reuse (audience binding + binary SHA256 pinning).
-- Stale-cache substitution (sequence monotonicity + chain hash on revocation list).
-- Revocation server downtime beyond grace period (signed `ExpiresAt` + grace window).
-- Side-channel leakage of which binding failed (opaque error + constant-time argon2id comparison).
-- Brute-force on password binding (argon2id: 64 MiB, 3 passes, 4 threads).
-- Clock rollback below the trusted floor (state file `TrustedFloor` + `LastSeenLocal`).
-- Algorithm confusion (single algorithm, domain-separated payload `"maldev-license-v1\x00"`).
+- Forgerie de signature (Ed25519).
+- Modification post-émission (toute la License est couverte par la signature).
+- Replay cross-audience (`aud` est signé).
+- Réutilisation cross-binaire (`aud` + binary/identity pinning).
+- Substitution de revocation list ancienne (sequence monotone + signed expiry + chain hash).
+- Brute-force de password binding (argon2id : t=3, m=64MiB, p=4).
+- Rollback de l'horloge sous le `TrustedFloor`.
+- Algorithm-confusion (un seul algo signé, domain-separated par message type).
 
-**Does NOT resist:**
+### Ne résiste **PAS** à
 
-- An attacker patching `Verify` to `return nil` in the binary. Mitigation:
-  combine with `cmd/packer` and code-signing (out of scope for this package).
-- Full clock rollback on an air-gapped machine that never reaches the online
-  checks. `TrustedFloor` only advances on online contact; a machine that was
-  always offline retains only local monotonicity.
-- Simultaneous modification of the binary and its embedded identity bytes.
-  Mitigation: ship the identity digest in the license and pin both.
-- Host ID spoofing when the attacker fully controls the OS (can replace
-  `MachineGuid`, `/etc/machine-id`, etc.).
-- Seat counting (preventing one license from being shared across N machines
-  simultaneously). Requires a stateful server (v2 scope).
+- Un attaquant qui patche `Verify` dans le binaire pour `return nil`. **Mitigation hors scope** — combiner avec `cmd/packer` + intégrité OS (Authenticode / Sigstore).
+- Tamper d'horloge parfait sur une machine totalement offline qui n'a jamais contacté le serveur (= aucun `TrustedFloor` jamais établi).
+- Usage offline indéfini au-delà du `GracePeriod` après rotation de clé.
+- Modification simultanée du binaire **et** de l'identity embarquée.
+- Spoofing de hostid sur une machine que l'attaquant contrôle entièrement.
+- Partage de seat (deux machines avec le même hostid + binding password).
 
-## API reference
+Voir [threat-model.md](../license/threat-model.md) pour le détail complet par classe de menace.
 
-[`pkg.go.dev/github.com/oioio-space/maldev/license`](https://pkg.go.dev/github.com/oioio-space/maldev/license)
+---
 
-## See also
+## Voir aussi
 
-- [Operator workflow](../license/workflow.md) — step-by-step genkey → issue → verify → revoke → rotate
-- [Threat model](../license/threat-model.md) — detailed per-threat breakdown
-- [`docs/by-role/operator.md`](../by-role/operator.md) — deployment patterns
-- [`docs/by-role/researcher.md`](../by-role/researcher.md) — cryptographic design rationale
+- [Cookbook (8 recettes copier-coller)](../license/workflow.md)
+- [Threat model détaillé](../license/threat-model.md)
+- [Spec de design](../superpowers/specs/2026-05-20-license-package-design.md) — décisions architecturales et trade-offs explicités.

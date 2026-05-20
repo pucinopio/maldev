@@ -28,3 +28,9 @@ func (t Trusted) Lookup(kid string) (ed25519.PublicKey, bool) {
 	k, ok := t.Keys[kid]
 	return k, ok
 }
+
+// SingleKey builds a Trusted.Keys map for the common case of one trusted key.
+// Equivalent to: map[string]ed25519.PublicKey{kid: pub}.
+func SingleKey(kid string, pub ed25519.PublicKey) map[string]ed25519.PublicKey {
+	return map[string]ed25519.PublicKey{kid: pub}
+}

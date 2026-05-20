@@ -2,362 +2,483 @@
 package: github.com/oioio-space/maldev/license
 ---
 
-# License package — Operator workflow
+# License — Cookbook
 
-Concrete step-by-step guide: key generation, optional binary identity setup,
-license issuance, verification, revocation, and key rotation. Each step
-includes a runnable Go snippet.
+Copy-paste programmes complets. Chaque recette compile telle quelle après
+`go get github.com/oioio-space/maldev@latest`.
 
-## Step 1 — Generate the issuer keypair
+- [Recette 1 — Hello license en 15 lignes](#recette-1)
+- [Recette 2 — Émettre depuis un CLI, vérifier depuis un binaire](#recette-2)
+- [Recette 3 — Binding multi-machines + mot de passe](#recette-3)
+- [Recette 4 — Pinning d'identité qui survit au `cmd/packer`](#recette-4)
+- [Recette 5 — Serveur de révocation HTTP minimal](#recette-5)
+- [Recette 6 — Verify complet avec révocation + heartbeat + state file](#recette-6)
+- [Recette 7 — Rotation de clé sans casser les licences existantes](#recette-7)
+- [Recette 8 — Payload chiffré dans une licence (sealed payload)](#recette-8)
 
-Generate once per rotation period. The private key signs every license; the
-public key is embedded in each binary that calls `Verify`.
+---
+
+## Recette 1
+
+**Génère une paire de clés, signe une licence, vérifie-la. Tout en RAM, zéro fichier.**
 
 ```go
 package main
 
 import (
-    "log"
-    "os"
+	"fmt"
+	"log"
+	"time"
 
-    "github.com/oioio-space/maldev/license"
+	"github.com/oioio-space/maldev/license"
 )
 
 func main() {
-    pub, priv, err := license.GenerateKey()
-    if err != nil {
-        log.Fatal(err)
-    }
+	pub, priv, err := license.GenerateKey()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-    privPEM, err := license.MarshalPrivateKey(priv)
-    if err != nil {
-        log.Fatal(err)
-    }
-    if err := os.WriteFile("issuer-priv.pem", privPEM, 0o600); err != nil {
-        log.Fatal(err)
-    }
+	// Émission "one-liner" (KeyID = "default", aucune contrainte hors NotAfter).
+	data, err := license.New(priv, "alice@example.com", 24*time.Hour)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-    // KID is a short identifier used for key rotation (see Step 7).
-    pubPEM, err := license.MarshalPublicKey(pub, "k2026-05")
-    if err != nil {
-        log.Fatal(err)
-    }
-    if err := os.WriteFile("issuer-pub.pem", pubPEM, 0o644); err != nil {
-        log.Fatal(err)
-    }
+	// Vérification.
+	v, err := license.Verify(data, license.Trusted{Keys: license.SingleKey("default", pub)})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("OK — délivrée à %s, expire %s\n", v.Subject, v.NotAfter)
 }
 ```
 
-> [!IMPORTANT]
-> Keep `issuer-priv.pem` off the filesystem of any machine that runs the
-> licensed binary. It should only exist on the operator's issuing workstation
-> or in an HSM (v2).
+> `license.New(priv, subject, ttl)` est le raccourci minimal. Pour ajouter
+> Issuer, Audience, Bindings, Payload, etc., passe à `license.Issue` — Recette 2.
 
 ---
 
-## Step 2 — Generate a per-binary identity (optional)
+## Recette 2
 
-Binary identity lets `Verify` reject a license even if the binary's on-disk
-hash changes after packing. The `identity` sub-package provides a 32-byte
-random seed embedded at build time.
+**Émission CLI, vérification binaire, fichiers PEM sur disque.**
 
-```go
-//go:generate go run github.com/oioio-space/maldev/license/identity/cmd/gen-identity
-
-// In your binary's main package:
-package main
-
-import (
-    _ "embed"
-
-    "github.com/oioio-space/maldev/license/identity"
-)
-
-//go:embed identity.bin
-var identityBlob []byte
-
-func init() {
-    // Register at program start. Panics on double-Set or wrong size.
-    identity.Set(identityBlob)
-}
-```
-
-Run `go generate ./...` once. `gen-identity` writes `identity.bin` if it does
-not exist yet (idempotent). Commit `identity.bin` alongside the source.
-
-Obtain the hash the issuer needs:
-
-```go
-hash := identity.HashIdentity(identityBlob) // hex-encoded sha256
-```
-
----
-
-## Step 3 — Issue a license
+### a. Côté émetteur
 
 ```go
 package main
 
 import (
-    "encoding/hex"
-    "log"
-    "os"
-    "time"
+	"log"
+	"os"
+	"time"
 
-    "github.com/oioio-space/maldev/license"
+	"github.com/oioio-space/maldev/license"
 )
 
 func main() {
-    privPEM, err := os.ReadFile("issuer-priv.pem")
-    if err != nil {
-        log.Fatal(err)
-    }
-    priv, err := license.ParsePrivateKey(privPEM)
-    if err != nil {
-        log.Fatal(err)
-    }
+	dir, _ := os.UserHomeDir()
+	dir += "/.maldev-issuer"
+	_ = os.MkdirAll(dir, 0o700)
 
-    // Build the password binding (argon2id, 64 MiB, t=3, p=4).
-    // The plaintext is not stored anywhere after this call.
-    pwBind, err := license.BindPassword("s3cr3t-phrase")
-    if err != nil {
-        log.Fatal(err)
-    }
+	// GenerateAndSave : génère + écrit issuer.key (0600) + issuer.pub (KID embarqué).
+	_, priv, err := license.GenerateAndSave(dir, "k2026-05")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-    // Read the machine fingerprint from the target host (out-of-band).
-    // In practice the licensee sends `hostid.Local()` to the issuer.
-    targetMachineID := "abc123deadbeef" // placeholder
+	data, err := license.Issue(license.IssueOptions{
+		PrivateKey: priv,
+		KeyID:      "k2026-05",
+		Subject:    "alice@example.com",
+		Issuer:     "lab-eu",
+		Audience:   []string{"rshell"},
+		NotAfter:   time.Now().Add(90 * 24 * time.Hour),
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 
-    // Identity hash from Step 2.
-    idHash := hex.EncodeToString(identitySHA256[:]) // from your build
-
-    data, err := license.Issue(license.IssueOptions{
-        PrivateKey:     priv,
-        KeyID:          "k2026-05",
-        Subject:        "alice@example.com",
-        Issuer:         "maldev-lab-eu",
-        Audience:       []string{"rshell", "memscan-server"},
-        NotAfter:       time.Now().AddDate(0, 6, 0).UTC(),
-        Bindings: []license.Binding{
-            license.BindMachineIDs(targetMachineID),
-            pwBind,
-            license.BindCustom("project", "WRAITH-2026"),
-        },
-        IdentitySHA256: idHash,
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    if err := os.WriteFile("alice-rshell.pem", data, 0o600); err != nil {
-        log.Fatal(err)
-    }
+	if err := license.SaveLicense("./alice.license", data); err != nil {
+		log.Fatal(err)
+	}
+	log.Print("Licence écrite : ./alice.license")
+	log.Print("Distribue ./alice.license et ~/.maldev-issuer/issuer.pub")
 }
 ```
 
-Ship `alice-rshell.pem` to the licensee via a secure channel. The binary
-reads this file (or has it embedded) at startup.
-
----
-
-## Step 4 — Verify in the binary
+### b. Côté binaire consommateur
 
 ```go
 package main
 
 import (
-    "context"
-    "crypto/ed25519"
-    _ "embed"
-    "errors"
-    "log/slog"
-    "os"
-    "time"
+	"log"
 
-    "github.com/oioio-space/maldev/license"
-    "github.com/oioio-space/maldev/license/hostid"
-    "github.com/oioio-space/maldev/license/identity"
-    "github.com/oioio-space/maldev/license/revoke"
-)
-
-//go:embed issuer-pub.pem
-var pubPEM []byte
-
-//go:embed identity.bin
-var identityBlob []byte
-
-func init() { identity.Set(identityBlob) }
-
-func checkLicense(ctx context.Context, licensePath, passphrase string) error {
-    data, err := os.ReadFile(licensePath)
-    if err != nil {
-        return err
-    }
-
-    pub, kid, err := license.ParsePublicKey(pubPEM)
-    if err != nil {
-        return err
-    }
-
-    mid, err := hostid.Local()
-    if err != nil {
-        return err
-    }
-
-    v, err := license.Verify(data,
-        license.Trusted{Keys: map[string]ed25519.PublicKey{kid: pub}},
-        license.WithAudience("rshell"),
-        license.WithIssuer("maldev-lab-eu"),
-        license.WithMachineID(mid),
-        license.WithPassword(passphrase),
-        license.WithCustom("project", "WRAITH-2026"),
-        license.WithBinaryPinning(),
-        license.WithRevocation(
-            revoke.HTTPSource("https://lic.maldev.test/revoked.pem", nil),
-            24*time.Hour,
-            "~/.maldev/revoke-cache.pem",
-        ),
-        license.WithGracePeriod(7*24*time.Hour),
-        license.WithStateFile("~/.maldev/license-state.json"),
-        license.WithStateHostID(hostid.Local),
-        license.WithMaxClockSkew(5*time.Minute),
-        license.WithNTPCheck("pool.ntp.org", 10*time.Minute),
-        license.WithLogger(slog.Default()),
-        license.WithContext(ctx),
-    )
-    if err != nil {
-        if errors.Is(err, license.ErrLicenseInvalid) {
-            // cause was already logged to slog; surface only the opaque error
-            return err
-        }
-        return err
-    }
-
-    for _, w := range v.Warnings {
-        slog.Warn("license warning", "msg", w)
-    }
-    slog.Info("license OK", "subject", v.Subject, "key", v.KeyUsed)
-    return nil
-}
-```
-
-> [!NOTE]
-> Embed `issuer-pub.pem` and `identity.bin` at build time so an attacker
-> cannot swap them without recompiling. Combine with `cmd/packer` to harden
-> further.
-
----
-
-## Step 5 — Publish a revocation list (server side)
-
-Start the revocation server once. Revoke individual licenses via the admin POST
-endpoint.
-
-```go
-package main
-
-import (
-    "log/slog"
-    "net/http"
-    "os"
-
-    "github.com/oioio-space/maldev/license"
-    "github.com/oioio-space/maldev/license/server"
+	"github.com/oioio-space/maldev/license"
 )
 
 func main() {
-    privPEM, _ := os.ReadFile("issuer-priv.pem")
-    priv, _ := license.ParsePrivateKey(privPEM)
+	pub, kid, err := license.LoadPublicKey("./issuer.pub")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-    mux := http.NewServeMux()
-    mux.Handle("/revoked.pem", server.NewRevocationHandler(server.RevocationOptions{
-        PrivateKey: priv,
-        KeyID:      "k2026-05",
-        Store:      server.FileStore("./revoked.json"),
-        ValidFor:   7 * 24 * time.Hour,
-        AdminToken: os.Getenv("MALDEV_ADMIN"),
-        Logger:     slog.Default(),
-    }))
-    _ = http.ListenAndServeTLS(":443", "cert.pem", "key.pem", mux)
+	v, err := license.VerifyFile("./alice.license",
+		license.Trusted{Keys: license.SingleKey(kid, pub)},
+		license.WithAudience("rshell"),
+		license.WithIssuer("lab-eu"),
+	)
+	if err != nil {
+		log.Fatalf("ACCESS DENIED: %v", err)
+	}
+	log.Printf("Autorisé — Subject=%s, KeyUsed=%s", v.Subject, v.KeyUsed)
 }
 ```
 
-### Revoke a license
+---
+
+## Recette 3
+
+**Limiter à un set de machines + exiger un mot de passe.**
+
+### Émission
+
+```go
+import "github.com/oioio-space/maldev/license/hostid"
+
+// Obtient le fingerprint de la machine cible (depuis cette machine).
+machineA, _ := hostid.Local()
+
+pwBinding, err := license.BindPassword("hunter2")
+if err != nil {
+	log.Fatal(err)
+}
+
+data, err := license.Issue(license.IssueOptions{
+	PrivateKey: priv,
+	KeyID:      "k2026-05",
+	Subject:    "alice@example.com",
+	NotAfter:   time.Now().Add(30 * 24 * time.Hour),
+	Bindings: []license.Binding{
+		license.BindMachineIDs(string(machineA)),
+		pwBinding,
+	},
+})
+```
+
+### Vérification
+
+```go
+me, _ := hostid.Local()
+v, err := license.Verify(data, trusted,
+	license.WithMachineID(me),
+	license.WithPassword("hunter2"),
+)
+```
+
+Si `me` ∉ liste OU password ≠ argon2id stocké → `ErrLicenseInvalid` (cause
+précise loguée mais absente du message — pour ne pas guider un attaquant).
+
+---
+
+## Recette 4
+
+**Identité embarquée — résiste au packer.**
+
+### a. Générer l'identité (une fois par série de builds)
 
 ```bash
-# Extract the license ID from a license file (no signature required).
-LIC_ID=$(go run ./cmd/license-test inspect alice-rshell.pem | jq -r .id)
-
-# POST the ID to the admin endpoint.
-curl -X POST https://lic.maldev.test/revoked.pem \
-  -H "Authorization: Bearer $MALDEV_ADMIN" \
-  -H "Content-Type: application/json" \
-  -d "{\"add\":[\"$LIC_ID\"]}"
+go run github.com/oioio-space/maldev/license/identity/cmd/gen-identity \
+    -out cmd/rshell/identity.bin
 ```
 
-The next `Verify` call that fetches the revocation list will return
-`ErrLicenseInvalid`. Binaries using a cached list continue to run until the
-cache's `ExpiresAt` (default 7 days), unless `WithGracePeriod(0)` was set.
+Idempotent. Commit `identity.bin` pour que toute l'équipe partage la même
+identité par binaire.
 
----
-
-## Step 6 — Run the heartbeat server (optional)
-
-Heartbeat provides real-time license liveness checks with nonce echo and signed
-server timestamps.
+### b. Embarquer dans le binaire
 
 ```go
-mux.Handle("/heartbeat", server.NewHeartbeatHandler(server.HeartbeatOptions{
-    PrivateKey: priv,
-    KeyID:      "k2026-05",
-    Store:      server.FileStore("./licenses.json"),
-    ValidFor:   1 * time.Hour,
-}))
+package main
+
+import (
+	_ "embed"
+	"log"
+
+	"github.com/oioio-space/maldev/license"
+	"github.com/oioio-space/maldev/license/identity"
+)
+
+//go:embed identity.bin
+var identityBytes []byte
+
+func main() {
+	identity.Set(identityBytes)
+
+	pub, kid, _ := license.LoadPublicKey("issuer.pub")
+	if _, err := license.VerifyFile("rshell.license",
+		license.Trusted{Keys: license.SingleKey(kid, pub)},
+		license.WithBinaryPinning(),
+	); err != nil {
+		log.Fatal(err)
+	}
+}
 ```
 
-On the binary side, add `WithHeartbeat`:
+### c. Émettre pour cette identité
 
 ```go
-license.WithHeartbeat(
-    heartbeat.HTTPClient("https://lic.maldev.test/heartbeat"),
-    1*time.Hour,
-),
-```
-
-The binary sends a 16-byte random nonce; the server replies with a signed
-`HeartbeatReply` carrying the nonce echo, server time, and `ok: true/false`.
-`Verify` rejects if the nonce echo does not match or `ok` is false.
-
----
-
-## Step 7 — Rotate the signing key
-
-Key rotation does not require re-issuing licenses immediately. Old licenses
-remain valid as long as their `NotAfter` has not passed.
-
-```go
-// 1. Generate the new keypair.
-newPub, newPriv, _ := license.GenerateKey()
-newPubPEM, _ := license.MarshalPublicKey(newPub, "k2026-11")
-
-// 2. Add the new public key to every binary's Trusted map
-//    (deploy a new binary build or update the embedded PEM).
-trusted := license.Trusted{Keys: map[string]ed25519.PublicKey{
-    "k2026-05": oldPub,   // keep until all k2026-05 licenses expire
-    "k2026-11": newPub,
-}}
-
-// 3. Issue new licenses under the new KeyID.
+identityBytes, _ := os.ReadFile("cmd/rshell/identity.bin")
 data, _ := license.Issue(license.IssueOptions{
-    PrivateKey: newPriv,
-    KeyID:      "k2026-11",
-    // ...
+	PrivateKey:     priv,
+	KeyID:          "k2026-05",
+	Subject:        "alice",
+	IdentitySHA256: license.HashIdentity(identityBytes),
+	NotAfter:       time.Now().Add(180 * 24 * time.Hour),
+})
+```
+
+La licence reste valide à travers `cmd/packer pack`, re-packing, strip,
+signature Authenticode — tant que `identity.bin` reste embarqué.
+
+---
+
+## Recette 5
+
+**Serveur HTTP minimal — revocation list signée + heartbeat. ~30 lignes.**
+
+```go
+package main
+
+import (
+	"log"
+	"net/http"
+	"os"
+	"time"
+
+	"github.com/oioio-space/maldev/license"
+	"github.com/oioio-space/maldev/license/server"
+)
+
+func main() {
+	priv, err := license.LoadPrivateKey("/etc/maldev/issuer.key")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/revoked.pem", server.NewRevocationHandler(server.RevocationOptions{
+		PrivateKey: priv,
+		KeyID:      "k2026-05",
+		Store:      server.FileStore("/var/lib/maldev/revoked.json"),
+		ValidFor:   7 * 24 * time.Hour,
+		AdminToken: os.Getenv("MALDEV_ADMIN_TOKEN"),
+	}))
+	mux.Handle("/heartbeat", server.NewHeartbeatHandler(server.HeartbeatOptions{
+		PrivateKey: priv,
+		KeyID:      "k2026-05",
+		Store:      server.StaticLicenseStore{}, // remplace par ta propre LicenseStore (DB, fichier…)
+		ValidFor:   time.Hour,
+	}))
+
+	log.Fatal(http.ListenAndServeTLS(":8443", "cert.pem", "key.pem", mux))
+}
+```
+
+### Révoquer / annuler une révocation (admin)
+
+```bash
+# Révoquer
+curl -X POST https://lic.example.com/revoked.pem \
+     -H "Authorization: Bearer $MALDEV_ADMIN_TOKEN" \
+     -d '{"add":["<license-id>"]}'
+
+# Annuler
+curl -X POST https://lic.example.com/revoked.pem \
+     -H "Authorization: Bearer $MALDEV_ADMIN_TOKEN" \
+     -d '{"remove":["<license-id>"]}'
+```
+
+---
+
+## Recette 6
+
+**Verify "production" — pinning + révocation + heartbeat + state file + NTP soft + grace period offline.**
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+	"os"
+	"time"
+
+	"github.com/oioio-space/maldev/license"
+	"github.com/oioio-space/maldev/license/heartbeat"
+	"github.com/oioio-space/maldev/license/hostid"
+	"github.com/oioio-space/maldev/license/revoke"
+)
+
+func main() {
+	pub, kid, _ := license.LoadPublicKey("issuer.pub")
+	state := os.Getenv("HOME") + "/.maldev/license-state"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	v, err := license.VerifyFile("rshell.license",
+		license.Trusted{Keys: license.SingleKey(kid, pub)},
+
+		// Scope.
+		license.WithAudience("rshell"),
+		license.WithIssuer("lab-eu"),
+		license.WithMachineID(must(hostid.Local())),
+
+		// Pinning binaire/identité.
+		license.WithBinaryPinning(),
+
+		// Révocation hybride : HTTP en priorité, fallback fichier, cache local.
+		license.WithRevocation(
+			revoke.MultiSource(
+				revoke.HTTPSource("https://lic.example.com/revoked.pem", nil),
+				revoke.FileSource("/etc/maldev/revoked.pem.cached"),
+			),
+			24*time.Hour,
+			state+".revoke",
+		),
+		license.WithGracePeriod(7*24*time.Hour),
+
+		// Heartbeat : ping rate-limité à 1/h.
+		license.WithHeartbeat(
+			heartbeat.HTTPClient("https://lic.example.com/heartbeat", nil),
+			time.Hour,
+		),
+
+		// Anti-tamper d'horloge.
+		license.WithStateFile(state),
+		license.WithStateHostID(hostid.Local),
+		license.WithMaxClockSkew(5*time.Minute),
+
+		// NTP en soft warning (ne refuse pas).
+		license.WithNTPCheck("pool.ntp.org:123", 10*time.Minute),
+
+		// Timeout global réseau.
+		license.WithContext(ctx),
+	)
+	if err != nil {
+		log.Fatalf("license check failed: %v", err)
+	}
+	for _, w := range v.Warnings {
+		log.Printf("[warn] %s", w)
+	}
+	log.Printf("autorisé — %s (key %s)", v.Subject, v.KeyUsed)
+}
+
+func must[T any](v T, err error) T {
+	if err != nil {
+		log.Fatal(err)
+	}
+	return v
+}
+```
+
+---
+
+## Recette 7
+
+**Rotation de clé sans casser les licences existantes.**
+
+```go
+oldPub, _, _ := license.LoadPublicKey("/etc/maldev/issuer-2026-05.pub")
+newPub, _, _ := license.LoadPublicKey("/etc/maldev/issuer-2026-11.pub")
+
+trusted := license.Trusted{
+	Keys: map[string]ed25519.PublicKey{
+		"k2026-05": oldPub, // gardée jusqu'à expiry des dernières licences
+		"k2026-11": newPub, // active maintenant
+	},
+}
+_, err := license.VerifyFile("./client.license", trusted, /* options */)
+```
+
+**Workflow recommandé :**
+
+1. Génère et déploie la nouvelle clé :
+   `license.GenerateAndSave("/etc/maldev/issuer-2026-11/", "k2026-11")`
+2. Push la nouvelle `issuer-2026-11.pub` à tous les binaires via release.
+3. Émets les nouvelles licences avec `KeyID: "k2026-11"`.
+4. Attends que toutes les licences `k2026-05` aient expiré (`max(NotAfter)`).
+5. Retire `k2026-05` de `Trusted.Keys` dans les binaires à la release suivante.
+6. Détruis `issuer-2026-05.key` (HSM/disque).
+
+---
+
+## Recette 8
+
+**Payload chiffré pour un destinataire — sealed payload.**
+
+```go
+import "github.com/oioio-space/maldev/license/seal"
+
+// 1. Le destinataire publie sa clé publique X25519.
+recipientPub, recipientPriv, _ := seal.GenerateRecipient()
+
+// 2. L'émetteur scelle un payload pour ce destinataire.
+secretConfig := []byte(`{"endpoint":"https://c2.example.com","token":"xxx"}`)
+sealed, _ := seal.Seal(recipientPub, secretConfig)
+
+// 3. La licence transporte le scellé. Signée publiquement par l'issuer,
+//    mais le contenu n'est lisible que par recipientPriv.
+data, _ := license.Issue(license.IssueOptions{
+	PrivateKey:    priv,
+	KeyID:         "k1",
+	Subject:       "alice",
+	NotAfter:      time.Now().Add(24 * time.Hour),
+	SealedPayload: sealed,
 })
 
-// 4. Once all k2026-05 licenses have passed their NotAfter, remove oldPub.
+// 4. Côté binaire : déchiffre après Verify.
+v, err := license.Verify(data, trusted)
+if err != nil { /* ... */ }
+config, err := seal.Open(recipientPriv, v.SealedPayload)
+if err != nil { /* clé X25519 incorrecte */ }
+fmt.Println("config:", string(config))
 ```
 
-> [!CAUTION]
-> Never delete an old public key from `Trusted` before all licenses it signed
-> have expired. Removing a key causes `Verify` to return `ErrLicenseInvalid`
-> for every holder of that license.
+Sous le capot : X25519 ECDH → HKDF-SHA256 → XChaCha20-Poly1305 AEAD avec
+l'ephemeral public key comme AAD.
+
+---
+
+## API helpers (cheatsheet)
+
+| Fonction | Quand l'utiliser |
+|---|---|
+| `license.GenerateKey()` | Crée une paire Ed25519 en RAM. |
+| `license.GenerateAndSave(dir, kid)` | Génère + écrit `issuer.key` (0600) et `issuer.pub` (0644). |
+| `license.SavePrivateKey(path, priv)` | PEM `MALDEV PRIVATE KEY`, atomique, 0600. |
+| `license.LoadPrivateKey(path)` | Lit + parse. |
+| `license.SavePublicKey(path, pub, kid)` | PEM `MALDEV PUBLIC KEY` avec header `KID:`. |
+| `license.LoadPublicKey(path)` | Renvoie `(pub, kid)`. |
+| `license.SingleKey(kid, pub)` | Sucre pour `map[string]ed25519.PublicKey{kid: pub}`. |
+| `license.New(priv, sub, ttl)` | Émission one-liner. |
+| `license.Issue(IssueOptions{...})` | Émission complète. |
+| `license.SaveLicense(path, data)` | Écrit le PEM `MALDEV LICENSE`. |
+| `license.LoadLicense(path)` | Lit les bytes (à passer à `Verify`). |
+| `license.Verify(data, trusted, ...)` | Vérification bytes-in. |
+| `license.VerifyFile(path, trusted, ...)` | Vérification fichier-in. |
+| `license.Inspect(data)` | Parse sans signature — **diagnostic uniquement**. |
+| `license.HashFile(path)` | sha256 hex d'un fichier (→ `BinarySHA256`). |
+| `license.HashIdentity(b)` | sha256 hex d'octets (→ `IdentitySHA256`). |
+| `license.BindMachineIDs(...)` | Binding liste OU. |
+| `license.BindPassword(p)` | Binding password (argon2id). |
+| `license.BindCustom(name, v...)` | Binding custom k/v. |
+| `license.RegisterVerifier(name, fn)` | Hook pour types de binding custom. |
+
+---
+
+## Référence des champs
+
+Documentation détaillée champ par champ dans
+[license-framing.md](../techniques/license-framing.md#référence-des-champs).
