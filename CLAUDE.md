@@ -31,6 +31,22 @@ control).
 - **Every code-modification block ends with `/simplify` and skill-compliance.** After any change to a `.go` file (or block of `.go` files), invoke the `simplify` skill BEFORE the commit that ships the change. The 3-agent review (reuse / quality / efficiency) catches reinventions, leaks, typos, and duplication of existing utilities (`golang.org/x/sys/windows`, `cleanup/memory`, repo-internal helpers) — gaps that pass `go build` and `go test` silently. This rule applies even when the diff feels small.
 - **Every code change updates the matching tech md `Examples` and `Limitations` blocks in the same commit.** New API surface ⇒ at least one Example using it; addressed Limitation ⇒ rewrite the bullet to reflect the new state. The same commit, not a follow-up.
 
+## Agent Models (cost/performance policy)
+When invoking sub-agents via the `Agent` tool, ALWAYS pass an explicit `model:` parameter — `model:` overrides the agent definition's frontmatter and controls cost directly. Default mapping for this repo:
+
+| Agent / use case | Model | Rationale |
+|---|---|---|
+| `code-simplifier` (/simplify, Go refinement) | `sonnet` | Frequent calls; Sonnet 4.6 handles Go conventions + reuse detection without Opus cost |
+| `code-reviewer` (review, security-review) | `sonnet` | Needs reasoning over the diff + CLAUDE.md compliance |
+| `code-architect` (feature-dev planning) | `sonnet` | Architecture decisions, not heavy synthesis |
+| `code-explorer`, `Explore`, `general-purpose` (read-only search, grep, file lookup) | `haiku` | Pattern matching / file enumeration — Haiku 4.5's sweet spot |
+| `Plan` (implementation strategy) | `sonnet` | Trade-off reasoning, not pure search |
+| `feature-dev:*`, `claude-code-guide` | `sonnet` | Default unless task is purely lookup |
+
+Only escalate to `opus` when the sub-task genuinely needs deep multi-step reasoning (e.g., complex refactor design, novel cryptographic protocol analysis). State the reason in the agent prompt when escalating.
+
+The `/simplify` skill internally dispatches its own 3-agent review (reuse / quality / efficiency); those invocations come from the skill harness, not from me — but when I spawn related agents myself, I follow the table above.
+
 ## Go Style
 Follow the rules in:
 - `.claude/skills/go-conventions.md` — naming, packages, files, receivers, anti-chatter, x/sys/windows dedup
