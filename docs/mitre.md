@@ -38,10 +38,11 @@ reflects_commit: a705c32
 | T1070 | Indicator Removal on Host | `cleanup/memory` | D3-SMRA |
 | T1070.004 | File Deletion | `cleanup/selfdelete`, `cleanup/wipe` | D3-FRA (File Removal Analysis) |
 | T1070.006 | Timestomp | `cleanup/timestomp` | D3-FHA (File Hash Analysis) |
-| T1071.001 | Web Protocols | `c2/transport/malleable`, `c2/transport/namedpipe` | D3-NTA (Network Traffic Analysis) |
+| T1071.001 | Web Protocols | `c2/transport/malleable`, `c2/transport/namedpipe`, `c2/transport/websocket` | D3-NTA (Network Traffic Analysis) |
 | T1082 | System Information Discovery | `win/domain`, `win/version` | D3-SYSIP (System Information Profiling) |
 | T1083 | File and Directory Discovery | `recon/folder` | D3-FDA (File Discovery Analysis) |
 | T1090.001 | Proxy: Internal Proxy | `c2/pivot/socks5` (forward SOCKS5v5 + RFC 1929 auth + RuleSet scope enforcement) | D3-NTA (Network Traffic Analysis), D3-PA (Process Analysis) |
+| T1090.004 | Proxy: Domain Fronting | `c2/transport/websocket` (`WithUTLSConfig` — JA3=Chrome on TLS while WS upgrade targets the fronted host) | D3-NTA (Network Traffic Analysis) |
 | T1106 | Native API | `win/api` (PEB walk, API hashing), `win/syscall`, `win/ntapi`, `pe/imports` (import table enumeration) | D3-SCA (System Call Analysis) |
 | T1113 | Screen Capture | `collection/screenshot` | D3-DA (Dynamic Analysis) |
 | T1115 | Clipboard Data | `collection/clipboard` | D3-DA (Dynamic Analysis) |

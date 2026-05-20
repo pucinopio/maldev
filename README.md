@@ -41,8 +41,10 @@ A single Go module covering the chain end-to-end:
 - **Persistence / collection / cleanup** — registry, scheduled tasks,
   service install, LNK, account; keylog / clipboard / screenshot;
   self-delete, multi-pass wipe, timestomp, ADS, BSOD kill switch.
-- **C2** — reverse shell + reconnect, TLS / named-pipe transports,
-  JA3 fingerprint, Meterpreter staging, multi-session listener.
+- **C2** — reverse shell + reconnect, TLS / named-pipe / WebSocket
+  transports, JA3 fingerprint (uTLS), N-channel fallback Router
+  with exponential backoff + operator kill switch, Meterpreter
+  staging, multi-session listener, beacon-side SOCKS5 pivot.
 - **BYOVD / kernel** — RTCore64 (CVE-2019-16098) R/W primitive.
 - **Privesc** — 4 UAC bypasses, CVE-2024-30088 LPE, DLL-hijack helpers.
 
@@ -54,7 +56,7 @@ Full inventory and MITRE/D3FEND mapping: [docs handbook](https://oioio-space.git
 go get github.com/oioio-space/maldev@latest
 ```
 
-Requires **Go 1.21+**. No CGO.
+Requires **Go 1.23+**. No CGO.
 
 ## Quick start
 
