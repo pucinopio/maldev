@@ -374,11 +374,11 @@ func serverCountLabel(statuses map[string]httpsrv.Status) string {
 	return fmt.Sprintf("%d/3 running", activeServerCount(statuses))
 }
 
-// OnClick handles sub-tab bar clicks. The bar lives on body row Y=3 (title+tabs+
-// breadcrumb=3) and contains [R] Revocation, [H] Heartbeat, [P] Fingerprint probe.
-// Each tab pill renders as `[K] Label ●` separated by spaces.
+// OnClick handles sub-tab bar clicks. Chrome takes Y=0..3 (title + tabs +
+// underline + breadcrumb) so the sub-tab bar is at Y=4. Each tab pill renders
+// as `[K] Label ●` separated by spaces.
 func (m serversModel) OnClick(x, y, _ int) tea.Cmd {
-	if y != 3 {
+	if y != 4 {
 		return nil
 	}
 	labels := []struct {

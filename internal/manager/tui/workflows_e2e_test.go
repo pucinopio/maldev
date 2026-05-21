@@ -2709,22 +2709,22 @@ func TestE2E_ClickabilityMatrix(t *testing.T) {
 				t.Errorf("expected ViewLicenses after tab click, got %s", rootOf(t, a).active)
 			}
 		}},
-		{ViewLicenses, toView(ViewLicenses, '2'), "filter chip[active]", 12, 3, func(t *testing.T, _, a tea.Model) {
+		{ViewLicenses, toView(ViewLicenses, '2'), "filter chip[active]", 12, 5, func(t *testing.T, _, a tea.Model) {
 			if rootOf(t, a).licenses.filter == licFilterAll {
 				t.Errorf("expected filter changed after chip click")
 			}
 		}},
-		{ViewServers, toView(ViewServers, '7'), "sub-tab [H] Heartbeat", 22, 3, func(t *testing.T, _, a tea.Model) {
+		{ViewServers, toView(ViewServers, '7'), "sub-tab [H] Heartbeat", 22, 4, func(t *testing.T, _, a tea.Model) {
 			if rootOf(t, a).servers.activeTab != serverTabHeartbeat {
 				t.Errorf("expected Heartbeat tab after click")
 			}
 		}},
-		{ViewServers, toView(ViewServers, '7'), "sub-tab [P] Probe", 40, 3, func(t *testing.T, _, a tea.Model) {
+		{ViewServers, toView(ViewServers, '7'), "sub-tab [P] Probe", 40, 4, func(t *testing.T, _, a tea.Model) {
 			if rootOf(t, a).servers.activeTab != serverTabProbe {
 				t.Errorf("expected Probe tab after click")
 			}
 		}},
-		{ViewAudit, toView(ViewAudit, '8'), "audit filter [l]license", 26, 3, func(t *testing.T, _, a tea.Model) {
+		{ViewAudit, toView(ViewAudit, '8'), "audit filter [l]license", 26, 5, func(t *testing.T, _, a tea.Model) {
 			if rootOf(t, a).audit.filter == auditFilterAll {
 				t.Errorf("expected filter changed after audit chip click")
 			}
@@ -2861,7 +2861,7 @@ func TestE2E_LicenseFilterChipClick(t *testing.T) {
 	m = driveRune(m, '2') // Licenses
 	// First chip (`all`) is at x≈1..7 on row Y=3. Click "active" at ~x=12.
 	updated, cmd := m.Update(tea.MouseMsg{
-		X: 12, Y: 3,
+		X: 12, Y: 5,
 		Button: tea.MouseButtonLeft,
 		Action: tea.MouseActionPress,
 	})
@@ -2889,7 +2889,7 @@ func TestE2E_ServerSubTabClick(t *testing.T) {
 	}
 	// "[R] Revocation ●" ≈ 16 cells; click on Heartbeat ~ x=20 on row Y=3.
 	updated, cmd := m.Update(tea.MouseMsg{
-		X: 22, Y: 3,
+		X: 22, Y: 4,
 		Button: tea.MouseButtonLeft,
 		Action: tea.MouseActionPress,
 	})

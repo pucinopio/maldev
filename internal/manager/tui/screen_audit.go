@@ -418,11 +418,11 @@ func writeAuditJSON(path string, rows []*ent.AuditEvent) error {
 	return os.WriteFile(path, b, 0o644)
 }
 
-// OnClick handles filter-chip clicks on row Y=3 (chip bar).
-// Mirrors chipBar layout: 1 space + "filtres :" + 2 spaces + chips separated
-// by zero spaces (each chip is its own bordered pill).
+// OnClick handles filter-chip clicks. Chrome=4 rows; the chip bar pills span
+// Y=4..6 (3-row bordered pill block — top border, label row, bottom border).
+// Mirrors chipBar layout: " filtres :  " prefix then chips back-to-back.
 func (m auditModel) OnClick(x, y, _ int) tea.Cmd {
-	if y < 3 || y > 5 {
+	if y < 4 || y > 6 {
 		return nil
 	}
 	allFilters := []auditKindFilter{
@@ -432,13 +432,16 @@ func (m auditModel) OnClick(x, y, _ int) tea.Cmd {
 	// 1 leading space + "filtres :" (9 chars) + 2 spaces = 12 cells before chips.
 	cursor := 12
 	for _, f := range allFilters {
-		// Pill width: hotkey(1) + label width + border+padding(4)
-		w := 1 + lipgloss.Width(f.label()) + 4
-		if x >= cursor && x < cursor+w {
+		// Pill = HintKey.Render(hotkey) + Base.Render(label) wrapped in a
+		// Border+Padding(0,1) style. HintKey itself has Padding(0,1) so its
+		// rendered width is 1+1+1=3 cells. Then label cells. Then 4 cells of
+		// outer border+padding (1 border + 1 padding on each side).
+		pillW := lipgloss.Width(HintKey.Render(f.hotkey())) + lipgloss.Width(f.label()) + 4
+		if x >= cursor && x < cursor+pillW {
 			target := f
 			return func() tea.Msg { return auditFilterClickMsg{f: target} }
 		}
-		cursor += w
+		cursor += pillW
 	}
 	return nil
 }

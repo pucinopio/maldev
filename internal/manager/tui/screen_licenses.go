@@ -175,6 +175,10 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 		m.rebuildTable()
 		return m, nil
 
+	case tableSelectRowMsg:
+		m.table.SetCursor(msg.row)
+		return m, nil
+
 	case tea.KeyMsg:
 		// Search mode absorbs keys.
 		if m.search.Focused() {
@@ -380,11 +384,21 @@ func (m licensesModel) View() string {
 }
 
 // OnClick handles mouse clicks on the licenses screen.
-// Chip row is at body row Y=3 (title=0, tabs=1, breadcrumb=2, chips=3).
-// Each chip is a 3-line bordered pill — the click is on the middle row.
+// Chrome=4 rows; the filter chip pills span Y=4..6 (3-row bordered pills).
+// Click on any of those rows registers as a chip click.
 func (m licensesModel) OnClick(x, y, _ int) tea.Cmd {
-	// Chip row spans Y=3..5 (3-line pill). Treat any click inside as a chip click.
-	if y < 3 || y > 5 {
+	if y >= 4 && y <= 6 {
+		// fall through to chip hit-test
+	} else {
+		// Table click handling: header at Y=7, data rows Y=8+.
+		const tableHeaderY = 7
+		if y > tableHeaderY {
+			row := y - tableHeaderY - 1
+			if row >= 0 && row < len(m.rows) {
+				target := row
+				return func() tea.Msg { return tableSelectRowMsg{row: target} }
+			}
+		}
 		return nil
 	}
 	filters := []licenseFilter{licFilterAll, licFilterActive, licFilterExpiring, licFilterExpired, licFilterRevoked, licFilterSuperseded}
