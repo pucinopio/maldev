@@ -31,7 +31,7 @@ require (
 	golang.org/x/crypto v0.33.0
 	golang.org/x/net v0.23.0
 	golang.org/x/sync v0.20.0
-	golang.org/x/sys v0.42.0
+	golang.org/x/sys v0.44.0
 	golang.org/x/text v0.22.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.50.1
@@ -63,6 +63,7 @@ require (
 	github.com/zclconf/go-cty-yaml v1.1.0 // indirect
 	golang.org/x/image v0.12.0 // indirect
 	golang.org/x/mod v0.33.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
 	modernc.org/libc v1.72.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
