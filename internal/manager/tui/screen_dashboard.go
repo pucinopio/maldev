@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -249,9 +250,11 @@ func (m dashboardModel) auditCardContent() string {
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
-// shortcutsCardContent builds the 6-hint shortcuts grid matching the reference.
+// shortcutsCardContent builds the 6-hint shortcuts grid matching dashboard.jsx:
+// 3 columns × 2 rows, dashed borders between cells (visual separator only).
 func (m dashboardModel) shortcutsCardContent() string {
-	hints := [][2]string{
+	type shortcut struct{ key, label string }
+	hints := []shortcut{
 		{"n", "nouvelle licence"},
 		{"/", "rechercher"},
 		{"x", "révoquer"},
@@ -259,9 +262,29 @@ func (m dashboardModel) shortcutsCardContent() string {
 		{"i", "identity.bin"},
 		{"?", "aide contextuelle"},
 	}
-	var lines []string
-	for _, h := range hints {
-		lines = append(lines, HintKey.Render("["+h[0]+"]")+"  "+HintText.Render(h[1]))
+
+	// The shortcuts box lives in the right column (~⅔ of total width).
+	// Subtract box chrome (border 2 + padding 2 = 4) then divide by 3 cols.
+	// Use a generous minimum so labels are never truncated.
+	rightColW := m.width * 2 / 3
+	cellW := (rightColW - 4) / 3
+	if cellW < 20 {
+		cellW = 20
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+
+	sep := Mute.Render("│")
+	divPart := strings.Repeat("─", cellW)
+	divider := Mute.Render(divPart + "┼" + divPart + "┼" + divPart)
+
+	var rows [2]string
+	for row := 0; row < 2; row++ {
+		var cells [3]string
+		for col := 0; col < 3; col++ {
+			h := hints[row*3+col]
+			cell := HintKey.Render("["+h.key+"]") + " " + HintText.Render(h.label)
+			cells[col] = lipgloss.NewStyle().Width(cellW).Render(cell)
+		}
+		rows[row] = cells[0] + sep + cells[1] + sep + cells[2]
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, rows[0], divider, rows[1])
 }

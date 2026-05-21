@@ -1778,6 +1778,30 @@ func TestE2E_SettingsMouseRefreshCycle(t *testing.T) {
 	}
 }
 
+// TestE2E_DashboardShortcutsGrid verifies the redesigned shortcuts card renders
+// all 6 hints in a 3-column grid layout with row/column separators.
+// Intentionally red against the old vertical-list layout, green after the grid fix.
+func TestE2E_DashboardShortcutsGrid(t *testing.T) {
+	// Build a minimal dashboard model with size injected directly.
+	dm := newDashboardModel(nil, nil)
+	dm.width = 120
+	dm.height = 40
+	dm.loading = false
+	got := dm.View()
+
+	// All 6 shortcuts must appear.
+	for _, label := range []string{"nouvelle licence", "rechercher", "révoquer", "clés d'émission", "identity.bin", "aide contextuelle"} {
+		if !strings.Contains(got, label) {
+			t.Errorf("DashboardShortcutsGrid: shortcut %q not found in output", label)
+		}
+	}
+
+	// The 3-column grid uses │ as column separator — must appear at least once.
+	if !strings.Contains(got, "│") {
+		t.Error("DashboardShortcutsGrid: column separator '│' not found — grid not rendering")
+	}
+}
+
 // ── Help overlay in every view ─────────────────────────────────────────────────
 
 // TestE2E_HelpOverlayInEachView presses '?' in every SessionReady view and

@@ -60,17 +60,17 @@
 │                                                                                                                       
 │ └────┘                                ││                                                                              
 │                                                                                                                       
-│ https://revoke.example.com:8443       ││  [n]   nouvelle licence                                                      
+│ https://revoke.example.com:8443       ││  [n]  nouvelle licence   │ [/]  rechercher         │ [x]  révoquer           
 │                                                                                                                       
-│ Heartbeat    ┌────┐                   ││  [/]   rechercher                                                            
+│ Heartbeat    ┌────┐                   ││ ─────────────────────────┼─────────────────────────┼───────────────────────  
 │                                                                                                                       
-│ │ ON │                                ││  [x]   révoquer                                                              
+│ │ ON │                                ││ ──                                                                           
 │                                                                                                                       
-│ └────┘                                ││  [k]   clés d'émission                                                       
+│ └────┘                                ││  [k]  clés d'émission    │ [i]  identity.bin       │ [?]  aide contextuelle  
 │                                                                                                                       
-│ https://heartbeat.example.com:8444    ││  [i]   identity.bin                                                          
+│ https://heartbeat.example.com:8444    ││                                                                              
 │                                                                                                                       
-│ Probe        ┌─────┐                  ││  [?]   aide contextuelle                                                     
+│ Probe        ┌─────┐                  ││                                                                              
 │                                                                                                                       
 │ │ OFF │                                                                                                               
 │└───────────────────────────────────────────────────────────────────────────────┘                                      

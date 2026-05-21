@@ -60,17 +60,17 @@
 │                                                                                                                       
 │ └─────┘                               ││                                                                              
 │                                                                                                                       
-│ Heartbeat    ┌─────┐                  ││  [n]   nouvelle licence                                                      
+│ Heartbeat    ┌─────┐                  ││  [n]  nouvelle licence   │ [/]  rechercher         │ [x]  révoquer           
 │                                                                                                                       
-│ │ OFF │                               ││  [/]   rechercher                                                            
+│ │ OFF │                               ││ ─────────────────────────┼─────────────────────────┼───────────────────────  
 │                                                                                                                       
-│ └─────┘                               ││  [x]   révoquer                                                              
+│ └─────┘                               ││ ──                                                                           
 │                                                                                                                       
-│ Probe        ┌─────┐                  ││  [k]   clés d'émission                                                       
+│ Probe        ┌─────┐                  ││  [k]  clés d'émission    │ [i]  identity.bin       │ [?]  aide contextuelle  
 │                                                                                                                       
-│ │ OFF │                               ││  [i]   identity.bin                                                          
+│ │ OFF │                               ││                                                                              
 │                                                                                                                       
-│ └─────┘                               ││  [?]   aide contextuelle                                                     
+│ └─────┘                               ││                                                                              
 │                                                                                                                       
 │                                                                                                                       
 │└───────────────────────────────────────────────────────────────────────────────┘                                      
