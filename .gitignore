@@ -51,6 +51,8 @@ coverage.txt
 dist/
 go.work.sum
 ignore/
+/ignore*.go
+/ignore*.txt
 material_theme_project_new.xml
 modules.xml
 testutil/results/
