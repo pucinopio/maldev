@@ -1,7 +1,7 @@
 ◆ license-manager v0.4.0-dev                            db: db.sqlite | net: online | http: 0/3 ON | 21/05/2026 07:54:12
-  1 Dashboard    2 Licenses    3 Issuers    4 Recipients    5 Identities    6 Revocation    7 Servers    8 Audit    9   
-Settings                                                                                                                
-                                                                                                       ───────────      
+  1 Dashboard    2 Licenses    3 Issuer keys    4 Recipients    5 Identities    6 Revocation    7 Servers    8 Audit    
+9 Settings                                                                                                              
+                                                                                                           ───────────  
  ┌─────┐                                                                                                                
 │ all │                                                                                                                 
 └─────┘ ┌───────────┐                                                                                                   
@@ -45,4 +45,6 @@ Settings
                                                                                                                         
                                                                                                                         
                                                                                                                         
- f filter   d detail   r refresh   E export CSV   J export JSON                                                         
+ f filter   d detail   r refresh   E export CSV   J export JSON                                               ┌────────┐
+│ ~ tour │                                                                                                              
+└────────┘                                                                                                              

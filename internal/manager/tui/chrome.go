@@ -18,7 +18,7 @@ var tabDefs = []struct {
 }{
 	{ViewDashboard, "Dashboard"},
 	{ViewLicenses, "Licenses"},
-	{ViewIssuers, "Issuers"},
+	{ViewIssuers, "Issuer keys"},
 	{ViewRecipients, "Recipients"},
 	{ViewIdentities, "Identities"},
 	{ViewRevocation, "Revocation"},

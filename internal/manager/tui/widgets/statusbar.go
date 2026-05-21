@@ -17,6 +17,13 @@ type KeyHint struct {
 }
 
 // StatusBar renders a row of keyboard hints at the bottom of a screen.
+//
+// Layout (matches chrome.jsx StatusBar):
+//
+//	[k] hint  [k2] hint2  …          ~ tour
+//	^── hints left ───────^          ^─ tour pill right
+//
+// The "~ tour" pill is always rendered on the far right.
 type StatusBar struct {
 	Hints  []KeyHint
 	bounds core.Rect
@@ -32,23 +39,44 @@ func (s *StatusBar) Bounds() core.Rect      { return s.bounds }
 
 func (s *StatusBar) Update(_ tea.Msg) (core.Widget, tea.Cmd) { return s, nil }
 
-type statusStyleSet struct{ key, text, sep lipgloss.Style }
+type statusStyleSet struct {
+	key, text, sep, tour lipgloss.Style
+}
 
 var statusStyleCache = sync.OnceValue(func() statusStyleSet {
 	return statusStyleSet{
 		key:  lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true).Padding(0, 1),
 		text: lipgloss.NewStyle().Foreground(core.Colors.FgDim),
 		sep:  lipgloss.NewStyle().Foreground(core.Colors.FgMute),
+		// "~ tour" pill: yellow foreground, bordered — mirrors the prototype's yellow pill.
+		tour: lipgloss.NewStyle().
+			Foreground(core.Colors.Yellow).
+			Bold(true).
+			Padding(0, 1).
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(core.Colors.Yellow),
 	}
 })
 
 func (s *StatusBar) View() string {
 	st := statusStyleCache()
+
 	parts := make([]string, len(s.Hints))
 	for i, h := range s.Hints {
 		parts[i] = st.key.Render(h.Key) + st.text.Render(h.Desc)
 	}
-	bar := strings.Join(parts, st.sep.Render("  "))
+	hintsStr := strings.Join(parts, st.sep.Render("  "))
+
+	tourPill := st.tour.Render("~ tour")
+	tourW := lipgloss.Width(tourPill)
+	hintsW := lipgloss.Width(hintsStr)
+
+	gap := s.bounds.W - hintsW - tourW
+	if gap < 1 {
+		gap = 1
+	}
+
+	bar := hintsStr + strings.Repeat(" ", gap) + tourPill
 	return lipgloss.NewStyle().
 		Background(core.Colors.Bg1).
 		Width(s.bounds.W).

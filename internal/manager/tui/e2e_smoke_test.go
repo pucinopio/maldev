@@ -32,7 +32,7 @@ func TestE2E_SmokeTUI(t *testing.T) {
 		}{
 			{'1', "Dashboard"},
 			{'2', "Licenses"},
-			{'3', "Issuers"},
+			{'3', "Issuer keys"},
 			{'4', "Recipients"},
 			{'5', "Identities"},
 			{'6', "Revocation"},
