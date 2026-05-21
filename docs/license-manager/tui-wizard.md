@@ -36,13 +36,25 @@ sequenceDiagram
     WZ->>Operator: QR overlay (PEM + TOTP QR)
 ```
 
-## Progress Breadcrumb
+## Progress Strip and Sidebar
 
-A breadcrumb bar at the top of the wizard shows all 8 step names. The current step is
-highlighted in magenta; completed steps appear dimmed; future steps are muted.
+The wizard chrome has two persistent navigation elements:
+
+**Progress strip** (top bar): shows `NOUVELLE LICENCE  étape N/8 · <label>` with
+styled key hints (`Tab` next, `⇧Tab` prev, `1-8` jump, `esc` cancel) right-aligned.
+A magenta progress bar below it fills proportionally to the current step.
+
+**Sidebar** (left column, ~27 chars wide): lists all 8 steps with a `[N]` badge,
+step label, and a one-line hint. The active step is prefixed with a magenta `│`
+accent; its badge and label are rendered bold. Hints are truncated to fit the sidebar
+width and never wrap.
 
 ```
- Identity › Recipient › Machine › Binary › Validity › Fields › TOTP › Review
+│ [1] Identité
+    subject · issuer · a…
+  [2] Destinataire
+    clé X25519 du destin…
+  …
 ```
 
 `esc` steps back one step at any point. `q` on the Licenses screen cancels and returns.

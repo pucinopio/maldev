@@ -71,15 +71,36 @@ injects via `cmds.DashboardSnapshotMsg`. Fields:
 ## tui-snap binary flags
 
 ```
--view  dashboard|licenses|issuers|recipients|identities|revocation|servers|audit|settings|onboarding|passphrase
+-view  dashboard|licenses|issuers|recipients|identities|revocation|servers|audit|settings
+       |onboarding|onboarding-step<0-3>|passphrase
+       |wizard|wizard-step<1-8>
+       |overlay-confirm|overlay-confirm-danger|overlay-error|overlay-quit|overlay-quit-servers
+       |overlay-revoke|overlay-input|overlay-qr|overlay-filepicker
 -width  144   terminal width in cells
 -height 44    terminal height in cells
--seed   path  seed JSON file (optional)
+-seed   path  seed JSON file (optional, dashboard only)
 -keys   "1 d / esc"   space-separated key presses to send after seed
 -mouse  "x,y[,left|right]"  single mouse click after layout
 ```
 
 Output is raw ANSI text on stdout; pipe to `freeze` for PNG.
+
+### Onboarding sub-steps
+
+```bash
+bash scripts/tui-snap.sh onboarding          # step 0 — welcome banner
+bash scripts/tui-snap.sh onboarding-step1    # step 1 — passphrase (shows étape 2/4)
+bash scripts/tui-snap.sh onboarding-step2    # step 2 — issuer     (shows étape 3/4)
+bash scripts/tui-snap.sh onboarding-step3    # step 3 — first lic  (shows étape 4/4)
+```
+
+### Wizard sub-steps
+
+```bash
+bash scripts/tui-snap.sh wizard              # step 1 — Identity (default)
+bash scripts/tui-snap.sh wizard-step5        # step 5 — Validity
+bash scripts/tui-snap.sh wizard-step8        # step 8 — Review & Issue
+```
 
 ## Interactive testing
 
