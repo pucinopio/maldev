@@ -2256,6 +2256,119 @@ func TestE2E_AuditExportKeysBound(t *testing.T) {
 	}
 }
 
+// ── Overlay polish — chrome, color variants, key hints ────────────────────────
+
+// TestE2E_ErrorOverlayHasCrossPrefix verifies the ✗ prefix and French dismiss
+// hint are present in the error overlay after the polish commit.
+func TestE2E_ErrorOverlayHasCrossPrefix(t *testing.T) {
+	ov := newErrorOverlay("Test titre", "quelque chose a échoué")
+	got := ov.View()
+	if !strings.Contains(got, "✗") {
+		t.Error("ErrorOverlay: '✗' prefix not found in view")
+	}
+	if !strings.Contains(got, "fermer") {
+		t.Error("ErrorOverlay: 'fermer' dismiss hint not found in view")
+	}
+}
+
+// TestE2E_ErrorOverlayWithDetailsRendersBlock verifies the optional details
+// block appears in the view when supplied.
+func TestE2E_ErrorOverlayWithDetailsRendersBlock(t *testing.T) {
+	ov := newErrorOverlayWithDetails("Err", "msg", "detail line 1\ndetail line 2")
+	got := ov.View()
+	if !strings.Contains(got, "detail line 1") {
+		t.Error("ErrorOverlayWithDetails: details block not found in view")
+	}
+}
+
+// TestE2E_ConfirmOverlayDangerTitleRed verifies a danger confirm overlay
+// renders the title with the red glow style (not magenta).
+func TestE2E_ConfirmOverlayDangerTitleRed(t *testing.T) {
+	ov := newConfirmOverlay("id", "Danger title", "body", "yes", "no", true)
+	got := ov.View()
+	// The danger confirm uses GlowRed for the title — the title text must appear.
+	if !strings.Contains(got, "Danger title") {
+		t.Error("ConfirmOverlayDanger: title text not found in view")
+	}
+	// Danger variant must use the red border style (ModalDanger).
+	// We can't inspect ANSI codes easily, but we can confirm the hints are present.
+	if !strings.Contains(got, "y/↵") {
+		t.Error("ConfirmOverlayDanger: 'y/↵' hint not found in view")
+	}
+}
+
+// TestE2E_FilePickerHeaderPresent verifies the "filepicker" and "cwd" labels
+// appear in the file picker header row.
+func TestE2E_FilePickerHeaderPresent(t *testing.T) {
+	ov := newFilePickerOverlay(nil)
+	got := ov.View()
+	if !strings.Contains(got, "filepicker") {
+		t.Error("FilePicker: 'filepicker' label not found in header")
+	}
+	if !strings.Contains(got, "cwd") {
+		t.Error("FilePicker: 'cwd' label not found in header")
+	}
+	// Key hints must be present.
+	if !strings.Contains(got, "choisir") {
+		t.Error("FilePicker: 'choisir' key hint not found")
+	}
+}
+
+// TestE2E_FilePickerDirIconPresent verifies that at least one ▸ dir icon
+// appears when the home directory contains subdirectories.
+func TestE2E_FilePickerDirIconPresent(t *testing.T) {
+	ov := newFilePickerOverlay(nil)
+	// Only assert when there's at least one directory entry.
+	hasDirEntry := false
+	for _, e := range ov.entries {
+		if e.IsDir() {
+			hasDirEntry = true
+			break
+		}
+	}
+	if !hasDirEntry {
+		t.Skip("home dir has no visible subdirectory entries — cannot test ▸ icon")
+	}
+	got := ov.View()
+	if !strings.Contains(got, "▸") {
+		t.Error("FilePicker: '▸' dir icon not found in view")
+	}
+}
+
+// TestE2E_ProbeDrawerHeaderHasCircle verifies the ◆ FINGERPRINT PROBE title
+// renders in the probe drawer initial state.
+func TestE2E_ProbeDrawerHeaderHasCircle(t *testing.T) {
+	ov := newProbeDrawerOverlay(nil, nil)
+	got := ov.View()
+	if !strings.Contains(got, "◆ FINGERPRINT PROBE") {
+		t.Error("ProbeDrawer: '◆ FINGERPRINT PROBE' title not found in view")
+	}
+}
+
+// TestE2E_RevokeOverlayHasSuggestions verifies the suggestion chips render in
+// the revoke overlay view.
+func TestE2E_RevokeOverlayHasSuggestions(t *testing.T) {
+	ov := newRevokeOverlay(newTestUUID(), "alice@example.test")
+	got := ov.View()
+	for _, sug := range []string{"key_compromised", "offboarding", "Suggestions"} {
+		if !strings.Contains(got, sug) {
+			t.Errorf("RevokeOverlay: suggestion %q not found in view", sug)
+		}
+	}
+}
+
+// TestE2E_QuitOverlayFrenchTitle verifies the French title renders for both
+// servers-running and servers-stopped variants.
+func TestE2E_QuitOverlayFrenchTitle(t *testing.T) {
+	for _, running := range []bool{false, true} {
+		ov := newQuitOverlay(running)
+		got := ov.View()
+		if !strings.Contains(got, "Quitter license-manager") {
+			t.Errorf("QuitOverlay(running=%v): French title not found in view", running)
+		}
+	}
+}
+
 // TestE2E_HelpOverlayInEachView presses '?' in every SessionReady view and
 // verifies View() doesn't panic (returns non-empty string).
 func TestE2E_HelpOverlayInEachView(t *testing.T) {

@@ -124,46 +124,77 @@ func (o *filePickerOverlay) navigateUp() (Overlay, tea.Cmd) {
 }
 
 func (o *filePickerOverlay) View() string {
-	fgDim := lipgloss.NewStyle().Foreground(Palette.FgDim)
-	fg := lipgloss.NewStyle().Foreground(Palette.Fg)
-	sel := lipgloss.NewStyle().Foreground(Palette.Magenta).Bold(true)
-	dirStyle := lipgloss.NewStyle().Foreground(Palette.Cyan)
 	red := lipgloss.NewStyle().Foreground(Palette.Red)
 
-	title := GlowMagent.Render("File Picker")
-	dirLine := fgDim.Render("  " + o.dir)
+	// Header: "filepicker  cwd  <path>" with key hints.
+	header := lipgloss.JoinHorizontal(lipgloss.Top,
+		GlowCyan.Render("filepicker"),
+		"  ", Dim.Render("cwd"), " ", Base.Render(o.dir),
+	)
+	keyHints := lipgloss.JoinHorizontal(lipgloss.Top,
+		HintKey.Render("↑↓"), HintText.Render(" nav  "),
+		HintKey.Render("↵"), HintText.Render(" choisir  "),
+		HintKey.Render("←"), HintText.Render(" remonter  "),
+		HintKey.Render("esc"), HintText.Render(" annuler"),
+	)
 
 	var lines []string
 	if o.errMsg != "" {
 		lines = []string{red.Render("  " + o.errMsg)}
 	} else if len(o.entries) == 0 {
-		lines = []string{fgDim.Render("  (empty directory)")}
+		lines = []string{Mute.Render("  (répertoire vide)")}
 	} else {
-		// Compute visible window.
 		start, end := o.visibleRange(filePickerHeight)
 		for i := start; i < end; i++ {
 			e := o.entries[i]
-			name := e.Name()
+			// Prototype icons: ▸ for dir, ● for exe/binary, · for other.
+			var icon string
+			var nameStyle lipgloss.Style
 			if e.IsDir() {
-				name = dirStyle.Render(name + "/")
+				icon = GlowCyan.Render("▸")
+				nameStyle = lipgloss.NewStyle().Foreground(Palette.Cyan)
 			} else {
-				name = fg.Render(name)
+				ext := filepath.Ext(e.Name())
+				switch ext {
+				case ".exe", ".elf", ".dmg", ".bin", ".sh":
+					icon = GlowMagent.Render("●")
+					nameStyle = lipgloss.NewStyle().Foreground(Palette.Magenta)
+				default:
+					icon = Dim.Render("·")
+					nameStyle = Dim
+				}
+			}
+			name := nameStyle.Render(e.Name())
+			if e.IsDir() {
+				name = nameStyle.Render(e.Name() + "/")
 			}
 			if i == o.cursor {
-				lines = append(lines, sel.Render("> ")+name)
+				lines = append(lines,
+					lipgloss.NewStyle().Foreground(Palette.Magenta).Bold(true).Render("> ")+
+						icon+" "+name)
 			} else {
-				lines = append(lines, "  "+name)
+				lines = append(lines, "  "+icon+" "+name)
 			}
 		}
 	}
 
-	hints := fgDim.Render("  ↑/↓ navigate   enter select/descend   ← up   esc cancel")
-	content := lipgloss.JoinVertical(lipgloss.Left,
-		append([]string{title, dirLine, ""},
-			append(lines, "", hints)...)...,
+	// Footer: selected path.
+	selectedPath := Mute.Render("— aucun —")
+	if len(o.entries) > 0 && o.cursor < len(o.entries) && !o.entries[o.cursor].IsDir() {
+		selectedPath = GlowMagent.Render(filepath.Join(o.dir, o.entries[o.cursor].Name()))
+	}
+	footer := lipgloss.JoinHorizontal(lipgloss.Top,
+		Dim.Render("sélection : "), selectedPath,
 	)
 
-	w := 60
+	content := lipgloss.JoinVertical(lipgloss.Left,
+		append(
+			[]string{header, keyHints, ""},
+			append(lines, "", footer)...,
+		)...,
+	)
+
+	w := 68
 	if o.width > 0 && o.width < w+4 {
 		w = o.width - 4
 	}

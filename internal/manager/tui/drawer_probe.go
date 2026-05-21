@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/atotto/clipboard"
@@ -147,53 +148,77 @@ func (o *probeDrawerOverlay) curlCommand() string {
 }
 
 func (o *probeDrawerOverlay) View() string {
-	fgDim := lipgloss.NewStyle().Foreground(Palette.FgDim)
 	green := lipgloss.NewStyle().Foreground(Palette.Green)
 	red := lipgloss.NewStyle().Foreground(Palette.Red)
 	yellow := lipgloss.NewStyle().Foreground(Palette.Yellow)
 
-	title := GlowMagent.Render("Probe Drawer")
-	var lines []string
-
+	// Prototype: cyan "◆ FINGERPRINT PROBE" title with phase dot + status.
+	var phaseDot, phaseStatus string
 	switch o.state {
 	case probeStateIssuing:
-		lines = []string{fgDim.Render("generating probe token…")}
+		phaseDot = yellow.Render("●")
+		phaseStatus = Dim.Render("génération du token…")
+	case probeStateWaiting:
+		phaseDot = yellow.Render("●")
+		phaseStatus = Dim.Render("subscribe channel · en attente")
+	case probeStateReceived:
+		phaseDot = green.Render("●")
+		phaseStatus = green.Render("fingerprint reçu")
+	case probeStateError:
+		phaseDot = red.Render("●")
+		phaseStatus = red.Render("erreur")
+	}
+
+	titleBar := lipgloss.JoinHorizontal(lipgloss.Top,
+		GlowCyan.Render("◆ FINGERPRINT PROBE"),
+		" ", phaseDot, " ", phaseStatus,
+		"  ", Dim.Render("[esc] fermer"),
+	)
+	rule := lipgloss.NewStyle().Foreground(Palette.Cyan).Render(
+		strings.Repeat("─", probeDrawerWidth),
+	)
+
+	var bodyLines []string
+	switch o.state {
+	case probeStateIssuing:
+		bodyLines = []string{Dim.Render("  génération du token en cours…")}
 
 	case probeStateWaiting:
-		lines = []string{
-			yellow.Render("Waiting for agent callback…"),
+		curl := o.curlCommand()
+		bodyLines = []string{
+			Dim.Render("URL à donner au client distant :"),
 			"",
-			fgDim.Render("Run on the target machine:"),
+			GlowCyan.Render("  " + curl),
 			"",
-			Base.Render("  " + o.curlCommand()),
+			Dim.Render("Le token expire dans 24 h."),
 			"",
-			fgDim.Render("Token expires in 24 h."),
-			"",
-			fgDim.Render("c copy   esc cancel"),
+			HintKey.Render("c") + HintText.Render(" copier   ") +
+				HintKey.Render("esc") + HintText.Render(" annuler"),
 		}
 
 	case probeStateReceived:
 		tok := o.token
-		lines = []string{
-			green.Render("Agent reported in!"),
+		bodyLines = []string{
+			green.Render("✓ Fingerprint reçu"),
 			"",
-			fgDim.Render(fmt.Sprintf("  hostname    : %s", tok.Hostname)),
-			fgDim.Render(fmt.Sprintf("  os/arch     : %s/%s", tok.Os, tok.Arch)),
-			fgDim.Render(fmt.Sprintf("  machine-id  : %s", tok.CompositeHex)),
+			Dim.Render("hostname   ") + Base.Render(tok.Hostname),
+			Dim.Render("OS / arch  ") + Base.Render(fmt.Sprintf("%s / %s", tok.Os, tok.Arch)),
+			Dim.Render("machine-id ") + GlowCyan.Render(tok.CompositeHex),
 			"",
-			fgDim.Render("enter use this machine-id   esc discard"),
+			HintKey.Render("↵") + HintText.Render(" utiliser cet ID   ") +
+				HintKey.Render("esc") + HintText.Render(" ignorer"),
 		}
 
 	case probeStateError:
-		lines = []string{
-			red.Render("Error: " + o.errMsg),
+		bodyLines = []string{
+			red.Render("✗ Erreur : " + o.errMsg),
 			"",
-			fgDim.Render("esc close"),
+			HintKey.Render("esc") + HintText.Render(" fermer"),
 		}
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
-		append([]string{title, ""}, lines...)...,
+		append([]string{titleBar, rule, ""}, bodyLines...)...,
 	)
 	return Modal.Width(probeDrawerWidth).Render(content)
 }

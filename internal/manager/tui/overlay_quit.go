@@ -37,24 +37,37 @@ func (o *quitOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 }
 
 func (o *quitOverlay) View() string {
-	var body string
+	var title string
 	if o.serversRunning {
-		body = GlowYellow.Render("⚠  Servers are running.") + "\n\n" +
-			Base.Render("Stop servers and quit?")
+		title = GlowRed.Render("Quitter license-manager ?")
 	} else {
-		body = Base.Render("Quit license-manager?")
+		title = GlowMagent.Render("Quitter license-manager ?")
 	}
-	body += "\n\n" +
-		HintKey.Render("y") + HintText.Render(" confirm   ") +
-		HintKey.Render("n/esc") + HintText.Render(" cancel")
 
-	style := ModalDanger
-	if !o.serversRunning {
-		style = Modal
+	var bodyLines []string
+	if o.serversRunning {
+		bodyLines = append(bodyLines,
+			GlowYellow.Render("⚠  Serveur(s) HTTP actif(s)"),
+			"",
+			Dim.Render("Quitter va arrêter les serveurs et fermer la base proprement."),
+		)
+	} else {
+		bodyLines = append(bodyLines,
+			Dim.Render("Aucun serveur HTTP actif."),
+		)
 	}
-	return lipgloss.Place(
-		40, 10,
-		lipgloss.Center, lipgloss.Center,
-		style.Render(body),
+
+	bodyLines = append(bodyLines,
+		"",
+		HintKey.Render("y/↵") + HintText.Render(" Arrêter & quitter   ") +
+			HintKey.Render("n/esc") + HintText.Render(" Annuler"),
 	)
+
+	content := title + "\n\n" + lipgloss.JoinVertical(lipgloss.Left, bodyLines...)
+
+	style := Modal
+	if o.serversRunning {
+		style = ModalDanger
+	}
+	return lipgloss.Place(58, 12, lipgloss.Center, lipgloss.Center, style.Render(content))
 }

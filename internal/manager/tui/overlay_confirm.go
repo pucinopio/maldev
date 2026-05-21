@@ -55,14 +55,20 @@ func (o *confirmOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 }
 
 func (o *confirmOverlay) View() string {
-	content := GlowMagent.Render(o.title) + "\n\n" +
-		Base.Render(o.body) + "\n\n" +
-		HintKey.Render("y/enter") + HintText.Render(" "+o.confirmLabel+"   ") +
+	var title string
+	if o.danger {
+		title = GlowRed.Render(o.title)
+	} else {
+		title = GlowMagent.Render(o.title)
+	}
+	content := title + "\n\n" +
+		Dim.Render(o.body) + "\n\n" +
+		HintKey.Render("y/↵") + HintText.Render(" "+o.confirmLabel+"   ") +
 		HintKey.Render("n/esc") + HintText.Render(" "+o.cancelLabel)
 
 	style := Modal
 	if o.danger {
 		style = ModalDanger
 	}
-	return lipgloss.Place(50, 12, lipgloss.Center, lipgloss.Center, style.Render(content))
+	return lipgloss.Place(54, 12, lipgloss.Center, lipgloss.Center, style.Render(content))
 }

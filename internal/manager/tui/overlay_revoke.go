@@ -54,12 +54,27 @@ func (o *revokeOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 }
 
 func (o *revokeOverlay) View() string {
-	content := GlowRed.Render("Revoke License") + "\n\n" +
-		Dim.Render("Subject: ") + Base.Render(o.subject) + "\n\n" +
-		Base.Render("Reason:") + "\n" +
-		o.input.View() + "\n\n" +
-		HintKey.Render("enter") + HintText.Render(" confirm   ") +
-		HintKey.Render("esc") + HintText.Render(" cancel")
+	suggestions := []string{
+		"key_compromised", "offboarding", "leak", "decommissioned", "abuse",
+	}
+	var chips []string
+	for _, s := range suggestions {
+		chips = append(chips, lipgloss.NewStyle().
+			Foreground(Palette.FgMute).
+			Border(lipgloss.NormalBorder()).BorderForeground(Palette.Border).
+			Padding(0, 0).
+			Render(s))
+	}
+	chipLine := lipgloss.JoinHorizontal(lipgloss.Top, chips...)
 
-	return lipgloss.Place(54, 14, lipgloss.Center, lipgloss.Center, ModalDanger.Render(content))
+	content := GlowRed.Render("Révoquer la licence ?") + "\n\n" +
+		Dim.Render("lic_id  ") + GlowMagent.Render(o.licenseID.String()[:8]+"…") + "\n" +
+		Dim.Render("subject ") + Base.Render(o.subject) + "\n\n" +
+		Dim.Render("raison :") + "\n" +
+		o.input.View() + "\n\n" +
+		Dim.Render("Suggestions : ") + chipLine + "\n\n" +
+		HintKey.Render("↵") + HintText.Render(" révoquer   ") +
+		HintKey.Render("esc") + HintText.Render(" annuler")
+
+	return lipgloss.Place(62, 18, lipgloss.Center, lipgloss.Center, ModalDanger.Render(content))
 }
