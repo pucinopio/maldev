@@ -1998,6 +1998,63 @@ func TestE2E_DashboardShortcutsGrid(t *testing.T) {
 
 // ── Help overlay in every view ─────────────────────────────────────────────────
 
+// ── Wizard sidebar + progress strip ──────────────────────────────────────────
+
+// TestE2E_WizardViewRendersProgressStrip verifies the prototype progress strip
+// ("NOUVELLE LICENCE", step counter, step label) is present in View().
+func TestE2E_WizardViewRendersProgressStrip(t *testing.T) {
+	wm := newWizardModel(nil)
+	wm.width = 120
+	got := wm.View()
+	for _, label := range []string{"NOUVELLE LICENCE", "1/8", "Identité"} {
+		if !strings.Contains(got, label) {
+			t.Errorf("WizardViewRendersProgressStrip: %q not found in view", label)
+		}
+	}
+}
+
+// TestE2E_WizardSidebarRendersAllSteps verifies all 8 step labels appear in
+// the sidebar so the operator can see the full wizard map at a glance.
+func TestE2E_WizardSidebarRendersAllSteps(t *testing.T) {
+	wm := newWizardModel(nil)
+	wm.width = 120
+	got := wm.View()
+	for _, label := range []string{
+		"Identité", "Destinataire", "Machine", "Binaire",
+		"Validité", "Champs libres", "TOTP", "Récap",
+	} {
+		if !strings.Contains(got, label) {
+			t.Errorf("WizardSidebarRendersAllSteps: %q not found in sidebar", label)
+		}
+	}
+}
+
+// TestE2E_WizardProgressAdvancesOnStepChange checks that advancing to step 5
+// updates the strip to show "5/8" and the step label for Validité.
+func TestE2E_WizardProgressAdvancesOnStepChange(t *testing.T) {
+	svc, _ := newTestServices(t)
+	wm := newWizardModel(svc)
+	wm.width = 120
+
+	// Drive through steps 1-4 by injecting the outgoing messages directly.
+	wm, _ = wm.Update(wizard.IdentityChosenMsg{IssuerID: uuid.New().String()})
+	wm, _ = wm.Update(wizard.RecipientChosenMsg{RecipientID: uuid.New().String()})
+	wm, _ = wm.Update(wizard.MachineBindingMsg{MachineID: "host-test"})
+	wm, _ = wm.Update(wizard.BinaryBindingMsg{SHA256: "abc123", Size: 100})
+	// Now on step 5 (wizStepValidity).
+	if wm.step != wizStepValidity {
+		t.Fatalf("expected wizStepValidity (%d), got %d", wizStepValidity, wm.step)
+	}
+
+	got := wm.View()
+	if !strings.Contains(got, "5/8") {
+		t.Errorf("WizardProgressAdvancesOnStepChange: '5/8' not found in view after step 5")
+	}
+	if !strings.Contains(got, "Validité") {
+		t.Errorf("WizardProgressAdvancesOnStepChange: 'Validité' not found as active step label")
+	}
+}
+
 // ── Servers screen sub-tab switching ─────────────────────────────────────────
 
 // TestE2E_ServersSubTabSwitching verifies that R/H/P hotkeys switch the active

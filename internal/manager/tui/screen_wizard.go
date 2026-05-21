@@ -3,8 +3,10 @@ package tui
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -294,66 +296,151 @@ func hashFileCmd(path string) tea.Cmd {
 	}
 }
 
+// wizardStepMeta holds display metadata for one wizard step.
+type wizardStepMeta struct {
+	label string
+	hint  string
+}
+
+// wizardStepMetas maps each wizardStep (by index) to its prototype display
+// label and hint. Order must match the wizardStep iota constants.
+var wizardStepMetas = []wizardStepMeta{
+	/* wizStepIdentity  */ {"Identité", "subject · issuer · audience · KeyID"},
+	/* wizStepRecipient */ {"Destinataire", "clé X25519 du destinataire"},
+	/* wizStepMachine   */ {"Machine", "binding machine (hostid)"},
+	/* wizStepBinary    */ {"Binaire", "SHA256 du binaire"},
+	/* wizStepValidity  */ {"Validité", "NotBefore · NotAfter"},
+	/* wizStepFreeFields*/ {"Champs libres", "claims JSON libres"},
+	/* wizStepTOTP      */ {"TOTP", "binding TOTP (optionnel)"},
+	/* wizStepReview    */ {"Récap & émettre", "aperçu + signature"},
+}
+
 func (m wizardModel) View() string {
-	fgDim := lipgloss.NewStyle().Foreground(Palette.FgDim)
-
-	// Progress breadcrumb.
-	steps := []string{"Identity", "Recipient", "Machine", "Binary", "Validity", "Fields", "TOTP", "Review"}
-	crumbs := make([]string, len(steps))
-	for i, s := range steps {
-		if wizardStep(i) < m.step {
-			crumbs[i] = fgDim.Render(s)
-		} else if wizardStep(i) == m.step {
-			crumbs[i] = GlowMagent.Render(s)
-		} else {
-			crumbs[i] = Mute.Render(s)
-		}
+	total := len(wizardStepMetas)
+	// Clamp step index — wizStepDone equals len(wizardStepMetas) and must not
+	// be used as an array index; show the last real step in that transient state.
+	stepIdx := int(m.step)
+	if stepIdx >= total {
+		stepIdx = total - 1
 	}
-	progress := " " + lipgloss.JoinHorizontal(lipgloss.Top, joinWithSep(crumbs, Mute.Render(" › "))...)
+	cur := stepIdx + 1 // 1-based for display
 
-	var body string
+	// ── Progress strip ────────────────────────────────────────────────────
+	meta := wizardStepMetas[stepIdx]
+	stripLeft := lipgloss.JoinHorizontal(lipgloss.Top,
+		GlowMagent.Render("NOUVELLE LICENCE"),
+		Dim.Render("  étape  "),
+		Base.Render(fmt.Sprintf("%d/%d", cur, total)),
+		Dim.Render("  ·  "),
+		GlowCyan.Render(meta.label),
+	)
+	stripHints := Dim.Render("[Tab] suivant  [⇧Tab] précédent  [1-8] aller à  [esc] annuler")
+	strip := lipgloss.JoinHorizontal(lipgloss.Top,
+		stripLeft,
+		lipgloss.NewStyle().Width(m.width-lipgloss.Width(stripLeft)-lipgloss.Width(stripHints)-2).Render(""),
+		stripHints,
+	)
+
+	// Progress bar (filled portion proportional to current step).
+	barFilled := (m.width - 2) * cur / total
+	if barFilled < 1 {
+		barFilled = 1
+	}
+	if barFilled > m.width-2 {
+		barFilled = m.width - 2
+	}
+	bar := lipgloss.NewStyle().Foreground(Palette.Magenta).Render(
+		strings.Repeat("─", barFilled),
+	) + lipgloss.NewStyle().Foreground(Palette.Border).Render(
+		strings.Repeat("─", m.width-2-barFilled),
+	)
+
+	progressStrip := lipgloss.JoinVertical(lipgloss.Left, strip, bar)
+
+	// ── Sidebar ───────────────────────────────────────────────────────────
+	sideW := 28 // character width of sidebar (prototype uses ~260px ≈ 26 chars)
+	var sideLines []string
+	for i, sm := range wizardStepMetas {
+		s := wizardStep(i)
+		// Step number badge.
+		var badge string
+		switch {
+		case s == m.step:
+			badge = lipgloss.NewStyle().
+				Foreground(Palette.Magenta).Bold(true).
+				Border(lipgloss.NormalBorder()).BorderForeground(Palette.Magenta).
+				Padding(0, 0).Width(2).Render(fmt.Sprintf("%d", i+1))
+		default:
+			badge = lipgloss.NewStyle().
+				Foreground(Palette.FgMute).
+				Border(lipgloss.NormalBorder()).BorderForeground(Palette.Border).
+				Padding(0, 0).Width(2).Render(fmt.Sprintf("%d", i+1))
+		}
+
+		var labelStyle lipgloss.Style
+		if s == m.step {
+			labelStyle = Base.Bold(true)
+		} else {
+			labelStyle = Dim
+		}
+
+		row := lipgloss.JoinHorizontal(lipgloss.Top,
+			badge, " ", labelStyle.Render(sm.label),
+		)
+		// Border-left indicator for active step.
+		if s == m.step {
+			row = lipgloss.NewStyle().
+				BorderLeft(true).BorderStyle(lipgloss.NormalBorder()).
+				BorderForeground(Palette.Magenta).
+				PaddingLeft(1).
+				Render(row)
+		} else {
+			row = "  " + row
+		}
+		sideLines = append(sideLines, row)
+		sideLines = append(sideLines, Mute.Render("    "+sm.hint))
+	}
+	sidebar := lipgloss.NewStyle().
+		Width(sideW).
+		Border(lipgloss.NormalBorder(), false, true, false, false).
+		BorderForeground(Palette.Border).
+		Render(lipgloss.JoinVertical(lipgloss.Left, sideLines...))
+
+	// ── Step content ──────────────────────────────────────────────────────
+	var stepBody string
 	switch m.step {
 	case wizStepIdentity:
-		body = m.stepIdentity.View()
+		stepBody = m.stepIdentity.View()
 	case wizStepRecipient:
-		body = m.stepRecipient.View()
+		stepBody = m.stepRecipient.View()
 	case wizStepMachine:
-		body = m.stepMachine.View()
+		stepBody = m.stepMachine.View()
 	case wizStepBinary:
-		body = m.stepBinary.View()
+		stepBody = m.stepBinary.View()
 	case wizStepValidity:
-		body = m.stepValidity.View()
+		stepBody = m.stepValidity.View()
 	case wizStepFreeFields:
-		body = m.stepFreeFields.View()
+		stepBody = m.stepFreeFields.View()
 	case wizStepTOTP:
-		body = m.stepTOTP.View()
+		stepBody = m.stepTOTP.View()
 	case wizStepReview:
-		body = m.stepReview.View()
+		stepBody = m.stepReview.View()
 	}
 
-	hints := renderStatusBar([]string{"esc", "back", "q", "cancel"}, m.width)
+	contentW := m.width - sideW - 4
+	if contentW < 20 {
+		contentW = 20
+	}
+	content := lipgloss.NewStyle().Width(contentW).Padding(0, 1).Render(stepBody)
+
+	body := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, content)
+
+	hints := renderStatusBar([]string{"Tab", "next", "⇧Tab", "prev", "1-8", "goto", "esc", "cancel"}, m.width)
 	return lipgloss.JoinVertical(lipgloss.Left,
-		GlowMagent.Render(" New License Wizard"),
-		progress,
-		"",
+		progressStrip,
 		body,
 		hints,
 	)
-}
-
-// joinWithSep interleaves sep between each element of ss.
-func joinWithSep(ss []string, sep string) []string {
-	if len(ss) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(ss)*2-1)
-	for i, s := range ss {
-		out = append(out, s)
-		if i < len(ss)-1 {
-			out = append(out, sep)
-		}
-	}
-	return out
 }
 
 // filePickedMsg is an internal message carrying a path chosen by the file picker.
