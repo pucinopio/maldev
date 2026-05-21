@@ -152,6 +152,9 @@
 - [Concepts](license-manager/concepts.md)
 - [Cookbook](license-manager/workflow.md)
 - [Configuration](license-manager/configuration.md)
+- [TUI widget system](license-manager/tui-widgets.md)
+- [TUI new-license wizard](license-manager/tui-wizard.md)
+- [TUI servers screen](license-manager/tui-servers.md)
 
 # Cookbook
 
