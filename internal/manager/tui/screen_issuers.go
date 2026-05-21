@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -188,20 +187,50 @@ func (m issuersModel) renderDetail() string {
 	if row == nil {
 		return Dim.Render("  no selection")
 	}
-	status := "inactive"
+
+	var statusPill string
+	switch {
+	case row.Active:
+		statusPill = PillActive.Render("ACTIVE")
+	case row.RetiredAt != nil:
+		statusPill = PillOff.Render("RETIRED")
+	default:
+		statusPill = PillOff.Render("INACTIVE")
+	}
+
+	// Left column: metadata KVs matching issuers.jsx expandedRowRender.
+	colW := m.width/2 - 4
+	if colW < 20 {
+		colW = 20
+	}
+	meta := lipgloss.JoinVertical(lipgloss.Left,
+		GlowCyan.Render("Métadonnées"),
+		kvRow("keyid", GlowCyan.Render(row.KeyID), 10),
+		kvRow("name", row.Name, 10),
+		kvRow("status", statusPill, 10),
+		kvRow("created", row.CreatedAt.Format("2006-01-02"), 10),
+		kvRow("db-id", row.ID.String(), 10),
+	)
+
+	// Right column: actions matching issuers.jsx Actions section.
+	activeLabel := "désigner active"
 	if row.Active {
-		status = "active"
-	} else if row.RetiredAt != nil {
-		status = "retired @ " + row.RetiredAt.Format(time.RFC3339)
+		activeLabel = "déjà active (aucune action)"
 	}
-	lines := []string{
-		fmt.Sprintf("  %-16s %s", "key-id:", row.KeyID),
-		fmt.Sprintf("  %-16s %s", "name:", row.Name),
-		fmt.Sprintf("  %-16s %s", "status:", status),
-		fmt.Sprintf("  %-16s %s", "created:", row.CreatedAt.Format(time.RFC3339)),
-		fmt.Sprintf("  %-16s %s", "db-id:", row.ID.String()),
-	}
-	return BoxStyle.Width(m.width - 2).Render(strings.Join(lines, "\n"))
+	actions := lipgloss.JoinVertical(lipgloss.Left,
+		GlowCyan.Render("Actions"),
+		HintKey.Render("[a]")+" "+Dim.Render(activeLabel),
+		HintKey.Render("[E]")+" "+Dim.Render("exporter clé publique (.pub)"),
+		HintKey.Render("[K]")+" "+Dim.Render("exporter clé privée (.key) — confirmation"),
+		GlowRed.Render("[x]")+" "+Dim.Render("retirer (la clé reste vérifiable côté binaire)"),
+	)
+
+	cols := lipgloss.JoinHorizontal(lipgloss.Top,
+		lipgloss.NewStyle().Width(colW).Render(meta),
+		"  ",
+		lipgloss.NewStyle().Width(colW).Render(actions),
+	)
+	return BoxStyle.Width(m.width - 2).Render(cols)
 }
 
 // handleIssuerInputResult processes overlay results for the issuers screen.

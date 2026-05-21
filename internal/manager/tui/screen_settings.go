@@ -208,8 +208,12 @@ func settingsBox(w int, title, body string) string {
 }
 
 // settingsKV renders a dim-key / fg-value row matching the KV component in settings.jsx.
-func settingsKV(key, value string) string {
-	return Dim.Render(fmt.Sprintf("%-22s", key)) + Base.Render(value)
+func settingsKV(key, value string) string { return kvRow(key, value, 22) }
+
+// kvRow renders a dim-key / fg-value row with an explicit key field width.
+// Shared by settingsKV, issuerKV, and similar detail-panel helpers.
+func kvRow(key, value string, keyW int) string {
+	return Dim.Render(fmt.Sprintf("%-*s", keyW, key)) + Base.Render(value)
 }
 
 // settingsToggle renders a toggle row: [✓]/[ ] label  on/off.

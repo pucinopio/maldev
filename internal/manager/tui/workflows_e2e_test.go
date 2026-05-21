@@ -853,6 +853,35 @@ func TestE2E_IssuersScreenLoadsRows(t *testing.T) {
 	}
 }
 
+// TestE2E_IssuersDetailPanel verifies the redesigned 2-column detail panel
+// renders metadata (keyid, name, status) and the 4 action hints.
+// Red against the old plain-text detail, green after the 2-column layout.
+func TestE2E_IssuersDetailPanel(t *testing.T) {
+	svc, _ := newTestServices(t)
+	if _, err := svc.Issuer.Generate(context.Background(), "prod-key", "k2026-04", "operator"); err != nil {
+		t.Fatalf("Issuer.Generate: %v", err)
+	}
+
+	im := newIssuersModel(svc)
+	im, _ = im.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	im, _ = im.Update(listIssuersCmd(svc)())
+	im.detail = true
+	got := im.View()
+
+	// Metadata section must be present.
+	for _, label := range []string{"Métadonnées", "k2026-04", "prod-key", "INACTIVE"} {
+		if !strings.Contains(got, label) {
+			t.Errorf("IssuersDetailPanel: %q not found in view", label)
+		}
+	}
+	// Actions section must contain all 4 action hints.
+	for _, action := range []string{"Actions", "[a]", "[E]", "[K]", "[x]"} {
+		if !strings.Contains(got, action) {
+			t.Errorf("IssuersDetailPanel: action %q not found in view", action)
+		}
+	}
+}
+
 // TestE2E_LicensesScreenLoadsRows wires a seeded service into licensesModel
 // and asserts the table populates via ListLicensesCmd.
 func TestE2E_LicensesScreenLoadsRows(t *testing.T) {
