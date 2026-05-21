@@ -7,6 +7,8 @@ import (
 	"crypto/rand"
 
 	"golang.org/x/crypto/argon2"
+
+	"github.com/oioio-space/maldev/cleanup/memory"
 )
 
 const (
@@ -28,18 +30,14 @@ func DeriveFromPassphrase(passphrase string, salt [16]byte) *KEK {
 	out := argon2.IDKey([]byte(passphrase), salt[:], argonTime, argonMemory, argonThreads, keyLen)
 	var k KEK
 	copy(k.key[:], out)
-	for i := range out {
-		out[i] = 0
-	}
+	memory.SecureZero(out)
 	return &k
 }
 
 // Wipe zeroes the key bytes. Call on clean shutdown so a memory snapshot
 // after exit doesn't reveal the KEK.
 func (k *KEK) Wipe() {
-	for i := range k.key {
-		k.key[i] = 0
-	}
+	memory.SecureZero(k.key[:])
 }
 
 // GenerateSalt returns a fresh 16-byte random salt for a new DB.

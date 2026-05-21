@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/oioio-space/maldev/cleanup/memory"
 	"github.com/oioio-space/maldev/internal/manager/crypto"
 	"github.com/oioio-space/maldev/internal/manager/store"
 	"github.com/oioio-space/maldev/internal/manager/store/ent"
@@ -112,11 +113,7 @@ func (svc *LicenseService) Issue(ctx context.Context, req IssueRequest) (*Issued
 	if err != nil {
 		return nil, fmt.Errorf("issuer priv: %w", err)
 	}
-	defer func() {
-		for i := range priv {
-			priv[i] = 0
-		}
-	}()
+	defer memory.SecureZero(priv)
 
 	// Build licencekg Bindings and collect TOTP secrets for later persistence.
 	var bindings []licensekg.Binding
@@ -342,14 +339,22 @@ func (svc *LicenseService) ReIssue(ctx context.Context, originalID uuid.UUID, op
 	if err != nil {
 		return nil, err
 	}
-	if _, err := svc.store.Client.License.UpdateOneID(originalID).
-		SetStatus(licenseent.StatusSuperseded).
-		Save(ctx); err != nil {
-		return nil, err
+	// Supersede the original in a single tx so a crash between Issue and the
+	// status update cannot leave the old licence active alongside the new one.
+	if err := withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		if _, err := tx.License.UpdateOneID(originalID).
+			SetStatus(licenseent.StatusSuperseded).
+			Save(ctx); err != nil {
+			return err
+		}
+		return svc.audit.AppendTx(ctx, tx, "license.reissue", opts.Actor,
+			Target{Kind: "License", ID: issued.Row.ID.String()},
+			map[string]any{"replaces": originalID.String()})
+	}); err != nil {
+		// New licence is already signed and persisted; surface the inconsistency
+		// so the caller can retry or alert, but don't discard the issued licence.
+		return issued, fmt.Errorf("supersede original: %w", err)
 	}
-	_ = svc.audit.Append(ctx, "license.reissue", opts.Actor,
-		Target{Kind: "License", ID: issued.Row.ID.String()},
-		map[string]any{"replaces": originalID.String()})
 	return issued, nil
 }
 

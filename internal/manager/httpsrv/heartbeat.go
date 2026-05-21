@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/oioio-space/maldev/cleanup/memory"
 	"github.com/oioio-space/maldev/internal/manager/service"
 	licenseent "github.com/oioio-space/maldev/internal/manager/store/ent/license"
 	"github.com/oioio-space/maldev/license/heartbeat"
@@ -188,11 +189,7 @@ func (s *HeartbeatServer) handle(w http.ResponseWriter, r *http.Request) {
 		s.emitReq(r, http.StatusInternalServerError)
 		return
 	}
-	defer func() {
-		for i := range privBytes {
-			privBytes[i] = 0
-		}
-	}()
+	defer memory.SecureZero(privBytes)
 	priv := ed25519.PrivateKey(privBytes)
 
 	now := time.Now().UTC()

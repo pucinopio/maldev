@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/oioio-space/maldev/cleanup/memory"
 	"github.com/oioio-space/maldev/internal/manager/store"
 	"github.com/oioio-space/maldev/internal/manager/store/ent"
 	licenseent "github.com/oioio-space/maldev/internal/manager/store/ent/license"
@@ -18,10 +20,25 @@ type RevokeService struct {
 	store  *store.Store
 	audit  *AuditService
 	issuer *IssuerService
+
+	cacheMu     sync.Mutex
+	cachedPEM   []byte
+	cachedUntil time.Time
 }
 
-func NewRevokeService(s *store.Store, a *AuditService, iss *IssuerService, lic *LicenseService) *RevokeService {
+// NewRevokeService wires a RevokeService. The lic parameter has been removed —
+// RevokeService does not depend on LicenseService.
+func NewRevokeService(s *store.Store, a *AuditService, iss *IssuerService) *RevokeService {
 	return &RevokeService{store: s, audit: a, issuer: iss}
+}
+
+// invalidateCache clears the PublishSignedList cache. Call after any mutation
+// that changes revocation state.
+func (svc *RevokeService) invalidateCache() {
+	svc.cacheMu.Lock()
+	svc.cachedPEM = nil
+	svc.cachedUntil = time.Time{}
+	svc.cacheMu.Unlock()
 }
 
 // Revoke marks a licence revoked with the given reason. License.status is
@@ -39,7 +56,7 @@ func (svc *RevokeService) Revoke(ctx context.Context, licenseID uuid.UUID, reaso
 		return nil // idempotent
 	}
 
-	return withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+	if err := withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
 		if _, err := tx.Revocation.Create().
 			SetReason(reason).
 			SetRevokedBy(actor).
@@ -55,13 +72,17 @@ func (svc *RevokeService) Revoke(ctx context.Context, licenseID uuid.UUID, reaso
 		return svc.audit.AppendTx(ctx, tx, "license.revoke", actor,
 			Target{Kind: "License", ID: licenseID.String()},
 			map[string]any{"reason": reason})
-	})
+	}); err != nil {
+		return err
+	}
+	svc.invalidateCache()
+	return nil
 }
 
 // Unrevoke deletes the Revocation row and resets status back to active.
 // Useful for admin error correction.
 func (svc *RevokeService) Unrevoke(ctx context.Context, licenseID uuid.UUID, actor string) error {
-	return withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+	if err := withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
 		row, err := tx.License.Get(ctx, licenseID)
 		if err != nil {
 			return err
@@ -79,7 +100,11 @@ func (svc *RevokeService) Unrevoke(ctx context.Context, licenseID uuid.UUID, act
 		}
 		return svc.audit.AppendTx(ctx, tx, "license.unrevoke", actor,
 			Target{Kind: "License", ID: licenseID.String()}, nil)
-	})
+	}); err != nil {
+		return err
+	}
+	svc.invalidateCache()
+	return nil
 }
 
 // RevocationView aggregates a revoked licence's metadata for the UI.
@@ -128,10 +153,23 @@ func (svc *RevokeService) ListRevoked(ctx context.Context) ([]RevocationView, er
 // defaults to 7 days if zero. Sequence is the current Unix timestamp — it
 // strictly increases between calls, which is enough monotonicity for the
 // client cache check. The HTTP revocation server calls this on every GET.
+//
+// The signed PEM is cached for validFor/2 and invalidated by Revoke/Unrevoke,
+// so repeated GET requests during a quiet period avoid redundant signing.
 func (svc *RevokeService) PublishSignedList(ctx context.Context, validFor time.Duration) ([]byte, error) {
 	if validFor <= 0 {
 		validFor = 7 * 24 * time.Hour
 	}
+
+	svc.cacheMu.Lock()
+	if svc.cachedPEM != nil && time.Now().Before(svc.cachedUntil) {
+		out := make([]byte, len(svc.cachedPEM))
+		copy(out, svc.cachedPEM)
+		svc.cacheMu.Unlock()
+		return out, nil
+	}
+	svc.cacheMu.Unlock()
+
 	iss, err := svc.issuer.Active(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("active issuer: %w", err)
@@ -140,11 +178,7 @@ func (svc *RevokeService) PublishSignedList(ctx context.Context, validFor time.D
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		for i := range priv {
-			priv[i] = 0
-		}
-	}()
+	defer memory.SecureZero(priv)
 
 	revoked, err := svc.ListRevoked(ctx)
 	if err != nil {
@@ -168,5 +202,17 @@ func (svc *RevokeService) PublishSignedList(ctx context.Context, validFor time.D
 		Revoked:    ids,
 		Entries:    entries,
 	}
-	return revoke.Sign(list, priv)
+	pem, err := revoke.Sign(list, priv)
+	if err != nil {
+		return nil, err
+	}
+
+	svc.cacheMu.Lock()
+	svc.cachedPEM = pem
+	svc.cachedUntil = now.Add(validFor / 2)
+	svc.cacheMu.Unlock()
+
+	out := make([]byte, len(pem))
+	copy(out, pem)
+	return out, nil
 }

@@ -2,6 +2,7 @@ package httpsrv
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -204,8 +205,8 @@ func (s *RevocationServer) serveAdmin(w http.ResponseWriter, r *http.Request) {
 		s.emitReq(r, http.StatusInternalServerError)
 		return
 	}
-	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if !ok || token != string(expected) {
+	got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok || subtle.ConstantTimeCompare([]byte(got), expected) != 1 {
 		http.Error(w, "unauthorised", http.StatusUnauthorized)
 		s.emitReq(r, http.StatusUnauthorized)
 		return

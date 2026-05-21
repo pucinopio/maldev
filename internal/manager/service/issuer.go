@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/oioio-space/maldev/cleanup/memory"
 	"github.com/oioio-space/maldev/internal/manager/crypto"
 	"github.com/oioio-space/maldev/internal/manager/store"
 	"github.com/oioio-space/maldev/internal/manager/store/ent"
@@ -38,9 +39,7 @@ func (svc *IssuerService) Generate(ctx context.Context, name, keyID, actor strin
 		return nil, err
 	}
 	wrapped, err := svc.kek.Wrap(priv)
-	for i := range priv {
-		priv[i] = 0 // zeroize in-place; wrapped blob is the durable copy
-	}
+	memory.SecureZero(priv) // zeroize in-place; wrapped blob is the durable copy
 	if err != nil {
 		return nil, err
 	}
@@ -78,9 +77,7 @@ func (svc *IssuerService) Import(ctx context.Context, name, keyID string, privat
 	}
 	pub := ed25519.PrivateKey(priv).Public().(ed25519.PublicKey)
 	wrapped, err := svc.kek.Wrap(priv)
-	for i := range priv {
-		priv[i] = 0 // zeroize before any early return
-	}
+	memory.SecureZero(priv) // zeroize before any early return
 	if err != nil {
 		return nil, err
 	}

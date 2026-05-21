@@ -1,12 +1,12 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
 	"github.com/google/uuid"
 
+	"github.com/oioio-space/maldev/cleanup/memory"
 	"github.com/oioio-space/maldev/internal/manager/crypto"
 	"github.com/oioio-space/maldev/internal/manager/store"
 	"github.com/oioio-space/maldev/internal/manager/store/ent"
@@ -35,9 +35,7 @@ func (svc *RecipientService) Generate(ctx context.Context, name, actor string) (
 		return nil, err
 	}
 	// Wipe the priv copy on stack — caller never sees it.
-	for i := range priv {
-		priv[i] = 0
-	}
+	memory.SecureZero(priv)
 
 	var row *ent.RecipientKey
 	err = withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
@@ -131,5 +129,3 @@ func (svc *RecipientService) Delete(ctx context.Context, id uuid.UUID, actor str
 	})
 }
 
-// suppress unused
-var _ = bytes.Equal

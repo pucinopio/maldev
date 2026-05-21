@@ -60,7 +60,10 @@ func TestHeartbeatRevokedLicense(t *testing.T) {
 	_ = svc.Revoke.Revoke(ctx, lic.ID, "leak", "op")
 
 	body, _ := json.Marshal(heartbeat.Request{LicenseID: uuid, Nonce: []byte{1, 2, 3}})
-	resp, _ := http.Post("http://"+srv.Status().ListenAddr+"/heartbeat", "application/json", bytes.NewReader(body))
+	resp, err := http.Post("http://"+srv.Status().ListenAddr+"/heartbeat", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
 	pub, kid := activePublicKey(t, svc, ctx)
@@ -83,7 +86,10 @@ func TestHeartbeatUnknownLicense(t *testing.T) {
 	defer srv.Stop(2 * time.Second)
 
 	body, _ := json.Marshal(heartbeat.Request{LicenseID: "no-such-uuid", Nonce: []byte("x")})
-	resp, _ := http.Post("http://"+srv.Status().ListenAddr+"/heartbeat", "application/json", bytes.NewReader(body))
+	resp, err := http.Post("http://"+srv.Status().ListenAddr+"/heartbeat", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
 	pub, kid := activePublicKey(t, svc, ctx)
@@ -155,7 +161,10 @@ func TestHeartbeatEvents(t *testing.T) {
 	defer srv.Stop(2 * time.Second)
 
 	body, _ := json.Marshal(heartbeat.Request{LicenseID: "x", Nonce: []byte("y")})
-	resp, _ := http.Post("http://"+srv.Status().ListenAddr+"/heartbeat", "application/json", bytes.NewReader(body))
+	resp, err := http.Post("http://"+srv.Status().ListenAddr+"/heartbeat", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
 	resp.Body.Close()
 
 	events := srv.Events()
