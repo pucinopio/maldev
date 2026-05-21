@@ -89,7 +89,14 @@ func (sl *serverLog) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 	return sl, cmd
 }
 
-func (sl *serverLog) View() string { return sl.vp.View() }
+func (sl *serverLog) View() string {
+	// Late-seed: the empty-state hint must show even before any event arrives.
+	// SetContent is idempotent so re-emitting it here is safe.
+	if len(sl.entries) == 0 {
+		sl.vp.SetContent(sl.render())
+	}
+	return sl.vp.View()
+}
 
 // append adds ev to the ring slice, evicting the oldest entry when full.
 func (sl *serverLog) append(ev httpsrv.Event) {
@@ -105,12 +112,21 @@ func (sl *serverLog) append(ev httpsrv.Event) {
 // render builds the full viewport content string respecting the active filter.
 func (sl *serverLog) render() string {
 	var sb strings.Builder
+	matched := 0
 	for _, e := range sl.entries {
 		if sl.filter != "" && e.Server != sl.filter {
 			continue
 		}
 		sb.WriteString(renderLogLine(e))
 		sb.WriteByte('\n')
+		matched++
+	}
+	if matched == 0 {
+		hint := "aucun évènement — démarre un serveur pour voir le trafic ici."
+		if sl.filter != "" {
+			hint = fmt.Sprintf("aucun évènement pour %q — démarre ce serveur ou change de sous-onglet.", sl.filter)
+		}
+		sb.WriteString(Mute.Render(hint))
 	}
 	return sb.String()
 }
