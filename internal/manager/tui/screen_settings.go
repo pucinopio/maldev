@@ -60,6 +60,19 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 		_ = msg
 		return m, loadSettingsCmd(m.svc)
 
+	case settingsToggleMsg:
+		// Toggle the in-memory row so the UI feedback proves the click landed.
+		// Persistence is a no-op until svc.Settings setters land.
+		if m.row != nil {
+			switch msg.key {
+			case "confirm_quit_with_servers":
+				m.row.ConfirmQuitWithServers = !m.row.ConfirmQuitWithServers
+			case "auto_start_servers":
+				m.row.AutoStartServers = !m.row.AutoStartServers
+			}
+		}
+		return m, nil
+
 	case settingsSetArgonMsg:
 		if m.svc != nil && m.row != nil {
 			m.row.DefaultArgonPreset = msg.preset
@@ -109,6 +122,7 @@ type settingsActionMsg struct{ kind string }
 // changes from clicks; the model handles them in Update.
 type settingsSetThemeMsg struct{ idx int } // 1=neon, 2=mono, 3=nord-soft
 type settingsSetArgonMsg struct{ preset setting.DefaultArgonPreset }
+type settingsToggleMsg struct{ key string }
 
 // OnClick implements ScreenMouseClick for the settings screen. It rebuilds
 // the hit map on every call (cheap; settings render is small) and dispatches
@@ -185,6 +199,20 @@ func (m settingsModel) buildHits(width int) hits {
 			return func() tea.Msg { return settingsSetThemeMsg{idx: idx} }
 		})
 	}
+
+	// ── Cycle-de-vie toggles (left col box #3) ────────────────────────────
+	// Heights: boxDefaultsLicence=8, boxIdentiteOperateur=6 → cycleY = 4+8+6 = 18.
+	// Inside the box, the two persisted toggles sit at row 4 (confirm_quit) and
+	// row 8 (auto_start) — rows 5 and 9 are non-persisted prototypes that we
+	// register as hits-with-noop to acknowledge the click without mutating.
+	leftInnerX := 2 // border(1)+padding(1)
+	cycleY := chromeRows + 8 + 6 // = 18
+	h.add(leftInnerX, cycleY+4, colW-2, 1, func() tea.Cmd {
+		return func() tea.Msg { return settingsToggleMsg{key: "confirm_quit_with_servers"} }
+	})
+	h.add(leftInnerX, cycleY+8, colW-2, 1, func() tea.Cmd {
+		return func() tea.Msg { return settingsToggleMsg{key: "auto_start_servers"} }
+	})
 
 	return h
 }

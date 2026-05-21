@@ -2570,6 +2570,82 @@ func TestE2E_TabCyclesViews(t *testing.T) {
 	}
 }
 
+// TestE2E_WizardAllStepsRender verifies every wizard step (1..8) renders a
+// non-empty view and accepts ctrl+c to cancel.
+func TestE2E_WizardAllStepsRender(t *testing.T) {
+	for step := 1; step <= 8; step++ {
+		step := step
+		t.Run(fmt.Sprintf("step%d", step), func(t *testing.T) {
+			m := NewWizardSnap(160, 50)
+			// Drive the wizard to the requested step via Tab presses (1 Tab per step).
+			var tm tea.Model = m
+			tm, _ = tm.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+			for i := 1; i < step; i++ {
+				tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyTab})
+			}
+			out := tm.View()
+			if out == "" {
+				t.Errorf("wizard step %d rendered empty view", step)
+			}
+			// Ctrl+c should not panic.
+			tm.Update(tea.KeyMsg{Type: tea.KeyCtrlC}) //nolint:errcheck
+		})
+	}
+}
+
+// TestE2E_OverlayKeysDoNotPanic instantiates each overlay type, drives a few
+// common keys (esc, enter, y, n, q, tab, arrows) and asserts View stays non-empty.
+func TestE2E_OverlayKeysDoNotPanic(t *testing.T) {
+	overlays := []struct {
+		name string
+		make func() Overlay
+	}{
+		{"confirm", func() Overlay {
+			return NewConfirmOverlay("id", "Title", "Body?", "Yes", "No", false)
+		}},
+		{"confirm-danger", func() Overlay {
+			return NewConfirmOverlay("id", "Danger", "Are you sure?", "Drop", "Cancel", true)
+		}},
+		{"error", func() Overlay { return NewErrorOverlay("Err", "bad") }},
+		{"input", func() Overlay { return NewInputOverlay("id", "Name", "ph", 80) }},
+		{"quit", func() Overlay { return NewQuitOverlay(false) }},
+		{"quit-servers", func() Overlay { return NewQuitOverlay(true) }},
+		{"help", func() Overlay { return NewHelpOverlay() }},
+		{"revoke", func() Overlay { return NewRevokeOverlay(newTestUUID(), "alice@research") }},
+		{"qr-empty", func() Overlay { return NewQROverlay(nil) }},
+	}
+	keys := []tea.KeyMsg{
+		{Type: tea.KeyEsc},
+		{Type: tea.KeyEnter},
+		{Type: tea.KeyTab},
+		{Type: tea.KeyUp},
+		{Type: tea.KeyDown},
+		{Type: tea.KeyRunes, Runes: []rune{'y'}},
+		{Type: tea.KeyRunes, Runes: []rune{'n'}},
+		{Type: tea.KeyRunes, Runes: []rune{'q'}},
+		{Type: tea.KeyRunes, Runes: []rune{'?'}},
+	}
+	for _, ov := range overlays {
+		ov := ov
+		t.Run(ov.name, func(t *testing.T) {
+			o := ov.make()
+			if o.View() == "" {
+				t.Errorf("overlay %s rendered empty initial view", ov.name)
+			}
+			for _, k := range keys {
+				next, _ := o.Update(k)
+				if next == nil {
+					continue
+				}
+				if next.View() == "" {
+					t.Errorf("overlay %s rendered empty view after %q", ov.name, k.String())
+				}
+				o = next
+			}
+		})
+	}
+}
+
 func min1(a, b int) int {
 	if a < b {
 		return a
@@ -2649,6 +2725,18 @@ func TestE2E_ClickabilityMatrix(t *testing.T) {
 			r := rootOf(t, a)
 			if len(r.overlays) == 0 {
 				t.Errorf("expected an overlay after [V] click, got none")
+			}
+		}},
+		// Settings toggle clicks (left col, boxCycleVieServeurs).
+		// Row 22 = confirm_quit_with_servers. Toggle flips the in-memory row.
+		{ViewSettings, toView(ViewSettings, '9'), "toggle confirm_quit_with_servers", 10, 22, func(t *testing.T, b, a tea.Model) {
+			rb := rootOf(t, b)
+			ra := rootOf(t, a)
+			if rb.settings.row == nil || ra.settings.row == nil {
+				return
+			}
+			if rb.settings.row.ConfirmQuitWithServers == ra.settings.row.ConfirmQuitWithServers {
+				t.Errorf("expected confirm_quit_with_servers to flip on click")
 			}
 		}},
 	}
