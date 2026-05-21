@@ -20,6 +20,7 @@ import (
 	"github.com/oioio-space/maldev/internal/manager/httpsrv"
 	"github.com/oioio-space/maldev/internal/manager/service"
 	"github.com/oioio-space/maldev/internal/manager/store"
+	"github.com/oioio-space/maldev/internal/manager/tui/wizard"
 )
 
 func timeNowPlus(hours int) time.Time { return time.Now().Add(time.Duration(hours) * time.Hour) }
@@ -881,6 +882,115 @@ func TestE2E_LicensesScreenLoadsRows(t *testing.T) {
 		t.Fatalf("licensesModel.rows len = %d, want 3", got)
 	}
 }
+
+// ── Wizard 8-step navigation ──────────────────────────────────────────────────
+
+// TestE2E_WizardAdvancesThroughAllSteps drives wizardModel via the same typed
+// msgs each step emits when the user confirms. Asserts each step transitions
+// to the next exactly once and reaches Review.
+func TestE2E_WizardAdvancesThroughAllSteps(t *testing.T) {
+	svc, _ := newTestServices(t)
+	wm := newWizardModel(svc)
+
+	type tcase struct {
+		name string
+		msg  tea.Msg
+		want wizardStep
+	}
+	issuerID := uuid.New().String()
+	recipientID := uuid.New().String()
+	steps := []tcase{
+		{"step1->step2", wizard.IdentityChosenMsg{IssuerID: issuerID}, wizStepRecipient},
+		{"step2->step3", wizard.RecipientChosenMsg{RecipientID: recipientID}, wizStepMachine},
+		{"step3->step4", wizard.MachineBindingMsg{MachineID: "host-abc"}, wizStepBinary},
+		{"step4->step5", wizard.BinaryBindingMsg{SHA256: "deadbeef", Size: 1234}, wizStepValidity},
+		{"step5->step6", wizard.ValidityMsg{NotBefore: time.Now(), NotAfter: time.Now().Add(24 * time.Hour)}, wizStepFreeFields},
+		{"step6->step7", wizard.FreeFieldsMsg{Fields: map[string]string{"k": "v"}}, wizStepTOTP},
+		{"step7->step8", wizard.TOTPChoiceMsg{Require: false}, wizStepReview},
+	}
+	for _, s := range steps {
+		s := s
+		t.Run(s.name, func(t *testing.T) {
+			var cmd tea.Cmd
+			wm, cmd = wm.Update(s.msg)
+			_ = cmd // initStep cmds may exist; we don't dispatch them in this test
+			if wm.step != s.want {
+				t.Fatalf("after %T, step = %d, want %d", s.msg, wm.step, s.want)
+			}
+		})
+	}
+
+	if wm.state.MachineID != "host-abc" {
+		t.Fatalf("state.MachineID = %q, want 'host-abc'", wm.state.MachineID)
+	}
+	if wm.state.BinarySHA256 != "deadbeef" {
+		t.Fatalf("state.BinarySHA256 = %q, want 'deadbeef'", wm.state.BinarySHA256)
+	}
+	if wm.state.IssuerID != issuerID {
+		t.Fatalf("state.IssuerID = %q, want %q", wm.state.IssuerID, issuerID)
+	}
+}
+
+// TestE2E_WizardEscRetreats covers Esc → back navigation across steps.
+func TestE2E_WizardEscRetreats(t *testing.T) {
+	wm := newWizardModel(nil)
+	wm, _ = wm.Update(wizard.IdentityChosenMsg{IssuerID: uuid.New().String()})
+	if wm.step != wizStepRecipient {
+		t.Fatalf("setup: step = %d, want %d", wm.step, wizStepRecipient)
+	}
+	wm, _ = wm.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if wm.step != wizStepIdentity {
+		t.Fatalf("after Esc, step = %d, want wizStepIdentity (%d)", wm.step, wizStepIdentity)
+	}
+	// Esc on first step is a no-op.
+	wm, _ = wm.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if wm.step != wizStepIdentity {
+		t.Fatalf("Esc on first step must stay, got %d", wm.step)
+	}
+}
+
+// TestE2E_WizardIssueResultSuccessEmitsDone — IssueResultMsg with no error
+// drives the wizard to emit WizardDoneMsg carrying the IssuedLicense.
+func TestE2E_WizardIssueResultSuccessEmitsDone(t *testing.T) {
+	wm := newWizardModel(nil)
+	wm.step = wizStepReview
+	issued := &service.IssuedLicense{}
+	_, cmd := wm.Update(wizard.IssueResultMsg{Issued: issued})
+	if cmd == nil {
+		t.Fatal("IssueResultMsg must emit cmd, got nil")
+	}
+	done, ok := cmd().(WizardDoneMsg)
+	if !ok {
+		t.Fatalf("expected WizardDoneMsg, got %T", cmd())
+	}
+	if done.Issued != issued {
+		t.Fatal("WizardDoneMsg.Issued != the IssuedLicense we passed")
+	}
+}
+
+// TestE2E_WizardIssueResultCancelledEmitsDoneNil — cancelled error emits
+// WizardDoneMsg with nil Issued (clean exit, no error overlay).
+func TestE2E_WizardIssueResultCancelledEmitsDoneNil(t *testing.T) {
+	wm := newWizardModel(nil)
+	wm.step = wizStepReview
+	_, cmd := wm.Update(wizard.IssueResultMsg{Err: errCancelled{}})
+	if cmd == nil {
+		t.Fatal("IssueResultMsg cancelled must emit cmd")
+	}
+	done, ok := cmd().(WizardDoneMsg)
+	if !ok {
+		t.Fatalf("expected WizardDoneMsg, got %T", cmd())
+	}
+	if done.Issued != nil {
+		t.Fatalf("cancelled path must emit nil Issued, got %v", done.Issued)
+	}
+}
+
+// errCancelled implements error with the magic "cancelled" text the wizard
+// matches on to distinguish cancellation from genuine failure.
+type errCancelled struct{}
+
+func (errCancelled) Error() string { return "cancelled" }
 
 // ── Help overlay in every view ─────────────────────────────────────────────────
 
