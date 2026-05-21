@@ -78,16 +78,31 @@ func run() error {
 	return err
 }
 
-// runOnboarding launches the first-launch wizard for a fresh DB.
-// The wizard collects passphrase + issuer details but does not write to disk
-// in Phase 1; it prints a restart prompt so the caller can wire the store.
+// runOnboarding launches the first-launch wizard for a fresh DB, then
+// persists the KEK, canary, and first issuer using the collected passphrase.
 func runOnboarding(flags cliFlags) error {
+	ctx := context.Background()
 	root := tui.New(nil, nil, tui.SessionOnboarding)
 	p := tea.NewProgram(root, tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
+	finalModel, err := p.Run()
+	if err != nil {
 		return err
 	}
-	fmt.Fprintln(os.Stderr, "license-manager: onboarding complete — restart to use the DB at", flags.DBPath)
+
+	rm, ok := finalModel.(tui.RootModel)
+	if !ok {
+		return errors.New("onboarding: unexpected model type after program exit")
+	}
+	result := rm.OnboardingResult()
+	if result == nil {
+		// Operator quit before completing — nothing to persist.
+		return nil
+	}
+
+	if err := tui.PersistOnboarding(ctx, flags.DBPath, *result); err != nil {
+		return fmt.Errorf("onboarding: persist: %w", err)
+	}
+	fmt.Fprintln(os.Stderr, "license-manager: database initialised at", flags.DBPath)
 	return nil
 }
 
