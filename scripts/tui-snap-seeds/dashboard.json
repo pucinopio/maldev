@@ -1,0 +1,22 @@
+{
+  "active": 47,
+  "revoked": 6,
+  "expired": 12,
+  "expiring_soon": 4,
+  "superseded": 9,
+  "active_key_id": "k2026-04",
+  "active_key_name": "rshell-prod-2026Q2",
+  "active_key_fingerprint": "4a:2f:88:d1:09:cc:fe:b3:72:1e:aa:5d:03:89:c0:f7",
+  "servers": [
+    { "name": "revocation", "on": true,  "url": ":8443", "requests": 142, "uptime": "3h12m" },
+    { "name": "heartbeat",  "on": true,  "url": ":8444", "requests":  87, "uptime": "3h12m" },
+    { "name": "probe",      "on": false, "url": ":8445", "requests":   0, "uptime": "" }
+  ],
+  "audit": [
+    { "at": "07:41:02", "kind": "license.issue",   "target": "lic-e7a1", "actor": "operator", "note": "rshell-prod" },
+    { "at": "07:38:55", "kind": "license.activate", "target": "lic-b3c0", "actor": "operator", "note": "" },
+    { "at": "07:31:14", "kind": "license.revoke",  "target": "lic-9d22", "actor": "operator", "note": "expired key" },
+    { "at": "07:20:00", "kind": "server.start",    "target": "revocation", "actor": "operator", "note": "" },
+    { "at": "07:05:33", "kind": "identity.new",    "target": "id-f001", "actor": "operator", "note": "workstation-1" }
+  ]
+}

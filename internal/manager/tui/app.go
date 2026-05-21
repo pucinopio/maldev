@@ -544,25 +544,32 @@ func (m rootModel) View() string {
 	return body
 }
 
-// handleMouse dispatches mouse events. Left-button release triggers click
-// dispatch; wheel is handled inside WrappedViewport widgets directly.
+// handleMouse dispatches mouse events. Left-button press OR release triggers
+// click dispatch; both are accepted because terminal emulators vary — some send
+// only Press (e.g. Windows Terminal with legacy mouse encoding), others send
+// only Release, and some send both. Accepting either avoids silent no-ops.
+// Wheel events are handled inside WrappedViewport widgets directly.
 func (m rootModel) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
-		// Tab bar occupies row Y=1 (row 0 = title bar, row 1 = tabs).
-		if msg.Y == 1 {
-			tb := buildTabBar(m.active, m.width)
-			cmd := tb.OnClick(msg.X, 0, tea.MouseButtonLeft)
-			return m, cmd
-		}
-		if m.active == ViewDashboard {
-			tree := m.dashboard.buildWidgetTree()
-			cmd := dispatchClick(tree, msg.X, msg.Y)
-			return m, cmd
-		}
-		if m.rootWidget != nil {
-			cmd := dispatchClick(m.rootWidget, msg.X, msg.Y)
-			return m, cmd
-		}
+	if msg.Button != tea.MouseButtonLeft {
+		return m, nil
+	}
+	if msg.Action != tea.MouseActionPress && msg.Action != tea.MouseActionRelease {
+		return m, nil
+	}
+	// Tab bar occupies row Y=1 (row 0 = title bar, row 1 = tabs).
+	if msg.Y == 1 {
+		tb := buildTabBar(m.active, m.width)
+		cmd := tb.OnClick(msg.X, 0, tea.MouseButtonLeft)
+		return m, cmd
+	}
+	if m.active == ViewDashboard {
+		tree := m.dashboard.buildWidgetTree()
+		cmd := dispatchClick(tree, msg.X, msg.Y)
+		return m, cmd
+	}
+	if m.rootWidget != nil {
+		cmd := dispatchClick(m.rootWidget, msg.X, msg.Y)
+		return m, cmd
 	}
 	return m, nil
 }

@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/oioio-space/maldev/internal/manager/tui/cmds"
 )
 
 // TestE2E_SmokeTUI exercises the rootModel by feeding it the same messages a
@@ -62,6 +64,82 @@ func TestE2E_SmokeTUI(t *testing.T) {
 		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 		_ = m.View()
 	})
+}
+
+// TestE2E_TileClickNavigatesToLicenses is the regression guard for the mouse
+// click dispatcher.
+//
+// Protocol:
+//  1. Build a dashboard at 144×44 with seeded counter data.
+//  2. Call View() so Layout() sets widget bounds (same path taken by real renderer).
+//  3. Send a MouseMsg with Action=Release on a coordinate inside the Active tile.
+//  4. Assert that the resulting model is on the Licenses view and its View()
+//     contains the "/ to search" hint unique to the licenses screen body.
+//
+// Also verifies that Action=Press (sent by some terminals instead of Release)
+// triggers the same navigation, since handleMouse accepts both.
+func TestE2E_TileClickNavigatesToLicenses(t *testing.T) {
+	snap := cmds.DashboardSnapshotMsg{
+		Active:       47,
+		Revoked:      6,
+		Expired:      12,
+		ExpiringSoon: 4,
+		ActiveKeyID:  "k2026-04",
+	}
+
+	build := func() tea.Model {
+		root := New(nil, nil, SessionReady)
+		var m tea.Model = root
+		m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
+		m, _ = m.Update(snap)
+		// Call View() to trigger Layout() and populate widget bounds.
+		_ = m.View()
+		return m
+	}
+
+	// The Active tile is the first in the row. At 144 cols with 4 equal tiles,
+	// each tile is ~35 cols wide. The tile row starts at Y=2 (rows 0+1 = chrome).
+	// Click at X=17, Y=4 — well inside the first tile body.
+	clickRelease := tea.MouseMsg{
+		X: 17, Y: 4,
+		Action: tea.MouseActionRelease,
+		Button: tea.MouseButtonLeft,
+		Type:   tea.MouseLeft,
+	}
+	clickPress := tea.MouseMsg{
+		X: 17, Y: 4,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+		Type:   tea.MouseLeft,
+	}
+
+	for _, tc := range []struct {
+		name string
+		msg  tea.MouseMsg
+	}{
+		{"release", clickRelease},
+		{"press", clickPress},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := build()
+			// Step 1: mouse event → model returns a Cmd (not yet a Msg).
+			m2, cmd := m.Update(tc.msg)
+			if cmd == nil {
+				t.Fatalf("tile click (%s): expected non-nil Cmd from handleMouse", tc.name)
+			}
+			// Step 2: execute the Cmd synchronously to get SwitchToLicensesMsg.
+			switchMsg := cmd()
+			if _, ok := switchMsg.(SwitchToLicensesMsg); !ok {
+				t.Fatalf("tile click (%s): expected SwitchToLicensesMsg, got %T", tc.name, switchMsg)
+			}
+			// Step 3: feed SwitchToLicensesMsg back so the model navigates.
+			m3, _ := m2.Update(switchMsg)
+			view := m3.View()
+			if !strings.Contains(view, "/ to search") {
+				t.Errorf("after tile click (%s) expected Licenses view, got first line: %q", tc.name, firstLine(view))
+			}
+		})
+	}
 }
 
 func firstLine(s string) string {

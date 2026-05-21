@@ -59,6 +59,7 @@ TOOLS := \
     rshell \
     sleepmask-demo \
     test-report \
+    tui-snap \
     vmtest
 
 .PHONY: all build tools release debug test test-intrusive verify cross-linux \
@@ -159,6 +160,23 @@ verify:
 	go test ./... -count=1
 	GOOS=linux GOARCH=amd64 go build ./...
 	@echo "All checks passed."
+
+# ── TUI snapshot targets ─────────────────────────────────────────────────────
+# Requires: go install github.com/charmbracelet/freeze@latest
+# Output:   ignore/snapshots/<view>.png
+
+TUI_VIEWS := dashboard licenses issuers recipients identities revocation servers audit settings
+
+.PHONY: tui-snap tui-snap-all $(addprefix tui-snap-,$(TUI_VIEWS))
+
+# Single-view target: make tui-snap VIEW=dashboard
+VIEW ?= dashboard
+tui-snap:
+	@bash scripts/tui-snap.sh $(VIEW)
+
+# All views in sequence.
+tui-snap-all:
+	@for v in $(TUI_VIEWS); do bash scripts/tui-snap.sh $$v; done
 
 # ── Tooling helpers ──────────────────────────────────────────────────────────
 install-garble:
