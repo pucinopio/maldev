@@ -45,6 +45,7 @@ type AuditEntry struct {
 	Kind     string
 	TargetID string
 	Actor    string
+	Note     string
 }
 
 // DashboardSnapshotMsg wraps DashboardSnapshot as a tea.Msg.

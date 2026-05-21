@@ -37,21 +37,4 @@ Audit (0)  [d] detail · [r] refresh · [pgup/pgdn] page
                                                                                                                         
                                                                                                                         
                                                                                                                         
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
- f all   l license   k key   s server   i identity   p probe   d detail   r refresh                           ┌────────┐
-│ ~ tour │                                                                                                              
-└────────┘                                                                                                              
+1-9 onglets  n nouvelle licence  / rechercher  k clés actives  ? aide  q quitter                                 ~ tour 

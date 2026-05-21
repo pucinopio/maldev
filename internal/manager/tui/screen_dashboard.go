@@ -96,7 +96,8 @@ func (m dashboardModel) buildWidgetTree() Widget {
 	}
 
 	// Five counter tiles with reference subtitles.
-	tileW := w/5 - 1
+	// tileW is the minimum per tile; flex distributes remaining space equally.
+	tileW := w / 5
 	activeTile := widgets.NewTile("Actives [a]", m.counters.active,
 		"signées par la clé active", Palette.Green,
 		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "active"} } })
@@ -151,8 +152,8 @@ func (m dashboardModel) buildWidgetTree() Widget {
 		FlexChild{W: tilesRow, Min: 5, Max: 7},
 		FlexChild{W: body, Flex: 1},
 	)
-	// Reserve 3 rows for chrome (title + tabs + breadcrumb).
-	root.Layout(Rect{X: 0, Y: 3, W: w, H: h - 3})
+	// Reserve 3 rows for chrome (title + tabs + breadcrumb) + 1 row for status bar.
+	root.Layout(Rect{X: 0, Y: 3, W: w, H: h - 4})
 	return root
 }
 
@@ -160,78 +161,178 @@ func (m dashboardModel) View() string {
 	if m.width == 0 {
 		return ""
 	}
+	// Content height = terminal height minus chrome (title+tabs+breadcrumb=3) and status bar (1).
+	contentH := m.height - 4
+	if contentH < 1 {
+		contentH = 1
+	}
 	if m.loading {
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
+		return lipgloss.Place(m.width, contentH, lipgloss.Center, lipgloss.Center,
 			Dim.Render("Loading dashboard…"))
 	}
 	if m.err != nil {
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
+		return lipgloss.Place(m.width, contentH, lipgloss.Center, lipgloss.Center,
 			GlowRed.Render("Error: "+m.err.Error()))
 	}
 	return m.buildWidgetTree().View()
 }
 
+// truncateFingerprint shortens a raw hex fingerprint like
+// "4a:2f:88:d1:09:cc:fe:b3:72:1e:aa:5d:03:89:c0:f7"
+// to "ed25519:4a2f…c0f7" (algo prefix + first 4 hex chars + ellipsis + last 4).
+// When the input already looks like "algo:…" it is returned unchanged.
+// The function never returns a string longer than ~24 chars, preventing wraps.
+func truncateFingerprint(fpr string) string {
+	if fpr == "" {
+		return ""
+	}
+	// Already in algo:digest form — trust it.
+	if strings.Contains(fpr, ":") {
+		// Strip colons to get raw hex bytes, then format.
+		raw := strings.ReplaceAll(fpr, ":", "")
+		if len(raw) < 8 {
+			return fpr
+		}
+		return "ed25519:" + raw[:4] + "…" + raw[len(raw)-4:]
+	}
+	if len(fpr) < 8 {
+		return fpr
+	}
+	return "ed25519:" + fpr[:4] + "…" + fpr[len(fpr)-4:]
+}
+
 // keyCardContent builds the text content for the issuer key card.
 // The KeyID is shown large; name and fingerprint follow on subsequent lines.
 // An ACTIVE pill appears on the right of the first data line when a key is set.
+// keyActivePill is a flat single-line ACTIVE tag — GlowGreen without a border,
+// because the bordered PillActive is 3 lines tall and cannot be embedded inline.
+var keyActivePill = GlowGreen
+
 func (m dashboardModel) keyCardContent() string {
 	if m.activeKey.id == "" {
 		return Mute.Render("aucune clé active")
 	}
-	pill := PillActive.Render("ACTIVE")
+	pill := keyActivePill.Render("ACTIVE")
 	idLine := GlowCyan.Render(m.activeKey.id) + "  " + pill
+	fpr := truncateFingerprint(m.activeKey.fingerprint)
 	return lipgloss.JoinVertical(lipgloss.Left,
 		idLine,
 		Base.Render("nom ")+Dim.Render(m.activeKey.name),
-		Base.Render("fpr ")+Mute.Render(m.activeKey.fingerprint),
+		Base.Render("fpr ")+Mute.Render(fpr),
 	)
 }
 
-// serversCardContent builds the text content for the servers card.
-// When the bundle is wired (Phase 4+) it reads live Status snapshots directly
-// so the dashboard always reflects the current running state.
-func (m dashboardModel) serversCardContent() string {
-	if m.bundle == nil {
-		// Bundle not wired — fall back to the snapshot injected by DashboardSnapshotMsg.
-		var lines []string
-		for _, s := range m.servers {
-			var pill string
-			if s.On {
-				pill = PillOn.Render("ON")
-			} else {
-				pill = PillOff.Render("OFF")
-			}
-			lines = append(lines, fmt.Sprintf("%-12s %s  %s", s.Name, pill, Mute.Render(s.URL)))
+// serverPillStyle returns a single-line colored tag for running/stopped state.
+// Unlike the bordered PillOn/PillOff styles used in tables, the inline variant
+// is flat (no border) so it can be embedded mid-string without injecting \n.
+var (
+	serverPillOn  = GlowGreen // reuses theme constant — green bold flat tag for ON state
+	serverPillOff = lipgloss.NewStyle().Foreground(Palette.FgMute).Bold(true)
+)
+
+// serverRow builds two lines for one server entry matching the reference layout:
+//
+//	● name  :port                                                      ON
+//	  https://host:port · N req · up Xh Ym
+//
+// The ON/OFF tag is right-aligned to colW on the first line.
+func serverRow(name, addr, url string, on bool, reqs uint64, uptime string, colW int) string {
+	bullet := Mute.Render("●")
+	if !on {
+		bullet = Mute.Render("○")
+	}
+
+	var tag string
+	if on {
+		tag = serverPillOn.Render("ON")
+	} else {
+		tag = serverPillOff.Render("OFF")
+	}
+
+	nameAddr := GlowCyan.Render(name) + "  " + Dim.Render(addr)
+	prefixW := lipgloss.Width(bullet) + 1 + lipgloss.Width(nameAddr)
+	tagW := lipgloss.Width(tag)
+	gap := colW - prefixW - tagW
+	if gap < 1 {
+		gap = 1
+	}
+	line1 := bullet + " " + nameAddr + strings.Repeat(" ", gap) + tag
+
+	// Line 2: url · req count · uptime (or stopped hint).
+	var detail string
+	if on && url != "" && url != "—" {
+		detail = Mute.Render(url)
+		if reqs > 0 {
+			detail += Mute.Render(fmt.Sprintf(" · %d req", reqs))
 		}
-		if len(lines) == 0 {
+		if uptime != "" {
+			detail += Mute.Render(" · up " + uptime)
+		}
+	} else if !on {
+		detail = Mute.Render("arrêté · démarrer via onglet [7]")
+	}
+
+	return line1 + "\n  " + detail
+}
+
+// serversCardContent builds the text content for the servers card.
+// Each server is rendered as two compact lines with the ON/OFF tag right-aligned.
+// When the bundle is wired (Phase 4+) it reads live Status snapshots directly.
+func (m dashboardModel) serversCardContent() string {
+	// body flex: Horizontal gap=1, leftFlex=1, rightFlex=2.
+	// leftColW = (w-1)/3. Box chrome = border(2) + padding(2) = 4.
+	// lipgloss Width(n) counts padding inside n, so actual text area = Width - 2 = boxW-6.
+	w := m.width
+	if w == 0 {
+		w = 120
+	}
+	colW := (w-1)/3 - 6
+	if colW < 20 {
+		colW = 20
+	}
+
+	// sep is reused by both bundle-nil and live paths.
+	sep := Mute.Render(strings.Repeat("╌", colW))
+
+	buildRows := func(name, addr, url string, on bool, reqs uint64, uptime string) string {
+		return serverRow(name, addr, url, on, reqs, uptime, colW)
+	}
+
+	if m.bundle == nil {
+		var rows []string
+		for _, s := range m.servers {
+			// s.URL holds the listen address (":8443"). Build a full URL for display.
+			url := ""
+			if s.URL != "" {
+				url = "https://manager.local" + s.URL
+			}
+			rows = append(rows, buildRows(s.Name, s.URL, url, s.On, s.Requests, ""))
+		}
+		if len(rows) == 0 {
 			return Mute.Render("no servers configured")
 		}
-		return lipgloss.JoinVertical(lipgloss.Left, lines...)
+		return strings.Join(rows, "\n"+sep+"\n")
 	}
 
 	// Live path: read directly from Bundle.Statuses().
 	statuses := m.bundle.Statuses()
 	names := []string{"revocation", "heartbeat", "probe"}
-	lines := make([]string, 0, len(names))
+	var rows []string
 	for _, name := range names {
 		s, ok := statuses[name]
-		var pill string
-		if ok && s.Running {
-			pill = PillOn.Render("ON")
-		} else {
-			pill = PillOff.Render("OFF")
-		}
-		addr := "—"
+		addr, url := "—", ""
+		var reqs uint64
 		if ok && s.ListenAddr != "" {
 			addr = s.ListenAddr
+			url = "https://manager.local" + s.ListenAddr
 		}
-		lines = append(lines, fmt.Sprintf("%-12s %s  %s", name, pill, Mute.Render(addr)))
+		rows = append(rows, buildRows(name, addr, url, ok && s.Running, reqs, ""))
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+	return strings.Join(rows, "\n"+sep+"\n")
 }
 
 // auditCardContent builds the text content for the recent events card.
-// Format: HH:MM:SS  kind  target  (actor)
+// Format: HH:MM:SS kind target (actor) — note
 func (m dashboardModel) auditCardContent() string {
 	if len(m.recent) == 0 {
 		return Mute.Render("aucun événement")
@@ -239,12 +340,13 @@ func (m dashboardModel) auditCardContent() string {
 	var lines []string
 	for _, e := range m.recent {
 		ts := e.At.Format("15:04:05")
-		line := fmt.Sprintf("%s  %-22s  %-16s  %s",
-			Mute.Render(ts),
-			GlowMagent.Render(e.Kind),
-			Dim.Render(e.TargetID),
-			Mute.Render("("+e.Actor+")"),
-		)
+		line := Mute.Render(ts) +
+			" " + GlowMagent.Render(e.Kind) +
+			" " + Dim.Render(e.TargetID) +
+			" " + Mute.Render("("+e.Actor+")")
+		if e.Note != "" {
+			line += Mute.Render(" — " + e.Note)
+		}
 		lines = append(lines, line)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
@@ -264,10 +366,12 @@ func (m dashboardModel) shortcutsCardContent() string {
 	}
 
 	// The shortcuts box lives in the right column (~⅔ of total width).
-	// Subtract box chrome (border 2 + padding 2 = 4) then divide by 3 cols.
-	// Use a generous minimum so labels are never truncated.
-	rightColW := m.width * 2 / 3
-	cellW := (rightColW - 4) / 3
+	// body flex: Horizontal gap=1, leftFlex=1, rightFlex=2.
+	// rightColW = (w-1)*2/3 (last child absorbs remainder, safe approximation).
+	// Box inner text width = rightColW - 6 (border 2 + padding 2 + lipgloss Width offset 2).
+	// Divide by 3 cols for shortcuts grid cell width.
+	rightColW := (m.width - 1) * 2 / 3
+	cellW := (rightColW - 6) / 3
 	if cellW < 20 {
 		cellW = 20
 	}

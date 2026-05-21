@@ -5,9 +5,7 @@
 ──────────────                                                                                                          
  settings                                                                                                               
   loading…                                                                                                              
- r refresh   P changer passphrase   V vacuum   B backup                                                       ┌────────┐
-│ ~ tour │                                                                                                              
-└────────┘                                                                                                              
+r refresh  P changer passphrase  V vacuum  B backup                                                              ~ tour 
                                                                                                                         
                                                                                                                         
                                                                                                                         
@@ -39,5 +37,4 @@
                                                                                                                         
                                                                                                                         
                                                                                                                         
-                                                                                                                        
-                                                                                                                        
+1-9 onglets  n nouvelle licence  / rechercher  k clés actives  ? aide  q quitter                                 ~ tour 

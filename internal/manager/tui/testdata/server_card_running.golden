@@ -30,13 +30,11 @@
                                                                                                                         
                                                                                                                         
                                                                                                                         
- R revocation   H heartbeat   P probe   s start/stop   c clear log   g regen token                            ┌────────┐
-│ ~ tour │                                                                                                              
-└────────┘                                                                                                              
+R revocation  H heartbeat  P probe  s start/stop  c clear log  g regen token                                     ~ tour 
                                                                                                                         
                                                                                                                         
                                                                                                                         
                                                                                                                         
                                                                                                                         
                                                                                                                         
-                                                                                                                        
+1-9 onglets  n nouvelle licence  / rechercher  k clés actives  ? aide  q quitter                                 ~ tour 

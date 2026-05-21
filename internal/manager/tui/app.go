@@ -626,20 +626,35 @@ func (m rootModel) viewReady() string {
 		content = m.settings.View()
 	}
 
-	// Reserve 3 rows for chrome (title + tabs + breadcrumb); status bar is rendered by each screen.
-	contentH := m.hgt - 3
+	// chrome = title(1) + tabs(1) + breadcrumb(1) + statusbar(1) = 4 rows.
+	contentH := m.hgt - 4
 	if contentH < 0 {
 		contentH = 0
 	}
+	// Clamp content to exactly contentH lines: pad short content up, trim tall
+	// content down. lipgloss Height() only pads — never truncates — so we must
+	// enforce the ceiling ourselves to keep the total view == m.hgt.
+	content = clampToHeight(content, contentH, m.width)
 	contentArea := lipgloss.NewStyle().
 		Width(m.width).
 		Height(contentH).
 		Render(content)
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		title,
-		tabs,
-		crumb,
-		contentArea,
-	)
+	statusBar := renderStatusBar([]string{
+		"1-9", "onglets",
+		"n", "nouvelle licence",
+		"/", "rechercher",
+		"k", "clés actives",
+		"?", "aide",
+		"q", "quitter",
+	}, m.width)
+
+	chrome := lipgloss.JoinVertical(lipgloss.Left, title, tabs, crumb)
+
+	// Hard-clamp chrome + content to (m.hgt - 1) lines so there is always exactly
+	// one row left for the status bar regardless of chrome wrapping.
+	body := lipgloss.JoinVertical(lipgloss.Left, chrome, contentArea)
+	body = clampToHeight(body, m.hgt-1, m.width)
+
+	return lipgloss.JoinVertical(lipgloss.Left, body, statusBar)
 }
