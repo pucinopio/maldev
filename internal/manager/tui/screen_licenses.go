@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -338,21 +337,68 @@ func (m licensesModel) renderDetail() string {
 	if row == nil {
 		return Dim.Render("  no selection")
 	}
-	lines := []string{
-		fmt.Sprintf("  %-18s %s", "status:", string(row.Status)),
-		fmt.Sprintf("  %-18s %s", "subject:", row.Subject),
-		fmt.Sprintf("  %-18s %s", "issuer:", row.IssuerName),
-		fmt.Sprintf("  %-18s %s", "audience:", strings.Join(row.Audience, ", ")),
-		fmt.Sprintf("  %-18s %s", "features:", strings.Join(row.Features, ", ")),
-		fmt.Sprintf("  %-18s %s", "not-before:", row.NotBefore.Format(time.RFC3339)),
-		fmt.Sprintf("  %-18s %s", "not-after:", row.NotAfter.Format(time.RFC3339)),
-		fmt.Sprintf("  %-18s %s", "identity-sha256:", row.IdentitySha256),
-		fmt.Sprintf("  %-18s %s", "binary-sha256:", row.BinarySha256),
-		fmt.Sprintf("  %-18s %s", "license-uuid:", row.LicenseUUID),
-		fmt.Sprintf("  %-18s %s", "db-id:", row.ID.String()),
+
+	// Header: license ID + subject + tab strip + action hints.
+	// Matches licenses.jsx detail box title + tab strip (line 76-135).
+	licID := row.LicenseUUID
+	if len(licID) > 12 {
+		licID = "lic:" + licID[:8] + "…"
 	}
-	detail := strings.Join(lines, "\n")
-	return BoxStyle.Width(m.width - 2).Render(detail)
+	title := Dim.Render("Détail · ") +
+		GlowMagent.Render(licID) + Dim.Render(" · ") +
+		Base.Render(row.Subject)
+
+	tabStrip := strings.Join([]string{
+		HintKey.Render("[I]") + Dim.Render("dent"),
+		HintKey.Render("[B]") + Dim.Render("ind"),
+		HintKey.Render("[P]") + Dim.Render("EM"),
+		HintKey.Render("[A]") + Dim.Render("udit"),
+		HintKey.Render("[C]") + Dim.Render("haîne"),
+	}, "  ")
+	actions := Dim.Render("[d] replier  [c] PEM  [e] re-émettre  [x] révoquer")
+	headerW := m.width - 4
+	gap := headerW - lipgloss.Width(tabStrip) - lipgloss.Width(actions)
+	if gap < 1 {
+		gap = 1
+	}
+	header := title + "\n" + tabStrip + strings.Repeat(" ", gap) + actions
+
+	// Identité tab body: 2-column KVs matching licenses.jsx ident tab.
+	statusPill := licStatusPill(row.Status)
+	body := lipgloss.JoinVertical(lipgloss.Left,
+		kvRow("status", statusPill, 14),
+		kvRow("subject", row.Subject, 14),
+		kvRow("issuer", row.IssuerName, 14),
+		kvRow("audience", strings.Join(row.Audience, ", "), 14),
+		kvRow("features", strings.Join(row.Features, ", "), 14),
+		kvRow("not-before", row.NotBefore.Format("2006-01-02"), 14),
+		kvRow("not-after", row.NotAfter.Format("2006-01-02"), 14),
+		kvRow("uuid", GlowCyan.Render(row.LicenseUUID), 14),
+	)
+
+	return BoxStyle.Width(m.width - 2).Render(
+		lipgloss.JoinVertical(lipgloss.Left, header, "", body),
+	)
+}
+
+// licStatusPill renders a colored status pill for the Licenses detail panel.
+func licStatusPill(s licenseent.Status) string {
+	switch s {
+	case licenseent.StatusActive:
+		return PillActive.Render("ACTIVE")
+	case licenseent.StatusRevoked:
+		return PillRevoked.Render("REVOKED")
+	case licenseent.StatusExpired:
+		return PillOff.Render("EXPIRED")
+	case licenseent.StatusSuperseded:
+		return PillSuperseded.Render("SUPERSEDED")
+	default:
+		// "expiring" is a computed status not stored in ent; render with yellow pill.
+		if s == "expiring" {
+			return PillExpiring.Render("EXPIRING")
+		}
+		return Dim.Render(string(s))
+	}
 }
 
 // handleRevokeResult applies the result of revokeOverlay back to this screen.

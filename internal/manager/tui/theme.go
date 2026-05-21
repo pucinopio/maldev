@@ -50,11 +50,12 @@ var (
 			Border(lipgloss.NormalBorder(), false, false, true, false).BorderForeground(Palette.Magenta)
 	TabInactive = lipgloss.NewStyle().Foreground(Palette.FgDim).Padding(0, 2)
 
-	PillActive   = lipgloss.NewStyle().Foreground(Palette.Green).Bold(true).Padding(0, 1).Border(lipgloss.NormalBorder()).BorderForeground(Palette.Green)
-	PillExpiring = lipgloss.NewStyle().Foreground(Palette.Yellow).Bold(true).Padding(0, 1).Border(lipgloss.NormalBorder()).BorderForeground(Palette.Yellow)
-	PillRevoked  = lipgloss.NewStyle().Foreground(Palette.Red).Bold(true).Padding(0, 1).Border(lipgloss.NormalBorder()).BorderForeground(Palette.Red)
-	PillOn       = PillActive
-	PillOff      = lipgloss.NewStyle().Foreground(Palette.FgMute).Bold(true).Padding(0, 1).Border(lipgloss.NormalBorder()).BorderForeground(Palette.FgMute)
+	PillActive     = lipgloss.NewStyle().Foreground(Palette.Green).Bold(true).Padding(0, 1).Border(lipgloss.NormalBorder()).BorderForeground(Palette.Green)
+	PillExpiring   = lipgloss.NewStyle().Foreground(Palette.Yellow).Bold(true).Padding(0, 1).Border(lipgloss.NormalBorder()).BorderForeground(Palette.Yellow)
+	PillRevoked    = lipgloss.NewStyle().Foreground(Palette.Red).Bold(true).Padding(0, 1).Border(lipgloss.NormalBorder()).BorderForeground(Palette.Red)
+	PillSuperseded = lipgloss.NewStyle().Foreground(Palette.Violet).Bold(true).Padding(0, 1).Border(lipgloss.NormalBorder()).BorderForeground(Palette.Violet)
+	PillOn         = PillActive
+	PillOff        = lipgloss.NewStyle().Foreground(Palette.FgMute).Bold(true).Padding(0, 1).Border(lipgloss.NormalBorder()).BorderForeground(Palette.FgMute)
 
 	Modal       = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(Palette.Magenta).Padding(1, 2)
 	ModalDanger = Modal.BorderForeground(Palette.Red)

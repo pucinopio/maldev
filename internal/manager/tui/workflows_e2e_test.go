@@ -1550,6 +1550,53 @@ func TestE2E_LicensesDetailToggles(t *testing.T) {
 	}
 }
 
+// TestE2E_LicensesDetailContent verifies the redesigned detail panel renders
+// the tab strip ([I]dent/[B]ind/[P]EM/[A]udit/[C]haîne) and the Identité
+// KVs (status pill, subject, issuer, audience, validity dates).
+// Red against the old fmt.Sprintf list, green after the new tab+KV layout.
+func TestE2E_LicensesDetailContent(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+	iss, err := svc.Issuer.Generate(ctx, "lic-det", "k-ld", "operator")
+	if err != nil {
+		t.Fatalf("Issuer.Generate: %v", err)
+	}
+	out, err := svc.License.Issue(ctx, service.IssueRequest{
+		IssuerID:     iss.ID,
+		Subject:      "alice@research",
+		AudienceList: []string{"rshell"},
+		NotAfter:     timeNowPlus(720),
+		Actor:        "operator",
+	})
+	if err != nil {
+		t.Fatalf("License.Issue: %v", err)
+	}
+	_ = out
+
+	lm := newLicensesModel(svc)
+	lm, _ = lm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	lm, _ = lm.Update(ListLicensesCmd(svc)())
+	lm.detail = true
+	got := lm.View()
+
+	// Tab strip must appear.
+	for _, tab := range []string{"[I]", "[B]", "[P]", "[A]", "[C]"} {
+		if !strings.Contains(got, tab) {
+			t.Errorf("LicensesDetailContent: tab %q not found", tab)
+		}
+	}
+	// Identité KVs must appear.
+	for _, kv := range []string{"Détail", "alice@research", "status", "subject", "issuer"} {
+		if !strings.Contains(got, kv) {
+			t.Errorf("LicensesDetailContent: KV %q not found", kv)
+		}
+	}
+	// Action hints must appear.
+	if !strings.Contains(got, "[d] replier") {
+		t.Error("LicensesDetailContent: '[d] replier' action hint not found")
+	}
+}
+
 // TestE2E_LicensesSearchFocus asserts '/' enters search mode and Esc exits.
 func TestE2E_LicensesSearchFocus(t *testing.T) {
 	lm := newLicensesModel(nil)
