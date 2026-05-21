@@ -144,7 +144,7 @@ func TestTeatest_MouseClickDoesNotPanic(t *testing.T) {
 	sendAndWait(t, tm, tea.MouseMsg{
 		X:      17,
 		Y:      4,
-		Action: tea.MouseActionRelease,
+		Action: tea.MouseActionPress,
 		Button: tea.MouseButtonLeft,
 		Type:   tea.MouseLeft,
 	}, "/ to search")

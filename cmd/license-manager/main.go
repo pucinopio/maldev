@@ -56,6 +56,7 @@ func run() error {
 			return errors.New("authentication failed")
 		}
 		passphrase = rp.ResolvedPassphrase()
+		tui.PassphraseSource = "TUI prompt"
 	}
 	defer wipeString(&passphrase)
 
@@ -131,21 +132,26 @@ func runMainTUI(ctx context.Context, st *store.Store, kek *crypto.KEK, flags cli
 }
 
 // resolvePassphraseSilent walks the cascade without opening a TTY prompt.
-// Returns "" when no source is available.
+// Returns "" when no source is available. As a side effect, records which
+// cascade step provided the value in tui.PassphraseSource so the Settings
+// screen reflects reality instead of guessing.
 func resolvePassphraseSilent(f cliFlags) string {
 	if f.PassphraseFile != "" {
 		s, err := readPassphraseFile(f.PassphraseFile)
 		if err == nil {
+			tui.PassphraseSource = "--passphrase-file flag"
 			return s
 		}
 	}
 	if path := os.Getenv("MALDEV_MGR_PASSPHRASE_FILE"); path != "" {
 		s, err := readPassphraseFile(path)
 		if err == nil {
+			tui.PassphraseSource = "env MALDEV_MGR_PASSPHRASE_FILE"
 			return s
 		}
 	}
 	if env := os.Getenv("MALDEV_MGR_PASSPHRASE"); env != "" {
+		tui.PassphraseSource = "env MALDEV_MGR_PASSPHRASE"
 		return env
 	}
 	// Terminal prompt — only when running with --no-tui so we don't fight bubbletea.

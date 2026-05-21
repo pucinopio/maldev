@@ -370,6 +370,11 @@ func (m settingsModel) boxApparence(w int) string {
 	return settingsBox(w, "Apparence", body)
 }
 
+// PassphraseSource is set by cmd/license-manager at boot to describe which
+// cascade step actually resolved the operator's passphrase. Read by the
+// settings screen so it doesn't lie about how the session unlocked.
+var PassphraseSource = "TUI prompt"
+
 func (m settingsModel) boxCascadePassphrase(w int, _ *ent.Setting) string {
 	steps := strings.Join([]string{
 		"  1. " + GlowCyan.Render("--passphrase-file") + " <path>",
@@ -379,8 +384,7 @@ func (m settingsModel) boxCascadePassphrase(w int, _ *ent.Setting) string {
 	}, "\n")
 	body := Dim.Render("La passphrase est résolue selon la cascade :") + "\n" +
 		steps + "\n\n" +
-		Dim.Render("Cette session a résolu via : ") + GlowMagent.Render("ENV_FILE") +
-		Dim.Render(" → écran passphrase ") + GlowGreen.Render("sauté") + Dim.Render(".")
+		Dim.Render("Cette session a résolu via : ") + GlowMagent.Render(PassphraseSource)
 	return settingsBox(w, "Cascade passphrase au boot (read-only)", body)
 }
 

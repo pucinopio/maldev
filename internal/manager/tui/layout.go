@@ -365,20 +365,29 @@ func truncateRunes(s string, max int) string {
 // filled cells using the Magenta accent for the filled portion and Border colour
 // for the remainder. Both screens (wizard, onboarding) share this helper.
 func renderProgressBar(w, cur, total int) string {
+	if w < 3 {
+		// Not enough space for the bar — render nothing rather than panic on
+		// strings.Repeat with a negative count.
+		return ""
+	}
 	if total <= 0 {
 		total = 1
 	}
 	filled := (w - 2) * cur / total
-	if filled < 1 {
-		filled = 1
+	if filled < 0 {
+		filled = 0
 	}
 	if filled > w-2 {
 		filled = w - 2
 	}
+	remainder := w - 2 - filled
+	if remainder < 0 {
+		remainder = 0
+	}
 	return lipgloss.NewStyle().Foreground(Palette.Magenta).Render(
 		strings.Repeat("─", filled),
 	) + lipgloss.NewStyle().Foreground(Palette.BorderBright).Render(
-		strings.Repeat("─", w-2-filled),
+		strings.Repeat("─", remainder),
 	)
 }
 

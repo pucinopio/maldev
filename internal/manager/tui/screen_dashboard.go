@@ -123,7 +123,7 @@ func (m dashboardModel) buildWidgetTree() Widget {
 		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "expiring"} } })
 	supersededTile := widgets.NewTile("Superseded [u]", m.counters.superseded,
 		"re-émises plus tard", Palette.Cyan,
-		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "active"} } })
+		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "superseded"} } })
 
 	tilesRow := NewFlex(Horizontal, 0,
 		FlexChild{W: activeTile, Min: tileW, Flex: 1},
