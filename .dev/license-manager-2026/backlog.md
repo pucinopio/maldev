@@ -6,8 +6,12 @@ last_reviewed: 2026-05-21
 # license-manager backlog (post-M1)
 
 ## TUI layer (next milestone)
-- Awaits design handoff from Claude Design (prompt in `docs/superpowers/specs/2026-05-20-license-manager-backend-design.md`)
-- Will live under `cmd/license-manager/` (bubbletea models) and `internal/manager/tui/`
+- ~~Awaits design handoff~~ — shipped in v0.162.0 (Phases 1..4)
+
+### TUI polish backlog (post-v0.162.0)
+- [ ] **Tab / Shift-Tab cycles views** — currently only `1-9` number keys route between views. `Tab` is more discoverable.
+- [ ] **`--no-tui` on fresh DB should auto-bootstrap from env** — today it still launches the bubbletea onboarding TUI even with `--no-tui`, which hangs in non-TTY shells (CI, scripts). Skip TUI when `MALDEV_MGR_PASSPHRASE` + `MALDEV_MGR_OPERATOR` are set.
+- [ ] **Env var name harmonisation** — `MALDEV_MGR_PASSPHRASE` vs the rest of the codebase using `MALDEV_LICENSE_PASSPHRASE`. Pick one and alias.
 
 ## Backend refactoring (nice-to-have)
 
