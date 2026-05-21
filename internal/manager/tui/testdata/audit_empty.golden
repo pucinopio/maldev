@@ -1,0 +1,48 @@
+ license-manager                                                                                     oioio-space/maldev 
+  1 Dashboard    2 Licenses    3 Issuers    4 Recipients    5 Identities    6 Revocation    7 Servers    8 Audit    9   
+Settings                                                                                                                
+                                                                                                       ───────────      
+ ┌─────┐                                                                                                                
+│ all │                                                                                                                 
+└─────┘ ┌───────────┐                                                                                                   
+│ license.* │                                                                                                           
+└───────────┘ ┌───────┐                                                                                                 
+│ key.* │                                                                                                               
+└───────┘ ┌─────────┐                                                                                                   
+│ probe.* │                                                                                                             
+└─────────┘                                                                                                             
+ TIMESTAMP             KIND                  ACTOR           TARGET            NOTE                                     
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+ f filter   d detail   r refresh   E export CSV   J export JSON                                                         

@@ -1,0 +1,228 @@
+package tui
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/charmbracelet/bubbles/table"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/oioio-space/maldev/internal/manager/service"
+	"github.com/oioio-space/maldev/internal/manager/store/ent"
+)
+
+// RecipientsLoadedMsg carries the result of fetching all recipient keys.
+type RecipientsLoadedMsg struct {
+	Rows []*ent.RecipientKey
+	Err  error
+}
+
+type recipientsModel struct {
+	svc    *service.Services
+	rows   []*ent.RecipientKey
+	err    error
+	table  table.Model
+	detail bool
+	width  int
+	hgt    int
+}
+
+func newRecipientsModel(svc *service.Services) recipientsModel {
+	cols := []table.Column{
+		{Title: "KEYID", Width: 20},
+		{Title: "NAME", Width: 28},
+		{Title: "CREATED", Width: 12},
+		{Title: "#SEALED", Width: 8},
+	}
+	t := table.New(
+		table.WithColumns(cols),
+		table.WithFocused(false),
+		table.WithHeight(15),
+		table.WithStyles(licTableStyles()),
+	)
+	return recipientsModel{svc: svc, table: t}
+}
+
+func listRecipientsCmd(svc *service.Services) tea.Cmd {
+	return func() tea.Msg {
+		if svc == nil {
+			return RecipientsLoadedMsg{}
+		}
+		rows, err := svc.Recipient.List(context.Background())
+		return RecipientsLoadedMsg{Rows: rows, Err: err}
+	}
+}
+
+func (m recipientsModel) Init() tea.Cmd { return listRecipientsCmd(m.svc) }
+
+func (m recipientsModel) Update(msg tea.Msg) (recipientsModel, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.hgt = msg.Height
+		m.rebuildTable()
+		return m, nil
+
+	case RecipientsLoadedMsg:
+		m.err = msg.Err
+		m.rows = msg.Rows
+		m.rebuildTable()
+		return m, nil
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "d":
+			m.detail = !m.detail
+			return m, nil
+
+		case "n":
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newInputOverlay("recipient-name", "New Recipient Key", "name (e.g. customer-acme)", 80)}
+			}
+
+		case "E":
+			row := m.selectedRow()
+			if row == nil {
+				return m, nil
+			}
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newInputOverlay("recipient-export-pub", "Export Public Key", "/path/to/recipient.pub", 256)}
+			}
+
+		case "x":
+			row := m.selectedRow()
+			if row == nil {
+				return m, nil
+			}
+			sub := fmt.Sprintf("Delete recipient key %q?\nThis cannot be undone.", row.Name)
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newConfirmOverlay("recipient-delete", "Delete Recipient", sub, "delete", "cancel", true)}
+			}
+
+		case "r":
+			return m, listRecipientsCmd(m.svc)
+		}
+	}
+	var cmd tea.Cmd
+	m.table, cmd = m.table.Update(msg)
+	return m, cmd
+}
+
+func (m *recipientsModel) selectedRow() *ent.RecipientKey {
+	idx := m.table.Cursor()
+	if idx < 0 || idx >= len(m.rows) {
+		return nil
+	}
+	return m.rows[idx]
+}
+
+func (m *recipientsModel) rebuildTable() {
+	rows := make([]table.Row, 0, len(m.rows))
+	for _, r := range m.rows {
+		keyID := fmt.Sprintf("%x", r.PublicKey)
+		if len(keyID) > 18 {
+			keyID = keyID[:18]
+		}
+		created := r.CreatedAt.Format("2006-01-02")
+		rows = append(rows, table.Row{keyID, r.Name, created, "—"})
+	}
+	tableH := m.hgt - 6
+	if m.detail {
+		tableH = tableH / 2
+	}
+	if tableH < 3 {
+		tableH = 3
+	}
+	m.table.SetRows(rows)
+	m.table.SetHeight(tableH)
+}
+
+func (m recipientsModel) View() string {
+	body := m.table.View()
+	if m.detail {
+		body = lipgloss.JoinVertical(lipgloss.Left, body, m.renderDetail())
+	}
+	if m.err != nil {
+		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
+	}
+	hints := []string{"n", "new", "E", "export pub", "x", "delete", "d", "detail", "r", "refresh"}
+	return lipgloss.JoinVertical(lipgloss.Left, body, renderStatusBar(hints, m.width))
+}
+
+func (m recipientsModel) renderDetail() string {
+	row := m.selectedRow()
+	if row == nil {
+		return Dim.Render("  no selection")
+	}
+	pubHex := fmt.Sprintf("%x", row.PublicKey)
+	lines := []string{
+		fmt.Sprintf("  %-14s %s", "name:", row.Name),
+		fmt.Sprintf("  %-14s %s", "public-key:", pubHex),
+		fmt.Sprintf("  %-14s %s", "created:", row.CreatedAt.Format(time.RFC3339)),
+		fmt.Sprintf("  %-14s %s", "db-id:", row.ID.String()),
+	}
+	return BoxStyle.Width(m.width - 2).Render(strings.Join(lines, "\n"))
+}
+
+// handleRecipientInputResult processes overlay results for the recipients screen.
+func (m recipientsModel) handleRecipientInputResult(res InputResultMsg) (recipientsModel, tea.Cmd) {
+	switch res.ID {
+	case "recipient-name":
+		if m.svc == nil {
+			return m, nil
+		}
+		name := res.Value
+		return m, func() tea.Msg {
+			_, err := m.svc.Recipient.Generate(context.Background(), name, "operator")
+			if err != nil {
+				return RecipientsLoadedMsg{Err: err}
+			}
+			rows, err := m.svc.Recipient.List(context.Background())
+			return RecipientsLoadedMsg{Rows: rows, Err: err}
+		}
+
+	case "recipient-export-pub":
+		row := m.selectedRow()
+		if row == nil || m.svc == nil {
+			return m, nil
+		}
+		id := row.ID
+		path := res.Value
+		return m, func() tea.Msg {
+			pub, err := m.svc.Recipient.ExportPublic(context.Background(), id)
+			if err != nil {
+				return pushOverlayMsg{newErrorOverlay("Export Error", err.Error())}
+			}
+			if err := os.WriteFile(path, pub, 0o600); err != nil {
+				return pushOverlayMsg{newErrorOverlay("Write Error", err.Error())}
+			}
+			rows, err := m.svc.Recipient.List(context.Background())
+			return RecipientsLoadedMsg{Rows: rows, Err: err}
+		}
+	}
+	return m, nil
+}
+
+// handleRecipientConfirmResult processes confirm overlay results.
+func (m recipientsModel) handleRecipientConfirmResult(res ConfirmResultMsg) (recipientsModel, tea.Cmd) {
+	if res.ID == "recipient-delete" && res.Confirm {
+		row := m.selectedRow()
+		if row == nil || m.svc == nil {
+			return m, nil
+		}
+		id := row.ID
+		return m, func() tea.Msg {
+			err := m.svc.Recipient.Delete(context.Background(), id, "operator")
+			if err != nil {
+				return RecipientsLoadedMsg{Err: err}
+			}
+			rows, err := m.svc.Recipient.List(context.Background())
+			return RecipientsLoadedMsg{Rows: rows, Err: err}
+		}
+	}
+	return m, nil
+}

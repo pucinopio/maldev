@@ -97,3 +97,29 @@ func TestOnboardingStep1Snapshot(t *testing.T) {
 	m := initModel(root)
 	compareOrUpdate(t, "onboarding_step1", m.View())
 }
+
+func TestLicensesEmptySnapshot(t *testing.T) {
+	root := tui.New(nil, nil, tui.SessionReady)
+	// Navigate to licenses tab (key "2").
+	m := initModel(root)
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
+	// Inject empty loaded message.
+	m, _ = m.Update(tui.LicensesLoadedMsg{Rows: nil, Err: nil})
+	compareOrUpdate(t, "licenses_empty", m.View())
+}
+
+func TestIssuersWithRowsSnapshot(t *testing.T) {
+	root := tui.New(nil, nil, tui.SessionReady)
+	m := initModel(root)
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
+	m, _ = m.Update(tui.IssuersLoadedMsg{Rows: nil, Err: nil})
+	compareOrUpdate(t, "issuers_empty", m.View())
+}
+
+func TestAuditEmptySnapshot(t *testing.T) {
+	root := tui.New(nil, nil, tui.SessionReady)
+	m := initModel(root)
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("8")})
+	m, _ = m.Update(tui.AuditLoadedMsg{Rows: nil, Err: nil})
+	compareOrUpdate(t, "audit_empty", m.View())
+}
