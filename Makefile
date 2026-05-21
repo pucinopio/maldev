@@ -1,82 +1,180 @@
-# maldev build pipeline
-# Usage:
-#   make build          # standard build (development)
-#   make release        # OPSEC build (garble + strip + trimpath)
-#   make test           # run all tests
-#   make test-intrusive # run intrusive tests (shellcode execution)
-#   make cross-linux    # cross-compile for Linux amd64
+# maldev build pipeline — cross-platform (Linux / macOS / Windows w/ Git-Bash, WSL, or MSYS2)
+#
+# Quick reference:
+#   make tools           build every cmd/* into ./bin/
+#   make <tool>          build one utility (e.g. make license-manager, make packer)
+#   make build           rshell -> $(BINARY) at repo root (legacy default)
+#   make release         OPSEC rshell build (garble + strip + trimpath)
+#   make debug           debug-tagged rshell build with logging enabled
+#   make test            non-intrusive test suite
+#   make test-intrusive  shellcode-execution tests (MALDEV_INTRUSIVE=1)
+#   make verify          build + test + Linux cross-build smoke
+#   make cross-linux     cross-compile rshell for Linux amd64
+#   make cross-tools     build every tool for Linux amd64 into ./bin/linux/
+#   make packer-demo     run the packer elevation tour (Linux-only)
+#   make clean           rm bin/, implant_linux, stray *.exe
+#   make help            print this help
+#
+# Windows note: needs GNU make + a POSIX-ish shell (Git-Bash, WSL, MSYS2).
+# Native cmd.exe is not supported.
 
-BINARY   ?= implant.exe
-CMD      ?= ./cmd/rshell
+# ── Host OS detection ────────────────────────────────────────────────────────
+ifeq ($(OS),Windows_NT)
+    EXE      := .exe
+    HOST_OS  := windows
+else
+    EXE      :=
+    HOST_OS  := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+endif
+
+# ── Flags ────────────────────────────────────────────────────────────────────
+BIN      ?= bin
 GOFLAGS  := -trimpath
-LDFLAGS  := -s -w -H windowsgui -buildid=
+LDFLAGS  := -s -w -buildid=
 TAGS     ?=
 
-# Standard development build
-.PHONY: build
+# rshell is a GUI implant — hide the console window on Windows builds.
+RSHELL_LDFLAGS := $(LDFLAGS) -H windowsgui
+
+# Legacy rshell-only default (preserved for backwards compatibility).
+BINARY   ?= implant$(EXE)
+CMD      ?= ./cmd/rshell
+
+# ── Tools matrix ─────────────────────────────────────────────────────────────
+# All cmd/ subdirectories worth shipping. Add new ones here.
+TOOLS := \
+    bof-runner \
+    bundle-launcher \
+    cert-snapshot \
+    hashgen \
+    license-manager \
+    license-test \
+    memscan-harness \
+    memscan-mcp \
+    memscan-server \
+    packer \
+    packer-vis \
+    packerscope \
+    privesc-e2e \
+    rshell \
+    sleepmask-demo \
+    test-report \
+    vmtest
+
+.PHONY: all build tools release debug test test-intrusive verify cross-linux \
+        cross-tools install-garble packer-demo clean help $(TOOLS) \
+        $(addprefix cross-,$(TOOLS))
+
+# ── Default target ───────────────────────────────────────────────────────────
+all: tools
+
+help:
+	@echo "Targets:"
+	@echo "  make tools           build every cmd/* into ./$(BIN)/"
+	@echo "  make <tool>          build one utility into ./$(BIN)/  (see list below)"
+	@echo "  make build           rshell -> $(BINARY) (legacy)"
+	@echo "  make release         OPSEC rshell build (garble)"
+	@echo "  make test            run all tests"
+	@echo "  make test-intrusive  run intrusive tests"
+	@echo "  make verify          build + test + Linux cross-build"
+	@echo "  make cross-linux     rshell for Linux amd64"
+	@echo "  make cross-tools     all tools for Linux amd64 (./$(BIN)/linux/)"
+	@echo "  make packer-demo     packer elevation tour (Linux-only)"
+	@echo "  make clean           remove $(BIN)/ and stray binaries"
+	@echo ""
+	@echo "Tools: $(TOOLS)"
+
+# ── Output directory ─────────────────────────────────────────────────────────
+$(BIN):
+	@mkdir -p $(BIN)
+
+$(BIN)/linux: | $(BIN)
+	@mkdir -p $(BIN)/linux
+
+# ── Per-tool build targets ───────────────────────────────────────────────────
+# Each $(t) target builds ./cmd/$(t) → ./$(BIN)/$(t)[.exe]
+# rshell gets the Windows GUI ldflag; everything else takes plain LDFLAGS.
+define TOOL_template
+$(1): | $$(BIN)
+	@echo "build $(1) -> $$(BIN)/$(1)$$(EXE)"
+	@go build $$(GOFLAGS) \
+		-ldflags="$$(if $$(filter rshell,$(1)),$$(RSHELL_LDFLAGS),$$(LDFLAGS))" \
+		-tags="$$(TAGS)" \
+		-o $$(BIN)/$(1)$$(EXE) ./cmd/$(1)
+endef
+$(foreach t,$(TOOLS),$(eval $(call TOOL_template,$(t))))
+
+# Build every tool.
+tools: $(TOOLS)
+	@echo "$(words $(TOOLS)) tools built into $(BIN)/"
+
+# ── Linux cross-build matrix ─────────────────────────────────────────────────
+# Each cross-$(t) target builds ./cmd/$(t) for linux/amd64 → ./$(BIN)/linux/$(t)
+# rshell drops the Windows-only -H windowsgui flag on Linux.
+define CROSS_template
+cross-$(1): | $$(BIN)/linux
+	@echo "cross-build $(1) -> $$(BIN)/linux/$(1)"
+	@GOOS=linux GOARCH=amd64 go build $$(GOFLAGS) \
+		-ldflags="$$(LDFLAGS)" \
+		-tags="$$(TAGS)" \
+		-o $$(BIN)/linux/$(1) ./cmd/$(1)
+endef
+$(foreach t,$(TOOLS),$(eval $(call CROSS_template,$(t))))
+
+cross-tools: $(addprefix cross-,$(TOOLS))
+	@echo "$(words $(TOOLS)) tools cross-built for linux/amd64 into $(BIN)/linux/"
+
+# ── Legacy rshell-at-root targets ────────────────────────────────────────────
 build:
-	go build $(GOFLAGS) -ldflags="$(LDFLAGS)" -o $(BINARY) $(CMD)
+	go build $(GOFLAGS) -ldflags="$(RSHELL_LDFLAGS)" -o $(BINARY) $(CMD)
 
 # OPSEC release build (requires: go install mvdan.cc/garble@latest)
 # - garble: randomizes symbols, encrypts strings, strips pclntab info
-# - -literals: encrypts all string literals in the binary
-# - -tiny: removes extra runtime info (panic messages, print support)
+# - -literals: encrypts all string literals
+# - -tiny: removes panic messages + print runtime
 # - -seed=random: different obfuscation per build
-.PHONY: release
 release:
 	CGO_ENABLED=0 garble -literals -tiny -seed=random \
-		build $(GOFLAGS) -ldflags="$(LDFLAGS)" -tags="$(TAGS)" \
+		build $(GOFLAGS) -ldflags="$(RSHELL_LDFLAGS)" -tags="$(TAGS)" \
 		-o $(BINARY) $(CMD)
 
-# Debug build (with logging enabled)
-.PHONY: debug
 debug:
 	go build $(GOFLAGS) -tags=debug -ldflags="-s -w" -o $(BINARY) $(CMD)
 
-# Run all tests (non-intrusive)
-.PHONY: test
-test:
-	go test $$(go list ./... | grep -v /ignore) -count=1
-
-# Run intrusive tests (requires MALDEV_INTRUSIVE=1)
-.PHONY: test-intrusive
-test-intrusive:
-	MALDEV_INTRUSIVE=1 go test $$(go list ./... | grep -v /ignore) -count=1
-
-# Cross-compile for Linux
-.PHONY: cross-linux
 cross-linux:
-	GOOS=linux GOARCH=amd64 go build $(GOFLAGS) -ldflags="-s -w" -o implant_linux $(CMD)
+	GOOS=linux GOARCH=amd64 go build $(GOFLAGS) -ldflags="$(LDFLAGS)" -o implant_linux $(CMD)
 
-# Build all packages (verification)
-.PHONY: verify
+# ── Tests ────────────────────────────────────────────────────────────────────
+# `go list ./...` already skips ignore/ because it has no Go files,
+# but we keep the explicit guard for safety.
+test:
+	go test ./... -count=1
+
+test-intrusive:
+	MALDEV_INTRUSIVE=1 go test ./... -count=1
+
+# Full verification: host build + tests + Linux cross-build.
 verify:
-	go build $$(go list ./... | grep -v /ignore)
-	go test $$(go list ./... | grep -v /ignore) -count=1
-	GOOS=linux GOARCH=amd64 go build $$(go list ./... | grep -v /ignore)
+	go build ./...
+	go test ./... -count=1
+	GOOS=linux GOARCH=amd64 go build ./...
 	@echo "All checks passed."
 
-# Install garble
-.PHONY: install-garble
+# ── Tooling helpers ──────────────────────────────────────────────────────────
 install-garble:
 	go install mvdan.cc/garble@latest
 
-# Packer elevation tour — single-command demo of every shipped wrap
-# variant. Builds the 12-byte exit42 fixture, packs it 4 ways (raw
-# min-ELF, all-asm bundle wrap, Go launcher default, Go launcher
-# reflective), runs each, prints sizes + average entropy + exit codes.
-#
-# Operationally pedagogical: see every variant in one shell session.
-# See docs/examples/packer-elevation-tour.md for the prose
-# walk-through.
-.PHONY: packer-demo
+# Packer elevation tour — runs every shipped pack variant in one session
+# (raw min-ELF, all-asm bundle, Go launcher default, Go launcher reflective).
+# Linux-only because it uses memfd / static-PIE.
 packer-demo:
 	@if [ "$$(uname)" != "Linux" ]; then \
 	  echo "packer-demo: Linux-only (uses memfd / static-PIE)."; exit 1; \
 	fi
 	@bash scripts/packer-demo.sh
 
-# Clean
-.PHONY: clean
+# ── Clean ────────────────────────────────────────────────────────────────────
 clean:
-	rm -f $(BINARY) implant_linux *.exe
+	@rm -rf $(BIN) implant_linux 2>/dev/null || true
+	@rm -f *.exe 2>/dev/null || true
+	@echo "cleaned $(BIN)/ + stray binaries"
