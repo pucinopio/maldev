@@ -10,31 +10,31 @@
 │                                                                                                                       
 │                                                           │ │                                                         
 │                                                                                                                       
-│ default_issuer_name                                       │ │ ┌──────────────────────────────┐                        
+│ default_issuer_name                                       │ │    [1]  fast (t=2 m=64MiB p=1)                          
 │                                                                                                                       
-│ default_audience                                          │ │ │  [1]  fast (t=2 m=64MiB p=1) │                        
+│ default_audience                                          │ │    [2]  default (t=3 m=256MiB p=2)                      
 │                                                                                                                       
-│ default_ttl_seconds   0 s                                 │ │ └──────────────────────────────┘                        
+│ default_ttl_seconds   0 s                                 │ │    [3]  paranoid (t=4 m=512MiB p=2)                     
 │                                                                                                                       
-│ default_keyid         active                              │ │ ┌──────────────────────────────────┐                    
-│                                                                                                                       
-└───────────────────────────────────────────────────────────┘ │ │  [2]  default (t=3 m=256MiB p=2) │                    
-│                                                                                                                       
-┌───────────────────────────────────────────────────────────┐ │ └──────────────────────────────────┘                    
-│                                                                                                                       
-│ Identité opérateur (audit actor)                          │ │ ┌───────────────────────────────────┐                   
-│                                                                                                                       
-│                                                           │ │ │  [3]  paranoid (t=4 m=512MiB p=2) │                   
-│                                                                                                                       
-│ operator_name                                             │ │ └───────────────────────────────────┘                   
-│                                                                                                                       
-│ Toutes les entries Audit sont taguées avec cette valeur.  │ │ Coût à la vérification côté binaire. paranoid ≈ 2.5s sur
+│ default_keyid         active                              │ │ Coût à la vérification côté binaire. paranoid ≈ 2.5s sur
 │                                                                                                                       
 └───────────────────────────────────────────────────────────┘ │ un i7.                                                  
 │                                                                                                                       
 ┌───────────────────────────────────────────────────────────┐                                                           
 └───────────────────────────────────────────────────────────┘                                                           
-│ Cycle de vie serveurs HTTP                                │                                                           
+│ Identité opérateur (audit actor)                          │                                                           
 ┌───────────────────────────────────────────────────────────┐                                                           
 │                                                           │ │ Base de données                                         
+│                                                                                                                       
+│ operator_name                                             │ │                                                         
+│                                                                                                                       
+│ Toutes les entries Audit sont taguées avec cette valeur.  │ │ chemin                ~/.config/license-                
+manager/db.sqlite │                                                                                                     
+└───────────────────────────────────────────────────────────┘ │ passphrase            résolue via                       
+│                                                                                                                       
+┌───────────────────────────────────────────────────────────┐ │ MALDEV_MGR_PASSPHRASE_FILE / env                        
+│                                                                                                                       
+│ Cycle de vie serveurs HTTP                                │ │                                                         
+│                                                                                                                       
+│                                                           │ │  [P]  changer la passphrase (rekey complet en           
 r rafraîchir  P passphrase  V vacuum  B backup  q quitter                                                        ~ tour 

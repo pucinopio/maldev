@@ -148,16 +148,22 @@ func (m settingsModel) boxArgonPreset(w int, r *ent.Setting) string {
 		{"2", "default (t=3 m=256MiB p=2)", setting.DefaultArgonPresetDefault},
 		{"3", "paranoid (t=4 m=512MiB p=2)", setting.DefaultArgonPresetParanoid},
 	}
-	var chips []string
+	// Borderless preset rows. Embedding bordered chips here breaks the parent
+	// box's row count (lipgloss line-wrap on inner borders) and produces the
+	// well-known staircase against the left column.
+	activeStyle := lipgloss.NewStyle().Foreground(Palette.Green).Bold(true)
+	inactiveStyle := lipgloss.NewStyle().Foreground(Palette.FgMute)
+	var rows []string
 	for _, p := range presets {
-		label := HintKey.Render("["+p.key+"]") + " " + p.label
+		marker := inactiveStyle.Render(" ")
+		labelStyle := inactiveStyle
 		if r.DefaultArgonPreset == p.v {
-			chips = append(chips, PillActive.Render(label))
-		} else {
-			chips = append(chips, PillOff.Render(label))
+			marker = activeStyle.Render("●")
+			labelStyle = activeStyle
 		}
+		rows = append(rows, marker+" "+HintKey.Render("["+p.key+"]")+" "+labelStyle.Render(p.label))
 	}
-	body := strings.Join(chips, "\n") + "\n" +
+	body := strings.Join(rows, "\n") + "\n" +
 		Dim.Render("Coût à la vérification côté binaire. paranoid ≈ 2.5s sur un i7.")
 	return settingsBox(w, "default_argon_preset (binding password)", body)
 }
@@ -193,12 +199,15 @@ func (m settingsModel) boxCycleVieServeurs(w int, r *ent.Setting) string {
 }
 
 func (m settingsModel) boxApparence(w int) string {
+	// Borderless theme markers (same reason as boxArgonPreset).
+	activeStyle := lipgloss.NewStyle().Foreground(Palette.Green).Bold(true)
+	inactiveStyle := lipgloss.NewStyle().Foreground(Palette.FgMute)
 	themes := []string{
-		PillActive.Render(HintKey.Render("[1]") + " neon"),
-		PillOff.Render(HintKey.Render("[2]") + " mono"),
-		PillOff.Render(HintKey.Render("[3]") + " nord-soft"),
+		activeStyle.Render("●") + " " + HintKey.Render("[1]") + " " + activeStyle.Render("neon"),
+		inactiveStyle.Render(" ") + " " + HintKey.Render("[2]") + " " + inactiveStyle.Render("mono"),
+		inactiveStyle.Render(" ") + " " + HintKey.Render("[3]") + " " + inactiveStyle.Render("nord-soft"),
 	}
-	body := Dim.Render("thème : ") + strings.Join(themes, " ") + "\n" +
+	body := Dim.Render("thème : ") + strings.Join(themes, "  ") + "\n" +
 		settingsToggle("bold + couleur saturée (équivalent glow en TUI)", true) + "\n" +
 		settingsToggle("densité confort (+1 ligne de padding partout)", false) + "\n" +
 		settingsToggle("show timestamps en local au lieu d'UTC", false)

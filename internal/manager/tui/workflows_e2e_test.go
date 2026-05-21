@@ -2380,8 +2380,8 @@ func TestE2E_ErrorOverlayHasCrossPrefix(t *testing.T) {
 	if !strings.Contains(got, "✗") {
 		t.Error("ErrorOverlay: '✗' prefix not found in view")
 	}
-	if !strings.Contains(got, "fermer") {
-		t.Error("ErrorOverlay: 'fermer' dismiss hint not found in view")
+	if !strings.Contains(got, "Fermer") {
+		t.Error("ErrorOverlay: 'Fermer' dismiss button not found in view")
 	}
 }
 
@@ -2406,8 +2406,8 @@ func TestE2E_ConfirmOverlayDangerTitleRed(t *testing.T) {
 	}
 	// Danger variant must use the red border style (ModalDanger).
 	// We can't inspect ANSI codes easily, but we can confirm the hints are present.
-	if !strings.Contains(got, "y/↵") {
-		t.Error("ConfirmOverlayDanger: 'y/↵' hint not found in view")
+	if !strings.Contains(got, "[↵]") || !strings.Contains(got, "[esc]") {
+		t.Error("ConfirmOverlayDanger: expected `[↵]` and `[esc]` button hotkeys in view")
 	}
 }
 
@@ -2515,3 +2515,65 @@ func TestE2E_HelpOverlayInEachView(t *testing.T) {
 		})
 	}
 }
+
+// TestE2E_HelpOverlayOpensOnQuestionMark guards that "?" pushes the help overlay.
+func TestE2E_HelpOverlayOpensOnQuestionMark(t *testing.T) {
+	var m tea.Model = New(nil, nil, SessionReady)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = driveRune(m, '?')
+	r := rootOf(t, m)
+	if len(r.overlays) != 1 {
+		t.Fatalf("expected 1 overlay after '?', got %d", len(r.overlays))
+	}
+	view := m.View()
+	if !strings.Contains(view, "Aide") {
+		t.Errorf("help overlay view missing 'Aide': %q", view[:min1(400, len(view))])
+	}
+	// Esc inside the overlay schedules OverlayDoneMsg; route it through Update.
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd != nil {
+		if msg := cmd(); msg != nil {
+			updated, _ = updated.Update(msg)
+		}
+	}
+	m = updated
+	r = rootOf(t, m)
+	if len(r.overlays) != 0 {
+		t.Errorf("expected overlay dismissed after esc, got %d", len(r.overlays))
+	}
+}
+
+// TestE2E_TabCyclesViews guards Tab / Shift-Tab cycling with wrap-around.
+func TestE2E_TabCyclesViews(t *testing.T) {
+	var m tea.Model = New(nil, nil, SessionReady)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	r := rootOf(t, m)
+	if r.active != ViewDashboard {
+		t.Fatalf("expected start at Dashboard, got %s", r.active)
+	}
+	m = driveKey(m, tea.KeyTab)
+	if r = rootOf(t, m); r.active != ViewLicenses {
+		t.Fatalf("expected Licenses after Tab, got %s", r.active)
+	}
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	if r = rootOf(t, m); r.active != ViewDashboard {
+		t.Fatalf("expected Dashboard after Shift-Tab, got %s", r.active)
+	}
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	if r = rootOf(t, m); r.active != ViewSettings {
+		t.Fatalf("expected wrap to Settings, got %s", r.active)
+	}
+	m = driveKey(m, tea.KeyTab)
+	if r = rootOf(t, m); r.active != ViewDashboard {
+		t.Fatalf("expected wrap to Dashboard, got %s", r.active)
+	}
+}
+
+func min1(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+

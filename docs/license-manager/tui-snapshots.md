@@ -75,7 +75,7 @@ injects via `cmds.DashboardSnapshotMsg`. Fields:
        |onboarding|onboarding-step<0-3>|passphrase
        |wizard|wizard-step<1-8>
        |overlay-confirm|overlay-confirm-danger|overlay-error|overlay-quit|overlay-quit-servers
-       |overlay-revoke|overlay-input|overlay-qr|overlay-filepicker
+       |overlay-revoke|overlay-input|overlay-qr|overlay-filepicker|overlay-help
 -width  144   terminal width in cells
 -height 44    terminal height in cells
 -seed   path  seed JSON file (optional, dashboard only)

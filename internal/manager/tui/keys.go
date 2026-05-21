@@ -4,17 +4,19 @@ import "github.com/charmbracelet/bubbles/key"
 
 // KeyMap holds the global keybindings active in every view.
 type KeyMap struct {
-	Quit   key.Binding
-	Help   key.Binding
-	Tab1   key.Binding
-	Tab2   key.Binding
-	Tab3   key.Binding
-	Tab4   key.Binding
-	Tab5   key.Binding
-	Tab6   key.Binding
-	Tab7   key.Binding
-	Tab8   key.Binding
-	Tab9   key.Binding
+	Quit    key.Binding
+	Help    key.Binding
+	NextTab key.Binding
+	PrevTab key.Binding
+	Tab1 key.Binding
+	Tab2 key.Binding
+	Tab3 key.Binding
+	Tab4 key.Binding
+	Tab5 key.Binding
+	Tab6 key.Binding
+	Tab7 key.Binding
+	Tab8 key.Binding
+	Tab9 key.Binding
 }
 
 func newKeyMap() KeyMap {
@@ -26,6 +28,14 @@ func newKeyMap() KeyMap {
 		Help: key.NewBinding(
 			key.WithKeys("?"),
 			key.WithHelp("?", "help"),
+		),
+		NextTab: key.NewBinding(
+			key.WithKeys("tab"),
+			key.WithHelp("tab", "onglet suivant"),
+		),
+		PrevTab: key.NewBinding(
+			key.WithKeys("shift+tab"),
+			key.WithHelp("shift+tab", "onglet précédent"),
 		),
 		Tab1: key.NewBinding(key.WithKeys("1"), key.WithHelp("1", "dashboard")),
 		Tab2: key.NewBinding(key.WithKeys("2"), key.WithHelp("2", "licenses")),

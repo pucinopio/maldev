@@ -229,6 +229,16 @@ func TestNewQuitOverlayRenders(t *testing.T) {
 	}
 }
 
+func TestNewHelpOverlayRenders(t *testing.T) {
+	o := tui.NewHelpOverlay()
+	out := o.View()
+	for _, want := range []string{"Aide", "Universel", "Formulaires", "Tab", "⇧Tab", "Détail licence"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("help overlay missing %q in: %q", want, out[:min(400, len(out))])
+		}
+	}
+}
+
 func TestNewInputOverlayRenders(t *testing.T) {
 	o := tui.NewInputOverlay("id", "Nommer la ressource", "e.g. prod-2026", 80)
 	out := o.View()

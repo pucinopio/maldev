@@ -47,6 +47,23 @@ const (
 // Populated by chrome.go's init() from tabDefs so the two stay in sync.
 var viewOrder []ViewID
 
+// nextView returns the ViewID dir steps from cur in viewOrder, wrapping around.
+// dir is +1 (Tab) or -1 (Shift-Tab). Falls back to cur when viewOrder is empty.
+func nextView(cur ViewID, dir int) ViewID {
+	if len(viewOrder) == 0 {
+		return cur
+	}
+	idx := 0
+	for i, v := range viewOrder {
+		if v == cur {
+			idx = i
+			break
+		}
+	}
+	idx = (idx + dir + len(viewOrder)) % len(viewOrder)
+	return viewOrder[idx]
+}
+
 // rootModel is the top-level bubbletea model. It owns the session state,
 // overlay stack, and all per-view sub-models.
 type rootModel struct {
@@ -293,6 +310,12 @@ func (m rootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
+	case "tab":
+		m.active = nextView(m.active, +1)
+		return m, m.initScreen(m.active)
+	case "shift+tab":
+		m.active = nextView(m.active, -1)
+		return m, m.initScreen(m.active)
 	case "q":
 		serversRunning := m.httpsrv != nil
 		if serversRunning {
@@ -302,8 +325,8 @@ func (m rootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case "?":
-		// Help overlay — Phase 2 placeholder.
-		return m, nil
+		m.overlays = append(m.overlays, NewHelpOverlay())
+		return m, m.overlays[len(m.overlays)-1].Init()
 
 	case "r":
 		if m.active == ViewDashboard && m.session == SessionReady {

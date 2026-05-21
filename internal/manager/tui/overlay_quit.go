@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -18,11 +17,6 @@ func newQuitOverlay(serversRunning bool) *quitOverlay {
 	return &quitOverlay{serversRunning: serversRunning}
 }
 
-var (
-	quitConfirmKey = key.NewBinding(key.WithKeys("y", "Y"), key.WithHelp("y", "yes, quit"))
-	quitCancelKey  = key.NewBinding(key.WithKeys("n", "N", "esc", "q"), key.WithHelp("n/esc", "cancel"))
-)
-
 func (o *quitOverlay) Init() tea.Cmd { return nil }
 
 func (o *quitOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
@@ -30,10 +24,10 @@ func (o *quitOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 	if !ok {
 		return o, nil
 	}
-	switch {
-	case key.Matches(km, quitConfirmKey):
+	switch km.String() {
+	case "y", "Y", "enter":
 		return o, func() tea.Msg { return OverlayDoneMsg{Result: true} }
-	case key.Matches(km, quitCancelKey):
+	case "n", "N", "esc", "q":
 		return o, func() tea.Msg { return OverlayDoneMsg{Result: false} }
 	}
 	return o, nil
@@ -60,11 +54,18 @@ func (o *quitOverlay) View() string {
 		)
 	}
 
-	bodyLines = append(bodyLines,
-		"",
-		HintKey.Render("y/↵") + HintText.Render(" Arrêter & quitter   ") +
-			HintKey.Render("n/esc") + HintText.Render(" Annuler"),
+	const innerW = 52
+	confirmLabel := "Quitter"
+	confirmKind := btnPrimary
+	if o.serversRunning {
+		confirmLabel = "Arrêter & quitter"
+		confirmKind = btnDanger
+	}
+	footer := renderButtons(innerW,
+		button{label: "Annuler", hotkey: "esc", kind: btnNeutral},
+		button{label: confirmLabel, hotkey: "↵", kind: confirmKind, focused: true},
 	)
+	bodyLines = append(bodyLines, "", footer)
 
 	content := title + "\n\n" + lipgloss.JoinVertical(lipgloss.Left, bodyLines...)
 

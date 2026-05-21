@@ -51,7 +51,9 @@ func (o *errorOverlay) View() string {
 			Padding(0, 1).
 			Render(o.details)
 	}
-	content += "\n\n" +
-		HintKey.Render("↵/esc") + HintText.Render(" fermer")
+	const innerW = 52
+	content += "\n\n" + renderButtons(innerW, button{
+		label: "Fermer", hotkey: "↵", kind: btnDanger, focused: true,
+	})
 	return lipgloss.Place(58, 14, lipgloss.Center, lipgloss.Center, ModalDanger.Render(content))
 }

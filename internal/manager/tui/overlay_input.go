@@ -59,9 +59,12 @@ func (o *inputOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 }
 
 func (o *inputOverlay) View() string {
+	const innerW = 48
+	footer := renderButtons(innerW,
+		button{label: "Annuler", hotkey: "esc", kind: btnNeutral},
+		button{label: "Confirmer", hotkey: "↵", kind: btnPrimary, focused: true},
+	)
 	content := GlowMagent.Render(o.title) + "\n\n" +
-		o.input.View() + "\n\n" +
-		HintKey.Render("enter") + HintText.Render(" confirm   ") +
-		HintKey.Render("esc") + HintText.Render(" cancel")
+		o.input.View() + "\n\n" + footer
 	return lipgloss.Place(54, 12, lipgloss.Center, lipgloss.Center, Modal.Render(content))
 }

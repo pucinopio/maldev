@@ -191,6 +191,8 @@ func overlayForView(view string, w, h int) tui.Overlay {
 		return tui.NewInputOverlay("snap-input", "Nommer la ressource", "e.g. prod-2026-Q3", 80)
 	case "overlay-qr":
 		return tui.NewQROverlay(nil)
+	case "overlay-help":
+		return tui.NewHelpOverlay()
 	case "overlay-filepicker":
 		// newFilePickerOverlay reads the filesystem; it's unexported so we trigger
 		// it through the root model by navigating to the binary wizard step.

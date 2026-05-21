@@ -66,10 +66,17 @@ func (o *confirmOverlay) View() string {
 	} else {
 		title = GlowMagent.Render(o.title)
 	}
-	content := title + "\n\n" +
-		Dim.Render(o.body) + "\n\n" +
-		HintKey.Render("y/↵") + HintText.Render(" "+o.confirmLabel+"   ") +
-		HintKey.Render("n/esc") + HintText.Render(" "+o.cancelLabel)
+	const innerW = 48
+	confirmKind := btnPrimary
+	if o.danger {
+		confirmKind = btnDanger
+	}
+	footer := renderButtons(innerW, button{
+		label: o.cancelLabel, hotkey: "esc", kind: btnNeutral,
+	}, button{
+		label: o.confirmLabel, hotkey: "↵", kind: confirmKind, focused: true,
+	})
+	content := title + "\n\n" + Dim.Render(o.body) + "\n\n" + footer
 
 	style := Modal
 	if o.danger {

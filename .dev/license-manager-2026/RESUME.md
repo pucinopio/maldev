@@ -143,6 +143,17 @@ Tag: `v0.166.0` at `76cf8ea`
 
 - [ ] Wizard 8 steps — visual polish per prototype
 - [ ] Onboarding screen — match prototype
-- [ ] Overlay polish (confirm, error, revoke, QR, file-picker)
-- [ ] Settings grid — fix right-column box height alignment
-- [ ] Context-aware status bar hints per screen
+- [x] Overlay polish (confirm, error, revoke, input, quit) — Session 0003, `renderButtons` helper, right-aligned styled buttons. QR/file-picker not yet polished.
+- [~] Settings grid — argon/theme inner-chip borders removed (compounded the staircase); root cause (lipgloss line-wrap of long inline text) still pending a full layout pass with per-box equal-height padding.
+- [x] Context-aware status bar hints per screen — shipped in `bca2e84` (P5)
+
+## Session 0003 — 2026-05-21
+
+| Feature | Where |
+|---|---|
+| Help overlay (`?`) | `internal/manager/tui/overlay_help.go` — `NewHelpOverlay`, wired in `app.go`, snap view `overlay-help` |
+| Tab / Shift-Tab cycle | `keys.go` + `app.go` `nextView` helper; wraps at ends |
+| Button-row polish | `internal/manager/tui/overlay_buttons.go` — `renderButtons` + `button{label,hotkey,kind,focused}`; refactored confirm/error/input/revoke/quit |
+| Settings inner-chip cleanup | `screen_settings.go` boxArgonPreset + boxApparence — borderless markers |
+
+Verification: `go test ./internal/manager/tui/... -count=1` PASS, `bin/tui-snap -view overlay-help` renders 2-column key matrix.
