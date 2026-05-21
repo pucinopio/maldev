@@ -166,6 +166,12 @@ func (m *issuersModel) rebuildTable() {
 	if tableH < 3 {
 		tableH = 3
 	}
+	// Collapse the table to its header row when empty so the empty-state hint
+	// added by View() sits directly under the header instead of being pushed
+	// off-screen by a full-height grid of blank rows.
+	if len(rows) == 0 {
+		tableH = 1
+	}
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
 	stretchLastColumn(&m.table, m.width)
@@ -173,6 +179,9 @@ func (m *issuersModel) rebuildTable() {
 
 func (m issuersModel) View() string {
 	body := m.table.View()
+	if hint := emptyTableHint(len(m.rows), m.width, "aucune clé d'émission — n pour créer la première"); hint != "" {
+		body = lipgloss.JoinVertical(lipgloss.Left, body, "", hint)
+	}
 	if m.detail {
 		body = lipgloss.JoinVertical(lipgloss.Left, body, m.renderDetail())
 	}

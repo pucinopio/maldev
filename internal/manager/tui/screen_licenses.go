@@ -114,6 +114,19 @@ func stretchLastColumn(t *table.Model, width int) {
 	t.SetColumns(cols)
 }
 
+// emptyTableHint returns a centered muted line shown under a table that has
+// no rows, hinting at the keybind that creates one. Returns "" when rows > 0.
+func emptyTableHint(rows int, width int, message string) string {
+	if rows > 0 || width <= 0 {
+		return ""
+	}
+	return lipgloss.NewStyle().
+		Width(width).
+		Align(lipgloss.Center).
+		Foreground(Palette.FgMute).
+		Render(message)
+}
+
 func licTableStyles() table.Styles {
 	s := table.DefaultStyles()
 	s.Header = s.Header.
@@ -298,6 +311,9 @@ func (m *licensesModel) rebuildTable() {
 	if tableH < 3 {
 		tableH = 3
 	}
+	if len(rows) == 0 {
+		tableH = 1
+	}
 
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
@@ -319,10 +335,14 @@ func (m licensesModel) View() string {
 		searchBar = " " + Dim.Render("/ to search")
 	}
 
+	tableView := m.table.View()
+	if hint := emptyTableHint(len(m.rows), m.width, "aucune licence — n pour en émettre une, ? pour l'aide"); hint != "" {
+		tableView = lipgloss.JoinVertical(lipgloss.Left, tableView, "", hint)
+	}
 	body := lipgloss.JoinVertical(lipgloss.Left,
 		chips,
 		searchBar,
-		m.table.View(),
+		tableView,
 	)
 
 	if m.detail {

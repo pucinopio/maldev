@@ -263,6 +263,9 @@ func (m *auditModel) rebuildTable() {
 	if tableH < 3 {
 		tableH = 3
 	}
+	if len(rows) == 0 {
+		tableH = 1
+	}
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
 	stretchLastColumn(&m.table, m.width)
@@ -332,7 +335,11 @@ func (m auditModel) View() string {
 	// calling visibleRows() again to avoid a second O(n) scan.
 	tableTitle := GlowCyan.Render(fmt.Sprintf("Audit (%d)", len(m.table.Rows()))) +
 		"  " + Dim.Render("[d] detail · [r] refresh · [pgup/pgdn] page")
-	tableBox := lipgloss.JoinVertical(lipgloss.Left, tableTitle, m.table.View())
+	tableBody := m.table.View()
+	if hint := emptyTableHint(len(m.table.Rows()), m.width, "aucun évènement — l'historique s'enrichit à chaque action"); hint != "" {
+		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", hint)
+	}
+	tableBox := lipgloss.JoinVertical(lipgloss.Left, tableTitle, tableBody)
 
 	body := lipgloss.JoinVertical(lipgloss.Left, chipBar, "", tableBox)
 

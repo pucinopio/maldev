@@ -164,6 +164,9 @@ func (m *identitiesModel) rebuildTable() {
 	if tableH < 3 {
 		tableH = 3
 	}
+	if len(rows) == 0 {
+		tableH = 1
+	}
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
 	stretchLastColumn(&m.table, m.width)
@@ -171,6 +174,9 @@ func (m *identitiesModel) rebuildTable() {
 
 func (m identitiesModel) View() string {
 	body := m.table.View()
+	if hint := emptyTableHint(len(m.rows), m.width, "aucune identité — émets une licence pour en créer une"); hint != "" {
+		body = lipgloss.JoinVertical(lipgloss.Left, body, "", hint)
+	}
 	if m.detail {
 		body = lipgloss.JoinVertical(lipgloss.Left, body, m.renderDetail())
 	}
