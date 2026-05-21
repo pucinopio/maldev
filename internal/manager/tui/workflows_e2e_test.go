@@ -1295,6 +1295,153 @@ func TestE2E_LicensesNewKeyOpensWizard(t *testing.T) {
 	// cmd is enough to prove the key is bound.
 }
 
+// ── Quit + error overlays ─────────────────────────────────────────────────────
+
+// TestE2E_QuitOverlayConfirmCancel — y/Y emits Result:true; n/N/esc/q emits
+// Result:false.
+func TestE2E_QuitOverlayConfirmCancel(t *testing.T) {
+	cases := []struct {
+		key   string
+		want  bool
+	}{
+		{"y", true}, {"Y", true},
+		{"n", false}, {"N", false},
+	}
+	for _, c := range cases {
+		c := c
+		t.Run(c.key, func(t *testing.T) {
+			ov := newQuitOverlay(false)
+			_, cmd := ov.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(c.key)})
+			if cmd == nil {
+				t.Fatalf("key %q must emit cmd", c.key)
+			}
+			done := cmd().(OverlayDoneMsg)
+			if got := done.Result.(bool); got != c.want {
+				t.Fatalf("key %q: Result=%v, want %v", c.key, got, c.want)
+			}
+		})
+	}
+	// Esc → cancel
+	ov := newQuitOverlay(false)
+	_, cmd := ov.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd == nil || cmd().(OverlayDoneMsg).Result.(bool) != false {
+		t.Fatal("Esc must emit Result:false")
+	}
+}
+
+// TestE2E_ErrorOverlayCloseKeys — esc/enter/q all dismiss with nil Result.
+func TestE2E_ErrorOverlayCloseKeys(t *testing.T) {
+	tests := []tea.KeyMsg{
+		{Type: tea.KeyEsc},
+		{Type: tea.KeyEnter},
+		{Type: tea.KeyRunes, Runes: []rune{'q'}},
+	}
+	for i, km := range tests {
+		ov := newErrorOverlay("title", "msg")
+		_, cmd := ov.Update(km)
+		if cmd == nil {
+			t.Fatalf("case %d: must emit cmd", i)
+		}
+		done := cmd().(OverlayDoneMsg)
+		if done.Result != nil {
+			t.Fatalf("case %d: Result must be nil, got %v", i, done.Result)
+		}
+	}
+}
+
+// ── Remaining screen list-loading paths ───────────────────────────────────────
+
+// TestE2E_IdentitiesScreenLoadsRows wires a seeded service into identitiesModel
+// and asserts rows populate via listIdentitiesCmd.
+func TestE2E_IdentitiesScreenLoadsRows(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+	if _, err := svc.Identity.Create(ctx, "alice@example.test", "operator"); err != nil {
+		t.Fatalf("Identity.Create: %v", err)
+	}
+	if _, err := svc.Identity.Create(ctx, "bob@example.test", "operator"); err != nil {
+		t.Fatalf("Identity.Create: %v", err)
+	}
+
+	im := newIdentitiesModel(svc)
+	im, _ = im.Update(listIdentitiesCmd(svc)())
+	if len(im.rows) != 2 {
+		t.Fatalf("identitiesModel.rows = %d, want 2", len(im.rows))
+	}
+}
+
+// TestE2E_RecipientsScreenLoadsRows wires a seeded service and asserts rows.
+func TestE2E_RecipientsScreenLoadsRows(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+	if _, err := svc.Recipient.Generate(ctx, "rec-a", "operator"); err != nil {
+		t.Fatalf("Recipient.Generate: %v", err)
+	}
+
+	rm := newRecipientsModel(svc)
+	rm, _ = rm.Update(listRecipientsCmd(svc)())
+	if len(rm.rows) != 1 {
+		t.Fatalf("recipientsModel.rows = %d, want 1", len(rm.rows))
+	}
+}
+
+// TestE2E_AuditScreenLoadsRows asserts auditModel populates from listAuditCmd
+// (any action through the service layer creates an audit row).
+func TestE2E_AuditScreenLoadsRows(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+	if _, err := svc.Issuer.Generate(ctx, "audit-iss", "k-audit", "operator"); err != nil {
+		t.Fatalf("Issuer.Generate: %v", err)
+	}
+
+	am := newAuditModel(svc)
+	am, _ = am.Update(listAuditCmd(svc)())
+	if len(am.rows) == 0 {
+		t.Fatal("auditModel.rows is empty — Issuer.Generate should have logged an event")
+	}
+}
+
+// TestE2E_RevocationScreenLoadsRows seeds a revoked license, fires the list
+// cmd, asserts row populates.
+func TestE2E_RevocationScreenLoadsRows(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+	iss, err := svc.Issuer.Generate(ctx, "rev-list", "k-rl", "operator")
+	if err != nil {
+		t.Fatalf("Issuer.Generate: %v", err)
+	}
+	out, err := svc.License.Issue(ctx, service.IssueRequest{
+		IssuerID: iss.ID,
+		Subject:  "rev-target",
+		NotAfter: timeNowPlus(24),
+		Actor:    "operator",
+	})
+	if err != nil {
+		t.Fatalf("License.Issue: %v", err)
+	}
+	if err := svc.Revoke.Revoke(ctx, out.Row.ID, "test", "operator"); err != nil {
+		t.Fatalf("Revoke.Revoke: %v", err)
+	}
+
+	rm := newRevocationModel(svc)
+	rm, _ = rm.Update(listRevocationCmd(svc)())
+	if len(rm.rows) != 1 {
+		t.Fatalf("revocationModel.rows = %d, want 1", len(rm.rows))
+	}
+}
+
+// TestE2E_SettingsScreenLoadsFromService asserts loadSettingsCmd produces a
+// SettingsLoadedMsg that hydrates settingsModel without panic.
+func TestE2E_SettingsScreenLoadsFromService(t *testing.T) {
+	svc, _ := newTestServices(t)
+	sm := newSettingsModel(svc)
+	msg := loadSettingsCmd(svc)()
+	sm, _ = sm.Update(msg)
+	if got := sm.View(); got == "" {
+		t.Fatal("settingsModel.View() empty after load")
+	}
+}
+
 // ── Help overlay in every view ─────────────────────────────────────────────────
 
 // TestE2E_HelpOverlayInEachView presses '?' in every SessionReady view and
