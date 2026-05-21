@@ -2577,6 +2577,83 @@ func min1(a, b int) int {
 	return b
 }
 
+// TestE2E_ClickabilityMatrix is the EXHAUSTIVE click coverage probe — for each
+// view, send a left-press at every documented interactive cell, then assert
+// the model actually responded (state change OR overlay pushed). Anything that
+// the user might intuitively want to click but stays silent should fail here.
+func TestE2E_ClickabilityMatrix(t *testing.T) {
+	const W, H = 160, 50
+
+	type probe struct {
+		view  ViewID
+		setup func(m tea.Model) tea.Model
+		label string
+		x, y  int
+		check func(t *testing.T, before, after tea.Model)
+	}
+
+	toView := func(view ViewID, digit rune) func(m tea.Model) tea.Model {
+		return func(m tea.Model) tea.Model { return driveRune(m, digit) }
+	}
+
+	probes := []probe{
+		// Tab strip — works regardless of active view
+		{ViewDashboard, toView(ViewDashboard, '1'), "tab[2]=Licenses click", 18, 1, func(t *testing.T, _, a tea.Model) {
+			if rootOf(t, a).active != ViewLicenses {
+				t.Errorf("expected ViewLicenses after tab click, got %s", rootOf(t, a).active)
+			}
+		}},
+		{ViewLicenses, toView(ViewLicenses, '2'), "filter chip[active]", 12, 3, func(t *testing.T, _, a tea.Model) {
+			if rootOf(t, a).licenses.filter == licFilterAll {
+				t.Errorf("expected filter changed after chip click")
+			}
+		}},
+		{ViewServers, toView(ViewServers, '7'), "sub-tab [H] Heartbeat", 22, 3, func(t *testing.T, _, a tea.Model) {
+			if rootOf(t, a).servers.activeTab != serverTabHeartbeat {
+				t.Errorf("expected Heartbeat tab after click")
+			}
+		}},
+		{ViewServers, toView(ViewServers, '7'), "sub-tab [P] Probe", 40, 3, func(t *testing.T, _, a tea.Model) {
+			if rootOf(t, a).servers.activeTab != serverTabProbe {
+				t.Errorf("expected Probe tab after click")
+			}
+		}},
+		{ViewAudit, toView(ViewAudit, '8'), "audit filter [l]license", 26, 3, func(t *testing.T, _, a tea.Model) {
+			if rootOf(t, a).audit.filter == auditFilterAll {
+				t.Errorf("expected filter changed after audit chip click")
+			}
+		}},
+		// Dashboard box hint clicks ── these live inside the widget tree.
+		// Box layout: tilesRow is rows 3..7 (5 rows). Body starts at row 8 with
+		// the title bar on row 8. The hint sits on row 8 (title line), x ≈ near
+		// the right edge of the left column.
+		{ViewDashboard, toView(ViewDashboard, '1'), "box hint [k] gérer click", 64, 12, func(t *testing.T, _, a tea.Model) {
+			if rootOf(t, a).active != ViewIssuers {
+				t.Errorf("expected ViewIssuers after [k] gérer click, got %s", rootOf(t, a).active)
+			}
+		}},
+	}
+
+	for _, p := range probes {
+		p := p
+		t.Run(string(p.view)+"/"+p.label, func(t *testing.T) {
+			var m tea.Model = New(nil, nil, SessionReady)
+			m, _ = m.Update(tea.WindowSizeMsg{Width: W, Height: H})
+			m = p.setup(m)
+			before := m
+			updated, cmd := m.Update(tea.MouseMsg{X: p.x, Y: p.y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+			for cmd != nil {
+				if msg := cmd(); msg != nil {
+					updated, cmd = updated.Update(msg)
+				} else {
+					break
+				}
+			}
+			p.check(t, before, updated)
+		})
+	}
+}
+
 // TestE2E_EveryViewKeysDoNotPanic visits every view via digit keys + Tab/Shift-
 // Tab and presses every documented hotkey in turn. It asserts the model stays
 // alive (View() returns a non-empty string) for every (view × key) cell.

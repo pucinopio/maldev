@@ -10,7 +10,6 @@
 │signées par la clé ac…││présentes dans la CRL ││NotAfter dépassé      ││à renouveler          ││re-émises plus tard   │
 └──────────────────────┘└──────────────────────┘└──────────────────────┘└──────────────────────┘└──────────────────────┘
                                                                                                                         
-                                                                                                                        
 ┌────────────────────────────────────────────────────┐ ┌──────────────────────────────────────────────────────────────┐ 
 │ Clé d'émission active                   [k] gérer  │ │ 5 dernières actions                        [8] tout l'audit  │ 
 │ maldev-prod-01                            ACTIVE   │ │ 00:00:00 license.issue uuid-1 (operator)                     │ 
@@ -21,20 +20,21 @@
 │                                                    │ │                                                              │ 
 │                                                    │ │                                                              │ 
 │                                                    │ │                                                              │ 
-│                                                    │ │                                                              │ 
 └────────────────────────────────────────────────────┘ │                                                              │ 
-                                                       │                                                              │ 
                                                        │                                                              │ 
 ┌────────────────────────────────────────────────────┐ │                                                              │ 
 │ Serveurs HTTP         [7] détail · [s] start/stop  │ └──────────────────────────────────────────────────────────────┘ 
 │ ● Revocation  https://revoke.example.com:8443 ON   │                                                                  
-│                                                    │                                                                  
-│ https://manager.localhttps://revoke.example.com:   │ ┌──────────────────────────────────────────────────────────────┐ 
-│ 8443                                               │ │ Raccourcis                                   touche → écran  │ 
-│ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌   │ │  [n]  nouvelle                                               │ 
-│ ● Heartbeat  https://heartbeat.example.com:8444    │ │ licence            │ [/]  rechercher   │ [x]  révoquer       │ 
-│ ON                                                 │ │ ───────────────────┼───────────────────┼──────────────────   │ 
-│                                                    │ │ ─                                                            │ 
-│ https://manager.localhttps://heartbeat.example.c   │ │  [k]  clés                                                   │ 
-│ om:8444                                            │ │ d'émission         │ [i]  identity.bin │ [?]  aide           │ 
+│                                                    │ ┌──────────────────────────────────────────────────────────────┐ 
+│ https://manager.localhttps://revoke.example.com:   │ │ Raccourcis                                   touche → écran  │ 
+│ 8443                                               │ │  [n]  nouvelle                                               │ 
+│ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌   │ │ licence            │ [/]  rechercher   │ [x]  révoquer       │ 
+│ ● Heartbeat  https://heartbeat.example.com:8444    │ │ ───────────────────┼───────────────────┼──────────────────   │ 
+│ ON                                                 │ │ ─                                                            │ 
+│                                                    │ │  [k]  clés                                                   │ 
+│ https://manager.localhttps://heartbeat.example.c   │ │ d'émission         │ [i]  identity.bin │ [?]  aide           │ 
+│ om:8444                                            │ │ contextuelle                                                 │ 
+│ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌   │ └──────────────────────────────────────────────────────────────┘ 
+│ ○ Probe  —                                   OFF   │                                                                  
+│   arrêté · démarrer via onglet [7]                 │                                                                  
 1-9 onglets  n nouvelle licence  / rechercher  k clés actives  ? aide  q quitter                                 ~ tour 

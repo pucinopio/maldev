@@ -141,9 +141,11 @@ func (m dashboardModel) buildWidgetTree() Widget {
 		keyTextW = 1
 	}
 	keyContent := widgets.NewText(m.keyCardContent(keyTextW), lipgloss.NewStyle())
-	keyBox := NewBoxWithHint(keyContent, "Clé d'émission active", "[k] gérer", false)
+	keyBox := NewBoxWithHintClick(keyContent, "Clé d'émission active", "[k] gérer", false,
+		func() tea.Cmd { return func() tea.Msg { return widgets.SwitchViewMsg{ID: string(ViewIssuers)} } })
 	serversContent := widgets.NewText(m.serversCardContent(), lipgloss.NewStyle())
-	serversBox := NewBoxWithHint(serversContent, "Serveurs HTTP", "[7] détail · [s] start/stop", false)
+	serversBox := NewBoxWithHintClick(serversContent, "Serveurs HTTP", "[7] détail · [s] start/stop", false,
+		func() tea.Cmd { return func() tea.Msg { return widgets.SwitchViewMsg{ID: string(ViewServers)} } })
 	leftCol := NewFlex(Vertical, 1,
 		FlexChild{W: keyBox, Min: 6, Flex: 1},
 		FlexChild{W: serversBox, Min: 6, Flex: 1},
@@ -151,7 +153,8 @@ func (m dashboardModel) buildWidgetTree() Widget {
 
 	// Right column (~6/11 ≈ 55%): audit log + shortcuts.
 	auditContent := widgets.NewText(m.auditCardContent(), lipgloss.NewStyle())
-	auditBox := NewBoxWithHint(auditContent, "5 dernières actions", "[8] tout l'audit", false)
+	auditBox := NewBoxWithHintClick(auditContent, "5 dernières actions", "[8] tout l'audit", false,
+		func() tea.Cmd { return func() tea.Msg { return widgets.SwitchViewMsg{ID: string(ViewAudit)} } })
 	shortcutsContent := widgets.NewText(m.shortcutsCardContent(), lipgloss.NewStyle())
 	shortcutsBox := NewBoxWithHint(shortcutsContent, "Raccourcis", "touche → écran", false)
 	rightCol := NewFlex(Vertical, 1,
@@ -166,11 +169,12 @@ func (m dashboardModel) buildWidgetTree() Widget {
 	)
 
 	root := NewFlex(Vertical, 1,
-		FlexChild{W: tilesRow, Min: 5, Max: 7},
+		FlexChild{W: tilesRow, Min: 6, Max: 6},
 		FlexChild{W: body, Flex: 1},
 	)
-	// Reserve 3 rows for chrome (title + tabs + breadcrumb) + 1 row for status bar.
-	root.Layout(Rect{X: 0, Y: 3, W: w, H: h - 4})
+	// Reserve 4 rows for chrome (title + 2-row tabs + breadcrumb) + 1 row for status bar.
+	// Content starts at Y=4 in the rendered terminal, matching viewReady's chrome stack.
+	root.Layout(Rect{X: 0, Y: 4, W: w, H: h - 5})
 	return root
 }
 

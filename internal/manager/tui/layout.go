@@ -137,13 +137,14 @@ func (f *flexWidget) View() string {
 	views := make([]string, 0, len(f.children)*2)
 	for i, c := range f.children {
 		if i > 0 && f.gap > 0 {
-			// Layout reserved `gap` cells between children; without inserting
-			// a spacer at View() time the children would render flush against
-			// each other AND leave a `gap`-wide hole on the trailing side.
+			// Layout reserved `gap` cells between children; insert a spacer at
+			// View() time so JoinHorizontal/Vertical doesn't render them flush.
+			// For Vertical: JoinVertical already inserts one \n between elements,
+			// so the spacer is `gap-1` blank rows (a string of newlines).
 			if f.dir == Horizontal {
 				views = append(views, strings.Repeat(" ", f.gap))
-			} else {
-				views = append(views, strings.Repeat("\n", f.gap))
+			} else if f.gap >= 1 {
+				views = append(views, strings.Repeat("\n", f.gap-1))
 			}
 		}
 		views = append(views, c.W.View())
@@ -435,8 +436,35 @@ type boxWidget struct {
 	inner     Widget
 	title     string
 	titleHint string // right-aligned hint in the title row (e.g. "[k] gérer")
+	onHint    func() tea.Cmd
 	focused   bool
 	bounds    Rect
+}
+
+// NewBoxWithHintClick is NewBoxWithHint plus an OnClick callback that fires
+// when the operator left-clicks the title-row hint (the [k] gérer style label
+// on the far right of the title bar).
+func NewBoxWithHintClick(w Widget, title, hint string, focused bool, onHint func() tea.Cmd) Widget {
+	return &boxWidget{inner: w, title: title, titleHint: hint, focused: focused, onHint: onHint}
+}
+
+// OnClick is the Clickable hook. The title row is at y=1 relative (y=0 is the
+// top border). The hint occupies the trailing characters of that row, x is
+// relative to bounds.X.
+func (b *boxWidget) OnClick(x, y int, _ tea.MouseButton) tea.Cmd {
+	if b.onHint == nil || b.titleHint == "" || y != 1 {
+		return nil
+	}
+	// Title row layout: hint is right-aligned within contentW = bounds.W - 2
+	// (visual width = Width(contentW) + border = bounds.W). The hint pill
+	// includes the HintKey style padding (1 cell each side).
+	hintW := lipgloss.Width(HintKey.Render(b.titleHint))
+	hintEnd := b.bounds.W - 2  // last cell before right border + right padding
+	hintStart := hintEnd - hintW
+	if x >= hintStart-1 && x <= hintEnd+1 { // ±1 cell tolerance for fat-finger
+		return b.onHint()
+	}
+	return nil
 }
 
 // NewBox wraps a widget with a bordered frame + optional title.
