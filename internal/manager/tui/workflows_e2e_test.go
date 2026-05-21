@@ -1998,6 +1998,61 @@ func TestE2E_DashboardShortcutsGrid(t *testing.T) {
 
 // ── Help overlay in every view ─────────────────────────────────────────────────
 
+// ── Onboarding welcome banner + progress strip ────────────────────────────────
+
+// TestE2E_OnboardingWelcomeBannerCards verifies the prototype welcome screen
+// renders the 4 feature-card grid labels and the call-to-action.
+func TestE2E_OnboardingWelcomeBannerCards(t *testing.T) {
+	m := newOnboardingRoot(t)
+	got := m.View()
+	for _, label := range []string{
+		"PREMIÈRE UTILISATION",
+		"Aucune base détectée",
+		"passphrase",
+		"issuer",
+		"Ed25519",
+		"Commencer",
+	} {
+		if !strings.Contains(got, label) {
+			t.Errorf("OnboardingWelcomeBannerCards: %q not found in welcome view", label)
+		}
+	}
+}
+
+// TestE2E_OnboardingPassphraseStepHasProgressStrip verifies the progress strip
+// appears with "1/3" and the step label after advancing past welcome.
+func TestE2E_OnboardingPassphraseStepHasProgressStrip(t *testing.T) {
+	m := newOnboardingRoot(t)
+	m = driveKey(m, tea.KeyEnter) // welcome → passphrase
+
+	got := m.View()
+	if !strings.Contains(got, "1/3") {
+		t.Errorf("OnboardingPassphraseStepHasProgressStrip: '1/3' not found in view")
+	}
+	if !strings.Contains(got, "Passphrase") {
+		t.Errorf("OnboardingPassphraseStepHasProgressStrip: 'Passphrase' label not found in view")
+	}
+}
+
+// TestE2E_OnboardingIssuerStepHasProgressStrip verifies the progress strip
+// shows "2/3" and the issuer label when on the issuer step.
+func TestE2E_OnboardingIssuerStepHasProgressStrip(t *testing.T) {
+	m := newOnboardingRoot(t)
+	m = advanceToPassphraseStep(t, m)
+	m = driveStr(m, "Str0ngP@ss!")
+	m = driveKey(m, tea.KeyTab)
+	m = driveStr(m, "Str0ngP@ss!")
+	m = driveKey(m, tea.KeyEnter) // → issuer step
+
+	if rootOf(t, m).onboarding.step != stepIssuer {
+		t.Fatalf("expected stepIssuer, got %d", rootOf(t, m).onboarding.step)
+	}
+	got := m.View()
+	if !strings.Contains(got, "2/3") {
+		t.Errorf("OnboardingIssuerStepHasProgressStrip: '2/3' not found in view")
+	}
+}
+
 // ── Wizard sidebar + progress strip ──────────────────────────────────────────
 
 // TestE2E_WizardViewRendersProgressStrip verifies the prototype progress strip

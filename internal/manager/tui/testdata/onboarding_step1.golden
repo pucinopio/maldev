@@ -8,25 +8,25 @@
                                                                                                                         
                                                                                                                         
                                                                                                                         
+                        ◆ PREMIÈRE UTILISATION                                                                          
+                        Aucune base détectée                                                                            
                                                                                                                         
+                        ┌──────────────────────────────────┐┌──────────────────────────────────┐                        
+                        │ ┌──┐ Chiffrer une base SQLite    ││ ┌──┐ Créer ton identité          │                        
+                        │ locale avec ta passphrase        ││ d'émission (issuer)              │                        
+                        │ │1 │                             ││ │2 │                             │                        
+                        │ └──┘                             ││ └──┘                             │                        
+                        └──────────────────────────────────┘└──────────────────────────────────┘                        
+                        ┌──────────────────────────────────┐┌──────────────────────────────────┐                        
+                        │ ┌──┐ Générer ta première paire   ││ ┌──┐ Émettre une licence pour    │                        
+                        │ de clés Ed25519                  ││ toi, pinnée à ta machine         │                        
+                        │ │3 │                             ││ │4 │                             │                        
+                        │ └──┘                             ││ └──┘                             │                        
+                        └──────────────────────────────────┘└──────────────────────────────────┘                        
                                                                                                                         
+                        Tu pourras revenir sur tous ces choix dans Settings après coup.                                 
                                                                                                                         
-                                ┌──────────────────────────────────────────────────────┐                                
-                                │   license-manager                                    │                                
-                                │                                                      │                                
-                                │ First launch — no database found.                    │                                
-                                │ This wizard will set up your store in a few steps.   │                                
-                                │                                                      │                                
-                                │ Steps:                                               │                                
-                                │   1. Set a passphrase                                │                                
-                                │   2. Create your first issuer key                    │                                
-                                │   3. Issue a first license (optional)                │                                
-                                │                                                      │                                
-                                │  enter  begin                                        │                                
-                                └──────────────────────────────────────────────────────┘                                
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
+                         enter  Commencer    esc  Quitter                                                               
                                                                                                                         
                                                                                                                         
                                                                                                                         

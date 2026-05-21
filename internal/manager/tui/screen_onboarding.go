@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -221,10 +224,54 @@ func (m onboardingModel) View() string {
 		h = 24
 	}
 
+	// stepWelcome has no progress strip — it's a full-screen welcome banner.
+	if m.step == stepWelcome {
+		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, m.viewWelcome(w))
+	}
+
+	// Steps 1-3 share a progress strip + centered content box.
+	type stepInfo struct {
+		n     int
+		label string
+	}
+	info := []stepInfo{
+		{1, "Passphrase DB"},
+		{2, "Issuer & 1ère clé"},
+		{3, "Première licence"},
+	}[int(m.step)-1]
+
+	// Progress strip.
+	total := 3
+	cur := info.n
+	barFilled := (w - 2) * cur / total
+	if barFilled < 1 {
+		barFilled = 1
+	}
+	if barFilled > w-2 {
+		barFilled = w - 2
+	}
+	stripLeft := lipgloss.JoinHorizontal(lipgloss.Top,
+		GlowMagent.Render("◆ PREMIÈRE UTILISATION"),
+		Dim.Render("  étape  "),
+		Base.Bold(true).Render(fmt.Sprintf("%d/3", cur)),
+		Dim.Render("  ·  "),
+		GlowCyan.Render(info.label),
+	)
+	stripHint := HintKey.Render("Tab") + HintText.Render(" continuer")
+	strip := lipgloss.JoinHorizontal(lipgloss.Top,
+		stripLeft,
+		lipgloss.NewStyle().Width(w-lipgloss.Width(stripLeft)-lipgloss.Width(stripHint)-2).Render(""),
+		stripHint,
+	)
+	bar := lipgloss.NewStyle().Foreground(Palette.Magenta).Render(
+		strings.Repeat("─", barFilled),
+	) + lipgloss.NewStyle().Foreground(Palette.Border).Render(
+		strings.Repeat("─", w-2-barFilled),
+	)
+	progressStrip := lipgloss.JoinVertical(lipgloss.Left, strip, bar)
+
 	var content string
 	switch m.step {
-	case stepWelcome:
-		content = m.viewWelcome()
 	case stepPassphrase:
 		content = m.viewPassphrase()
 	case stepIssuer:
@@ -233,31 +280,76 @@ func (m onboardingModel) View() string {
 		content = m.viewLicense()
 	}
 
-	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, content)
+	centred := lipgloss.Place(w, h-3, lipgloss.Center, lipgloss.Center, content)
+	return lipgloss.JoinVertical(lipgloss.Left, progressStrip, centred)
 }
 
-func (m onboardingModel) viewWelcome() string {
-	lines := []string{
-		GlowCyan.Render("  license-manager  "),
-		"",
-		Dim.Render("First launch — no database found."),
-		Dim.Render("This wizard will set up your store in a few steps."),
-		"",
-		Base.Render("Steps:"),
-		Mute.Render("  1. Set a passphrase"),
-		Mute.Render("  2. Create your first issuer key"),
-		Mute.Render("  3. Issue a first license (optional)"),
-		"",
-		HintKey.Render("enter") + HintText.Render(" begin"),
+// viewWelcome renders the prototype welcome banner with 4 feature cards in a
+// 2×2 grid and a "Commencer" call to action.
+func (m onboardingModel) viewWelcome(w int) string {
+	type card struct {
+		n    int
+		text string
+		cyan bool // true = cyan border, false = magenta
 	}
-	return BoxStyle.Width(54).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	cards := []card{
+		{1, "Chiffrer une base SQLite locale avec ta passphrase", true},
+		{2, "Créer ton identité d'émission (issuer)", true},
+		{3, "Générer ta première paire de clés Ed25519", false},
+		{4, "Émettre une licence pour toi, pinnée à ta machine", false},
+	}
+
+	cardW := 34
+	var row1, row2 []string
+	for i, c := range cards {
+		color := Palette.Cyan
+		if !c.cyan {
+			color = Palette.Magenta
+		}
+		badge := lipgloss.NewStyle().
+			Foreground(color).Bold(true).
+			Border(lipgloss.NormalBorder()).BorderForeground(color).
+			Padding(0, 0).Width(2).
+			Render(fmt.Sprintf("%d", c.n))
+		cell := lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).BorderForeground(Palette.Border).
+			Padding(0, 1).Width(cardW).
+			Render(lipgloss.JoinHorizontal(lipgloss.Top, badge, " ", Dim.Render(c.text)))
+		if i < 2 {
+			row1 = append(row1, cell)
+		} else {
+			row2 = append(row2, cell)
+		}
+	}
+
+	grid := lipgloss.JoinVertical(lipgloss.Left,
+		lipgloss.JoinHorizontal(lipgloss.Top, row1...),
+		lipgloss.JoinHorizontal(lipgloss.Top, row2...),
+	)
+
+	note := Dim.Render("Tu pourras revenir sur tous ces choix dans Settings après coup.")
+	action := lipgloss.JoinHorizontal(lipgloss.Top,
+		HintKey.Render("enter")+" "+HintText.Render("Commencer"),
+		"   ",
+		HintKey.Render("esc")+" "+HintText.Render("Quitter"),
+	)
+
+	header := GlowMagent.Render("◆ PREMIÈRE UTILISATION")
+	subHead := Dim.Render("Aucune base détectée")
+
+	content := lipgloss.JoinVertical(lipgloss.Left,
+		header, subHead, "", grid, "", note, "", action,
+	)
+	_ = w
+	return content
 }
 
 func (m onboardingModel) viewPassphrase() string {
 	lines := []string{
-		GlowMagent.Render("Step 1 of 3 — Set passphrase"),
+		GlowMagent.Render("2 / 4 — Passphrase de la base"),
 		"",
-		Dim.Render("Choose a strong passphrase to protect the key store."),
+		Dim.Render("Cette passphrase est demandée à chaque lancement."),
+		Dim.Render("Note-la dans ton gestionnaire de mots de passe."),
 		"",
 		m.passInput.View(),
 		m.passConfirm.View(),
@@ -267,39 +359,39 @@ func (m onboardingModel) viewPassphrase() string {
 		lines = append(lines, GlowRed.Render(m.passErr))
 	}
 	lines = append(lines, "",
-		HintKey.Render("tab")+" "+HintText.Render("next field")+
-			"  "+HintKey.Render("enter")+" "+HintText.Render("confirm"),
+		HintKey.Render("tab")+" "+HintText.Render("champ suivant")+
+			"  "+HintKey.Render("enter")+" "+HintText.Render("suivant"),
 	)
-	return BoxStyle.Width(54).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return BoxStyle.Width(58).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
 func (m onboardingModel) viewIssuer() string {
 	lines := []string{
-		GlowMagent.Render("Step 2 of 3 — First issuer"),
+		GlowMagent.Render("3 / 4 — Issuer & première paire de clés"),
 		"",
-		Dim.Render("An issuer is an Ed25519 signing key with a human name."),
+		Dim.Render("L'issuer est la clé Ed25519 qui signe tes licences."),
 		"",
-		Base.Render("Name:"),
+		Dim.Render("Nom de l'issuer :"),
 		m.issuerName.View(),
 		"",
-		Base.Render("Key ID (short identifier):"),
+		Dim.Render("KeyID (auto-suggéré) :"),
 		m.issuerKeyID.View(),
 		"",
-		HintKey.Render("tab")+" "+HintText.Render("next field")+
-			"  "+HintKey.Render("enter")+" "+HintText.Render("create"),
+		HintKey.Render("tab")+" "+HintText.Render("champ suivant")+
+			"  "+HintKey.Render("enter")+" "+HintText.Render("Générer & continuer"),
 	}
-	return BoxStyle.Width(54).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return BoxStyle.Width(58).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
 func (m onboardingModel) viewLicense() string {
 	lines := []string{
-		GlowMagent.Render("Step 3 of 3 — First license"),
+		GlowMagent.Render("4 / 4 — Première licence (pour toi, sur ta machine)"),
 		"",
-		Dim.Render("You can issue a first license now, or skip and do it later"),
-		Dim.Render("from the Licenses view."),
+		Dim.Render("On crée une licence minimale pour valider le flow."),
+		Dim.Render("Tu pourras en émettre d'autres depuis l'onglet Licences."),
 		"",
-		HintKey.Render("enter")+" "+HintText.Render("skip for now")+
-			"  "+HintKey.Render("esc")+" "+HintText.Render("skip"),
+		HintKey.Render("enter")+" "+HintText.Render("Émettre & entrer dans l'app")+
+			"  "+HintKey.Render("esc")+" "+HintText.Render("passer"),
 	}
-	return BoxStyle.Width(54).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return BoxStyle.Width(58).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
