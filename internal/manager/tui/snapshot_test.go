@@ -123,3 +123,11 @@ func TestAuditEmptySnapshot(t *testing.T) {
 	m, _ = m.Update(tui.AuditLoadedMsg{Rows: nil, Err: nil})
 	compareOrUpdate(t, "audit_empty", m.View())
 }
+
+func TestSettingsSnapshot(t *testing.T) {
+	root := tui.New(nil, nil, tui.SessionReady)
+	m := initModel(root)
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("9")})
+	m, _ = m.Update(tui.SettingsLoadedMsg{Row: nil, Err: nil})
+	compareOrUpdate(t, "settings_loading", m.View())
+}

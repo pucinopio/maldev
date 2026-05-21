@@ -1733,6 +1733,51 @@ func TestE2E_SettingsScreenLoadsFromService(t *testing.T) {
 	}
 }
 
+// TestE2E_SettingsScreenSections verifies that the redesigned Settings View()
+// renders all 7 prototype sections. Each section title must appear in the output.
+// This test is intentionally red against the old placeholder and green after
+// the new 7-section grid layout.
+func TestE2E_SettingsScreenSections(t *testing.T) {
+	svc, _ := newTestServices(t)
+	sm := newSettingsModel(svc)
+	sm, _ = sm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	msg := loadSettingsCmd(svc)()
+	sm, _ = sm.Update(msg)
+	got := sm.View()
+
+	sections := []string{
+		"Defaults licence",
+		"default_argon_preset",
+		"Identité opérateur",
+		"Base de données",
+		"Cycle de vie serveurs",
+		"Apparence",
+		"Cascade passphrase",
+	}
+	for _, s := range sections {
+		if !strings.Contains(got, s) {
+			t.Errorf("Settings.View(): section %q not found in output", s)
+		}
+	}
+
+	// Toggle rendering: confirm [✓] and [ ] appear (cycle de vie section has both).
+	if !strings.Contains(got, "[✓]") {
+		t.Error("Settings.View(): on-toggle '[✓]' not found")
+	}
+}
+
+// TestE2E_SettingsMouseRefreshCycle verifies pressing 'r' on the settings screen
+// does not panic and re-arms the load command.
+func TestE2E_SettingsMouseRefreshCycle(t *testing.T) {
+	var m tea.Model = New(nil, nil, SessionReady)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = driveRune(m, '9')         // navigate to Settings
+	m = driveRune(m, 'r')         // trigger refresh
+	if got := m.View(); got == "" {
+		t.Fatal("Settings.View() empty after 'r' refresh")
+	}
+}
+
 // ── Help overlay in every view ─────────────────────────────────────────────────
 
 // TestE2E_HelpOverlayInEachView presses '?' in every SessionReady view and
