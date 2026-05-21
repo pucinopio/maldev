@@ -16,14 +16,15 @@ const maxPassphraseAttempts = 3
 // passphraseModel is the DB-unlock screen shown when the passphrase cascade
 // did not resolve before the TUI launched.
 type passphraseModel struct {
-	store    *store.Store
-	input    textinput.Model
-	attempts int
-	err      string
-	done     bool
-	result   string
-	width    int
-	hgt      int
+	store       *store.Store
+	input       textinput.Model
+	attempts    int
+	err         string
+	done        bool
+	result      string
+	pendingPass string // holds typed value while async unlock is in flight
+	width       int
+	hgt         int
 }
 
 // PassphraseResult carries the resolved passphrase out of a standalone
@@ -82,6 +83,7 @@ func (m passphraseModel) update(msg tea.Msg) (passphraseModel, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyEnter:
 			pass := m.input.Value()
+			m.pendingPass = pass // save before clearing so async result can use it
 			m.input.SetValue("")
 			if m.store != nil {
 				return m, cmds.TryUnlockCmd(m.store, pass)
@@ -90,6 +92,7 @@ func (m passphraseModel) update(msg tea.Msg) (passphraseModel, tea.Cmd) {
 			if pass != "" {
 				m.done = true
 				m.result = pass
+				m.pendingPass = ""
 				return m, func() tea.Msg { return PassphraseResult{Passphrase: pass} }
 			}
 			m.err = "passphrase must not be empty"
@@ -101,14 +104,19 @@ func (m passphraseModel) update(msg tea.Msg) (passphraseModel, tea.Cmd) {
 
 	case cmds.UnlockResultMsg:
 		if msg.Err != nil {
+			m.pendingPass = ""
 			m.err = fmt.Sprintf("error: %v", msg.Err)
 			return m, nil
 		}
 		if msg.OK {
 			m.done = true
-			m.result = m.input.Value()
-			return m, func() tea.Msg { return PassphraseResult{Passphrase: m.result} }
+			m.result = m.pendingPass
+			pass := m.pendingPass
+			m.pendingPass = ""
+			passphraseResultCmd := func() tea.Msg { return PassphraseResult{Passphrase: pass} }
+			return m, tea.Batch(passphraseResultCmd, tea.Quit)
 		}
+		m.pendingPass = ""
 		m.attempts++
 		remaining := maxPassphraseAttempts - m.attempts
 		if remaining <= 0 {
