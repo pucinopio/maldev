@@ -9,6 +9,7 @@ import (
 
 	"github.com/oioio-space/maldev/internal/manager/httpsrv"
 	"github.com/oioio-space/maldev/internal/manager/service"
+	"github.com/oioio-space/maldev/internal/manager/tui/widgets"
 )
 
 // SessionState describes which top-level flow the TUI enters on start.
@@ -54,6 +55,10 @@ type rootModel struct {
 
 	services *service.Services
 	httpsrv  *httpsrv.Bundle // nil until Phase 4
+
+	// rootWidget is non-nil for screens that have been retrofitted to the
+	// widget system. The mouse dispatcher uses it for hit-testing.
+	rootWidget Widget
 
 	// Phase 1 screens
 	passphrase passphraseModel
@@ -138,6 +143,30 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
+
+	case widgets.SwitchViewMsg:
+		prev := m.active
+		m.active = ViewID(msg.ID)
+		if prev != m.active {
+			return m, m.initScreen(m.active)
+		}
+		return m, nil
+
+	case SwitchToLicensesMsg:
+		m.active = ViewLicenses
+		filterMap := map[string]licenseFilter{
+			"active":   licFilterActive,
+			"expiring": licFilterExpiring,
+			"expired":  licFilterExpired,
+			"revoked":  licFilterRevoked,
+		}
+		if f, ok := filterMap[msg.Filter]; ok {
+			m.licenses.filter = f
+		}
+		return m, m.licenses.Init()
 
 	case PassphraseResult:
 		if msg.Passphrase == "" {
@@ -367,6 +396,54 @@ func (m rootModel) View() string {
 		return lipgloss.Place(m.width, m.hgt, lipgloss.Center, lipgloss.Center, overlay)
 	}
 	return body
+}
+
+// handleMouse dispatches mouse events. Left-button release triggers click
+// dispatch; wheel is handled inside WrappedViewport widgets directly.
+func (m rootModel) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
+		// Tab bar occupies row Y=1 (row 0 = title bar, row 1 = tabs).
+		if msg.Y == 1 {
+			tb := buildTabBar(m.active, m.width)
+			cmd := tb.OnClick(msg.X, 0, tea.MouseButtonLeft)
+			return m, cmd
+		}
+		if m.active == ViewDashboard {
+			tree := m.dashboard.buildWidgetTree()
+			cmd := dispatchClick(tree, msg.X, msg.Y)
+			return m, cmd
+		}
+		if m.rootWidget != nil {
+			cmd := dispatchClick(m.rootWidget, msg.X, msg.Y)
+			return m, cmd
+		}
+	}
+	return m, nil
+}
+
+// dispatchClick walks the widget tree rooted at w and calls OnClick on the
+// deepest Clickable whose bounds contain (x, y).
+func dispatchClick(w Widget, x, y int) tea.Cmd {
+	if !w.Bounds().Contains(x, y) {
+		return nil
+	}
+	// Try children first (depth-first).
+	type hasChildren interface {
+		Children() []Widget
+	}
+	if parent, ok := w.(hasChildren); ok {
+		for _, child := range parent.Children() {
+			if cmd := dispatchClick(child, x, y); cmd != nil {
+				return cmd
+			}
+		}
+	}
+	// Fall back to this widget if it is Clickable.
+	if c, ok := w.(Clickable); ok {
+		b := w.Bounds()
+		return c.OnClick(x-b.X, y-b.Y, tea.MouseButtonLeft)
+	}
+	return nil
 }
 
 func (m rootModel) viewReady() string {

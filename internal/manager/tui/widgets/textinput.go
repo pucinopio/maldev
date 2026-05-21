@@ -4,13 +4,13 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/oioio-space/maldev/internal/manager/tui"
+	"github.com/oioio-space/maldev/internal/manager/tui/core"
 )
 
 // WrappedTextInput wraps bubbles/textinput as a Focusable + Clickable widget.
 type WrappedTextInput struct {
 	inner  textinput.Model
-	bounds tui.Rect
+	bounds core.Rect
 }
 
 // NewWrappedTextInput constructs a WrappedTextInput from an already-configured model.
@@ -18,14 +18,14 @@ func NewWrappedTextInput(ti textinput.Model) *WrappedTextInput {
 	return &WrappedTextInput{inner: ti}
 }
 
-func (w *WrappedTextInput) Layout(bounds tui.Rect) {
+func (w *WrappedTextInput) Layout(bounds core.Rect) {
 	w.bounds = bounds
 	w.inner.Width = bounds.W - 4 // leave room for prompt + border
 }
 
-func (w *WrappedTextInput) Bounds() tui.Rect { return w.bounds }
+func (w *WrappedTextInput) Bounds() core.Rect { return w.bounds }
 
-func (w *WrappedTextInput) Update(msg tea.Msg) (tui.Widget, tea.Cmd) {
+func (w *WrappedTextInput) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 	updated, cmd := w.inner.Update(msg)
 	w.inner = updated
 	return w, cmd
@@ -33,12 +33,12 @@ func (w *WrappedTextInput) Update(msg tea.Msg) (tui.Widget, tea.Cmd) {
 
 func (w *WrappedTextInput) View() string { return w.inner.View() }
 
-// Focus implements tui.Focusable.
+// Focus implements core.Focusable.
 func (w *WrappedTextInput) Focus()        { w.inner.Focus() } //nolint:errcheck — Focus returns tea.Cmd in newer bubbles; we discard it intentionally here
 func (w *WrappedTextInput) Blur()         { w.inner.Blur() }
 func (w *WrappedTextInput) Focused() bool { return w.inner.Focused() }
 
-// OnClick implements tui.Clickable — clicking focuses the input.
+// OnClick implements core.Clickable — clicking focuses the input.
 func (w *WrappedTextInput) OnClick(_, _ int, _ tea.MouseButton) tea.Cmd {
 	return w.inner.Focus()
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/oioio-space/maldev/internal/manager/tui"
+	"github.com/oioio-space/maldev/internal/manager/tui/cmds"
 	"github.com/oioio-space/maldev/internal/manager/tui/widgets"
 )
 
@@ -59,6 +60,20 @@ func TestWidgetFlexVerticalSnapshot(t *testing.T) {
 	flex.Layout(tui.Rect{X: 0, Y: 0, W: 20, H: 10})
 	got := flex.View()
 	compareOrUpdate(t, "flex_vertical", got)
+}
+
+// TestDashboardWidgetSnapshot verifies the widget-based dashboard renders
+// without panicking and produces stable output.
+func TestDashboardWidgetSnapshot(t *testing.T) {
+	snap := cmds.DashboardSnapshotMsg{
+		Active: 5, Revoked: 1, Expired: 2, ExpiringSoon: 0,
+		ActiveKeyID: "k1", ActiveKeyName: "test-key", ActiveKeyFingerprint: "aa:bb",
+		Servers:     []cmds.ServerStatus{},
+		RecentAudit: []cmds.AuditEntry{{Kind: "license.issue", Actor: "op"}},
+	}
+	root := tui.New(nil, nil, tui.SessionReady)
+	m := initModel(root, snap)
+	compareOrUpdate(t, "dashboard_widget", m.View())
 }
 
 // TestWidgetTabBarClickRouting verifies that clicking at a given X coordinate

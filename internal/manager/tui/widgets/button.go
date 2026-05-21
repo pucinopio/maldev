@@ -4,17 +4,17 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/oioio-space/maldev/internal/manager/tui"
+	"github.com/oioio-space/maldev/internal/manager/tui/core"
 )
 
 // Button is a labeled interactive widget that fires OnPress when clicked.
-// It implements tui.Clickable and tui.Focusable.
+// It implements core.Clickable and core.Focusable.
 type Button struct {
 	Label   string
 	Hotkey  string
 	OnPress func() tea.Cmd
 	focused bool
-	bounds  tui.Rect
+	bounds  core.Rect
 	style   lipgloss.Style
 }
 
@@ -28,10 +28,10 @@ func NewButton(label, hotkey string, onPress func() tea.Cmd) *Button {
 	}
 }
 
-func (b *Button) Layout(bounds tui.Rect) { b.bounds = bounds }
-func (b *Button) Bounds() tui.Rect      { return b.bounds }
+func (b *Button) Layout(bounds core.Rect) { b.bounds = bounds }
+func (b *Button) Bounds() core.Rect      { return b.bounds }
 
-func (b *Button) Update(msg tea.Msg) (tui.Widget, tea.Cmd) {
+func (b *Button) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 	if km, ok := msg.(tea.KeyMsg); ok {
 		if b.focused && b.Hotkey != "" && km.String() == b.Hotkey {
 			if b.OnPress != nil {
@@ -54,7 +54,7 @@ func (b *Button) View() string {
 	return st.Render(label)
 }
 
-// OnClick implements tui.Clickable.
+// OnClick implements core.Clickable.
 func (b *Button) OnClick(_, _ int, _ tea.MouseButton) tea.Cmd {
 	if b.OnPress != nil {
 		return b.OnPress()
@@ -62,7 +62,7 @@ func (b *Button) OnClick(_, _ int, _ tea.MouseButton) tea.Cmd {
 	return nil
 }
 
-// Focus implements tui.Focusable.
+// Focus implements core.Focusable.
 func (b *Button) Focus()        { b.focused = true }
 func (b *Button) Blur()         { b.focused = false }
 func (b *Button) Focused() bool { return b.focused }

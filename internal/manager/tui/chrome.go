@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/oioio-space/maldev/internal/manager/tui/widgets"
 )
 
 // tabDefs is the single source of truth for tab order, IDs, and labels.
@@ -31,6 +33,17 @@ func init() {
 	}
 }
 
+// buildTabBar constructs a widgets.TabBar from tabDefs for the given active view.
+func buildTabBar(active ViewID, width int) *widgets.TabBar {
+	items := make([]widgets.TabItem, len(tabDefs))
+	for i, td := range tabDefs {
+		items[i] = widgets.TabItem{ID: string(td.ID), Label: td.Label}
+	}
+	tb := widgets.NewTabBar(items, string(active))
+	tb.Layout(Rect{X: 0, Y: 1, W: width, H: 1})
+	return tb
+}
+
 // renderTitleBar returns the top title bar string.
 func renderTitleBar(width int) string {
 	title := GlowMagent.Render(" license-manager ")
@@ -46,38 +59,18 @@ func renderTitleBar(width int) string {
 		Render(bar)
 }
 
-// renderTabStrip returns the tab strip for the given active view and total width.
+// renderTabStrip returns the tab strip using a TabBar widget.
 func renderTabStrip(active ViewID, width int) string {
-	var parts []string
-	for i, td := range tabDefs {
-		label := td.Label
-		if i < 9 {
-			label = Dim.Render(string(rune('1'+i))) + " " + label
-		}
-		if td.ID == active {
-			parts = append(parts, TabActive.Render(label))
-		} else {
-			parts = append(parts, TabInactive.Render(label))
-		}
-	}
-	strip := lipgloss.JoinHorizontal(lipgloss.Top, parts...)
-	return lipgloss.NewStyle().
-		Background(Palette.Bg1).
-		Width(width).
-		Render(strip)
+	return buildTabBar(active, width).View()
 }
 
-// renderStatusBar returns the bottom status/hint bar.
+// renderStatusBar returns the bottom status/hint bar using a StatusBar widget.
 func renderStatusBar(hints []string, width int) string {
-	var parts []string
+	kh := make([]widgets.KeyHint, 0, len(hints)/2)
 	for i := 0; i+1 < len(hints); i += 2 {
-		k := HintKey.Render(hints[i])
-		v := HintText.Render(hints[i+1])
-		parts = append(parts, k+v)
+		kh = append(kh, widgets.KeyHint{Key: hints[i], Desc: hints[i+1]})
 	}
-	bar := strings.Join(parts, Dim.Render("  "))
-	return lipgloss.NewStyle().
-		Background(Palette.Bg1).
-		Width(width).
-		Render(bar)
+	sb := widgets.NewStatusBar(kh...)
+	sb.Layout(Rect{W: width, H: 1})
+	return sb.View()
 }

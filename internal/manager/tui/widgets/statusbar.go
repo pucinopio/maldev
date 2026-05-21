@@ -6,7 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/oioio-space/maldev/internal/manager/tui"
+	"github.com/oioio-space/maldev/internal/manager/tui/core"
 )
 
 // KeyHint is a key + description pair shown in the status bar.
@@ -18,7 +18,7 @@ type KeyHint struct {
 // StatusBar renders a row of keyboard hints at the bottom of a screen.
 type StatusBar struct {
 	Hints  []KeyHint
-	bounds tui.Rect
+	bounds core.Rect
 }
 
 // NewStatusBar constructs a StatusBar.
@@ -26,10 +26,10 @@ func NewStatusBar(hints ...KeyHint) *StatusBar {
 	return &StatusBar{Hints: hints}
 }
 
-func (s *StatusBar) Layout(bounds tui.Rect) { s.bounds = bounds }
-func (s *StatusBar) Bounds() tui.Rect      { return s.bounds }
+func (s *StatusBar) Layout(bounds core.Rect) { s.bounds = bounds }
+func (s *StatusBar) Bounds() core.Rect      { return s.bounds }
 
-func (s *StatusBar) Update(_ tea.Msg) (tui.Widget, tea.Cmd) { return s, nil }
+func (s *StatusBar) Update(_ tea.Msg) (core.Widget, tea.Cmd) { return s, nil }
 
 var (
 	hintKey  = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff36d4")).Bold(true).Padding(0, 1)

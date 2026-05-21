@@ -4,7 +4,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/oioio-space/maldev/internal/manager/tui"
+	"github.com/oioio-space/maldev/internal/manager/tui/core"
 )
 
 // TabItem describes one tab in a TabBar.
@@ -17,11 +17,11 @@ type TabItem struct {
 type SwitchViewMsg struct{ ID string }
 
 // TabBar is a horizontal strip of tabs. Clicking a tab fires SwitchViewMsg.
-// It implements tui.Clickable.
+// It implements core.Clickable.
 type TabBar struct {
 	Tabs   []TabItem
 	Active string
-	bounds tui.Rect
+	bounds core.Rect
 
 	// tabWidths[i] is the rendered width of tab i, set during View().
 	tabWidths []int
@@ -32,10 +32,10 @@ func NewTabBar(tabs []TabItem, active string) *TabBar {
 	return &TabBar{Tabs: tabs, Active: active}
 }
 
-func (tb *TabBar) Layout(bounds tui.Rect) { tb.bounds = bounds }
-func (tb *TabBar) Bounds() tui.Rect      { return tb.bounds }
+func (tb *TabBar) Layout(bounds core.Rect) { tb.bounds = bounds }
+func (tb *TabBar) Bounds() core.Rect      { return tb.bounds }
 
-func (tb *TabBar) Update(_ tea.Msg) (tui.Widget, tea.Cmd) { return tb, nil }
+func (tb *TabBar) Update(_ tea.Msg) (core.Widget, tea.Cmd) { return tb, nil }
 
 var (
 	tabActive   = lipgloss.NewStyle().Foreground(lipgloss.Color("#e6e6ff")).Bold(true).Padding(0, 2).Border(lipgloss.NormalBorder(), false, false, true, false).BorderForeground(lipgloss.Color("#ff36d4"))
@@ -67,7 +67,7 @@ func (tb *TabBar) View() string {
 		Render(strip)
 }
 
-// OnClick implements tui.Clickable. x is relative to bounds.X.
+// OnClick implements core.Clickable. x is relative to bounds.X.
 func (tb *TabBar) OnClick(x, _ int, _ tea.MouseButton) tea.Cmd {
 	// Walk accumulated tab widths to find which tab was clicked.
 	cursor := 0

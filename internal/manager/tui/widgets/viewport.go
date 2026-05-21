@@ -4,14 +4,14 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/oioio-space/maldev/internal/manager/tui"
+	"github.com/oioio-space/maldev/internal/manager/tui/core"
 )
 
-// WrappedViewport wraps bubbles/viewport as a tui.Widget.
+// WrappedViewport wraps bubbles/viewport as a core.Widget.
 // Mouse wheel events scroll the content.
 type WrappedViewport struct {
 	inner  viewport.Model
-	bounds tui.Rect
+	bounds core.Rect
 }
 
 // NewWrappedViewport constructs a WrappedViewport with the given content.
@@ -21,15 +21,15 @@ func NewWrappedViewport(content string) *WrappedViewport {
 	return &WrappedViewport{inner: vp}
 }
 
-func (wv *WrappedViewport) Layout(bounds tui.Rect) {
+func (wv *WrappedViewport) Layout(bounds core.Rect) {
 	wv.bounds = bounds
 	wv.inner.Width = bounds.W
 	wv.inner.Height = bounds.H
 }
 
-func (wv *WrappedViewport) Bounds() tui.Rect { return wv.bounds }
+func (wv *WrappedViewport) Bounds() core.Rect { return wv.bounds }
 
-func (wv *WrappedViewport) Update(msg tea.Msg) (tui.Widget, tea.Cmd) {
+func (wv *WrappedViewport) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 	if mm, ok := msg.(tea.MouseMsg); ok {
 		if mm.Action == tea.MouseActionPress {
 			switch mm.Button {

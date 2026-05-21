@@ -73,7 +73,7 @@ func run() error {
 	}
 
 	root := tui.New(svc, nil /* httpsrv wired in Phase 4 */, tui.SessionReady)
-	p := tea.NewProgram(root, tea.WithAltScreen())
+	p := tea.NewProgram(root, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err = p.Run()
 	return err
 }

@@ -10,7 +10,12 @@ import (
 	"github.com/oioio-space/maldev/internal/manager/httpsrv"
 	"github.com/oioio-space/maldev/internal/manager/service"
 	"github.com/oioio-space/maldev/internal/manager/tui/cmds"
+	"github.com/oioio-space/maldev/internal/manager/tui/widgets"
 )
+
+// SwitchToLicensesMsg is fired when a dashboard tile is clicked.
+// Filter is one of "active", "expiring", "expired", "revoked".
+type SwitchToLicensesMsg struct{ Filter string }
 
 // dashboardModel holds the data and layout state for the Dashboard view.
 type dashboardModel struct {
@@ -77,9 +82,11 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 	return m, nil
 }
 
-func (m dashboardModel) View() string {
-	w := m.width
-	h := m.height
+// buildWidgetTree constructs the full dashboard widget tree and assigns layout.
+// Called on View() and on mouse dispatch so it always reflects current data.
+// The tree is intentionally stateless — cheap for small trees.
+func (m dashboardModel) buildWidgetTree() Widget {
+	w, h := m.width, m.height
 	if w == 0 {
 		w = 120
 	}
@@ -87,127 +94,125 @@ func (m dashboardModel) View() string {
 		h = 40
 	}
 
+	// Counter tiles row.
+	tileW := w/4 - 2
+	activeTile := widgets.NewTile("Active", m.counters.active, "", Palette.Green,
+		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "active"} } })
+	expiringTile := widgets.NewTile("Expiring Soon", m.counters.expiringSoon, "", Palette.Yellow,
+		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "expiring"} } })
+	expiredTile := widgets.NewTile("Expired", m.counters.expired, "", Palette.Red,
+		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "expired"} } })
+	revokedTile := widgets.NewTile("Revoked", m.counters.revoked, "", Palette.Red,
+		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "revoked"} } })
+
+	tilesRow := NewFlex(Horizontal, 0,
+		FlexChild{W: activeTile, Min: tileW, Flex: 1},
+		FlexChild{W: expiringTile, Min: tileW, Flex: 1},
+		FlexChild{W: expiredTile, Min: tileW, Flex: 1},
+		FlexChild{W: revokedTile, Min: tileW, Flex: 1},
+	)
+
+	// Left column content.
+	keyContent := widgets.NewText(m.keyCardContent(), lipgloss.NewStyle())
+	keyBox := NewBox(keyContent, "Active Issuer Key", false)
+	serversContent := widgets.NewText(m.serversCardContent(), lipgloss.NewStyle())
+	serversBox := NewBox(serversContent, "Servers", false)
+	leftCol := NewFlex(Vertical, 1,
+		FlexChild{W: keyBox, Min: 6, Flex: 1},
+		FlexChild{W: serversBox, Min: 6, Flex: 1},
+	)
+
+	// Right column content.
+	auditContent := widgets.NewText(m.auditCardContent(), lipgloss.NewStyle())
+	auditBox := NewBox(auditContent, "Recent Events", false)
+	shortcutsContent := widgets.NewText(m.shortcutsCardContent(), lipgloss.NewStyle())
+	shortcutsBox := NewBox(shortcutsContent, "Shortcuts", false)
+	rightCol := NewFlex(Vertical, 1,
+		FlexChild{W: auditBox, Min: 6, Flex: 1},
+		FlexChild{W: shortcutsBox, Min: 6, Flex: 1},
+	)
+
+	body := NewFlex(Horizontal, 2,
+		FlexChild{W: leftCol, Flex: 1},
+		FlexChild{W: rightCol, Flex: 1},
+	)
+
+	root := NewFlex(Vertical, 1,
+		FlexChild{W: tilesRow, Min: 5, Max: 7},
+		FlexChild{W: body, Flex: 1},
+	)
+	// Reserve 2 rows for chrome (title + tabs).
+	root.Layout(Rect{X: 0, Y: 2, W: w, H: h - 2})
+	return root
+}
+
+func (m dashboardModel) View() string {
+	if m.width == 0 {
+		return ""
+	}
 	if m.loading {
-		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center,
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
 			Dim.Render("Loading dashboard…"))
 	}
 	if m.err != nil {
-		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center,
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
 			GlowRed.Render("Error: "+m.err.Error()))
 	}
-
-	// ── Counter tiles ────────────────────────────────────────────────
-	tiles := m.renderCounterTiles(w)
-
-	// ── Left column: active key + servers ───────────────────────────
-	leftW := w / 2
-	keyCard := m.renderKeyCard(leftW - 2)
-	serversCard := m.renderServersCard(leftW - 2)
-	leftCol := lipgloss.JoinVertical(lipgloss.Left, keyCard, "", serversCard)
-
-	// ── Right column: recent audit + shortcuts ───────────────────────
-	rightW := w - leftW - 2
-	auditCard := m.renderAuditCard(rightW - 2)
-	shortcutsCard := m.renderShortcutsCard(rightW - 2)
-	rightCol := lipgloss.JoinVertical(lipgloss.Left, auditCard, "", shortcutsCard)
-
-	body := lipgloss.JoinHorizontal(lipgloss.Top,
-		lipgloss.NewStyle().Width(leftW).Render(leftCol),
-		"  ",
-		lipgloss.NewStyle().Width(rightW).Render(rightCol),
-	)
-
-	return lipgloss.JoinVertical(lipgloss.Left, tiles, "", body)
+	return m.buildWidgetTree().View()
 }
 
-func (m dashboardModel) renderCounterTiles(w int) string {
-	tileW := w/4 - 2
-
-	tile := func(label string, val int, style lipgloss.Style) string {
-		inner := lipgloss.JoinVertical(lipgloss.Center,
-			style.Render(fmt.Sprintf("%d", val)),
-			Dim.Render(label),
-		)
-		return BoxStyle.Width(tileW).Align(lipgloss.Center).Render(inner)
-	}
-
-	t1 := tile("Active", m.counters.active, GlowGreen)
-	t2 := tile("Expiring Soon", m.counters.expiringSoon, GlowYellow)
-	t3 := tile("Expired", m.counters.expired, GlowRed)
-	t4 := tile("Revoked", m.counters.revoked, GlowRed)
-
-	return lipgloss.JoinHorizontal(lipgloss.Top, t1, t2, t3, t4)
-}
-
-func (m dashboardModel) renderKeyCard(w int) string {
-	var lines []string
-	lines = append(lines, GlowCyan.Render("Active Issuer Key"))
-	lines = append(lines, "")
+// keyCardContent builds the text content for the key card.
+func (m dashboardModel) keyCardContent() string {
 	if m.activeKey.id == "" {
-		lines = append(lines, Mute.Render("no active key"))
-	} else {
-		lines = append(lines, Base.Render("Name:  ")+Dim.Render(m.activeKey.name))
-		lines = append(lines, Base.Render("KeyID: ")+Dim.Render(m.activeKey.id))
-		lines = append(lines, Base.Render("FP:    ")+Mute.Render(m.activeKey.fingerprint))
+		return Mute.Render("no active key")
 	}
-	return BoxStyle.Width(w).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return lipgloss.JoinVertical(lipgloss.Left,
+		Base.Render("Name:  ")+Dim.Render(m.activeKey.name),
+		Base.Render("KeyID: ")+Dim.Render(m.activeKey.id),
+		Base.Render("FP:    ")+Mute.Render(m.activeKey.fingerprint),
+	)
 }
 
-func (m dashboardModel) renderServersCard(w int) string {
-	var lines []string
-	lines = append(lines, GlowCyan.Render("Servers"))
-	lines = append(lines, "")
-
+// serversCardContent builds the text content for the servers card.
+func (m dashboardModel) serversCardContent() string {
 	if m.bundle == nil {
-		lines = append(lines, Mute.Render("Phase 4 — to be wired"))
-	} else {
-		for _, s := range m.servers {
-			var pill string
-			if s.On {
-				pill = PillOn.Render("ON")
-			} else {
-				pill = PillOff.Render("OFF")
-			}
-			line := fmt.Sprintf("%-12s %s  %s", s.Name, pill, Mute.Render(s.URL))
-			lines = append(lines, Base.Render(line))
-		}
+		return Mute.Render("Phase 4 — to be wired")
 	}
-	return BoxStyle.Width(w).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	var lines []string
+	for _, s := range m.servers {
+		var pill string
+		if s.On {
+			pill = PillOn.Render("ON")
+		} else {
+			pill = PillOff.Render("OFF")
+		}
+		lines = append(lines, fmt.Sprintf("%-12s %s  %s", s.Name, pill, Mute.Render(s.URL)))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
-func (m dashboardModel) renderAuditCard(w int) string {
-	var lines []string
-	lines = append(lines, GlowCyan.Render("Recent Events"))
-	lines = append(lines, "")
-
+// auditCardContent builds the text content for the recent events card.
+func (m dashboardModel) auditCardContent() string {
 	if len(m.recent) == 0 {
-		lines = append(lines, Mute.Render("no events yet"))
-	} else {
-		for _, e := range m.recent {
-			ts := e.At.Format(time.RFC3339)[:19]
-			row := fmt.Sprintf("%-19s  %-20s  %s",
-				Mute.Render(ts),
-				GlowMagent.Render(e.Kind),
-				Dim.Render(e.Actor),
-			)
-			lines = append(lines, row)
-		}
-	}
-	return BoxStyle.Width(w).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
-}
-
-func (m dashboardModel) renderShortcutsCard(w int) string {
-	hints := [][2]string{
-		{"1-9", "switch view"},
-		{"q", "quit"},
-		{"?", "help"},
-		{"r", "refresh"},
+		return Mute.Render("no events yet")
 	}
 	var lines []string
-	lines = append(lines, GlowCyan.Render("Shortcuts"))
-	lines = append(lines, "")
+	for _, e := range m.recent {
+		ts := e.At.Format(time.RFC3339)[:19]
+		lines = append(lines, fmt.Sprintf("%-19s  %-20s  %s",
+			Mute.Render(ts), GlowMagent.Render(e.Kind), Dim.Render(e.Actor)))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+// shortcutsCardContent builds the text content for the shortcuts card.
+func (m dashboardModel) shortcutsCardContent() string {
+	hints := [][2]string{
+		{"1-9", "switch view"}, {"q", "quit"}, {"?", "help"}, {"r", "refresh"},
+	}
+	var lines []string
 	for _, h := range hints {
 		lines = append(lines, HintKey.Render(h[0])+" "+HintText.Render(h[1]))
 	}
-	return BoxStyle.Width(w).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }

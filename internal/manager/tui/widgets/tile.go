@@ -6,18 +6,18 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/oioio-space/maldev/internal/manager/tui"
+	"github.com/oioio-space/maldev/internal/manager/tui/core"
 )
 
 // Tile is a counter card shown on the dashboard. Clicking it fires OnPress.
-// It implements tui.Clickable.
+// It implements core.Clickable.
 type Tile struct {
 	Title    string
 	Value    int
 	Subtitle string
 	Color    lipgloss.Color
 	OnPress  func() tea.Cmd
-	bounds   tui.Rect
+	bounds   core.Rect
 }
 
 // NewTile constructs a Tile.
@@ -31,10 +31,10 @@ func NewTile(title string, value int, subtitle string, color lipgloss.Color, onP
 	}
 }
 
-func (t *Tile) Layout(bounds tui.Rect) { t.bounds = bounds }
-func (t *Tile) Bounds() tui.Rect      { return t.bounds }
+func (t *Tile) Layout(bounds core.Rect) { t.bounds = bounds }
+func (t *Tile) Bounds() core.Rect      { return t.bounds }
 
-func (t *Tile) Update(_ tea.Msg) (tui.Widget, tea.Cmd) { return t, nil }
+func (t *Tile) Update(_ tea.Msg) (core.Widget, tea.Cmd) { return t, nil }
 
 func (t *Tile) View() string {
 	valStyle := lipgloss.NewStyle().Foreground(t.Color).Bold(true)
@@ -57,7 +57,7 @@ func (t *Tile) View() string {
 		Render(inner)
 }
 
-// OnClick implements tui.Clickable.
+// OnClick implements core.Clickable.
 func (t *Tile) OnClick(_, _ int, _ tea.MouseButton) tea.Cmd {
 	if t.OnPress != nil {
 		return t.OnPress()
