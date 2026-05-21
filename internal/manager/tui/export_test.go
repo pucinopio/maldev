@@ -3,10 +3,24 @@
 package tui
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/oioio-space/maldev/internal/manager/httpsrv"
 )
+
+// SetTitleBarClock replaces the clock used by renderTitleBar with fn and
+// returns a restore func. Call it in TestMain or t.Cleanup to get deterministic
+// golden output. Example:
+//
+//	restore := tui.SetTitleBarClock(func() time.Time { return fixedTime })
+//	t.Cleanup(restore)
+func SetTitleBarClock(fn func() time.Time) (restore func()) {
+	prev := titleBarClock
+	titleBarClock = fn
+	return func() { titleBarClock = prev }
+}
 
 // ServerEventMsg wraps an httpsrv.Event as the internal serverEventMsg so
 // tests can inject events without importing the unexported type.

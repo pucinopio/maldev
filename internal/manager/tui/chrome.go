@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -44,15 +46,41 @@ func buildTabBar(active ViewID, width int) *widgets.TabBar {
 	return tb
 }
 
-// renderTitleBar returns the top title bar string.
+// appVersion is shown in the title bar.
+const appVersion = "v0.4.0-dev"
+
+// titleBarClock is the clock used by renderTitleBar. Tests may replace it with
+// a fixed-time func to produce deterministic golden output.
+var titleBarClock = time.Now
+
+// renderTitleBar returns the top title bar:
+//
+//	left:  ◆ license-manager v0.4.0-dev
+//	right: db: <dbName> | net: online | http: N/3 ON | HH:MM:SS DD/MM/YYYY
 func renderTitleBar(width int) string {
-	title := GlowMagent.Render(" license-manager ")
-	sub := Dim.Render(" oioio-space/maldev ")
-	pad := width - lipgloss.Width(title) - lipgloss.Width(sub)
-	if pad < 0 {
-		pad = 0
+	return renderTitleBarWith(width, "db.sqlite", 0, titleBarClock())
+}
+
+// renderTitleBarWith is the testable core of renderTitleBar.
+// dbName is the database filename; httpOn is the number of running HTTP servers.
+func renderTitleBarWith(width int, dbName string, httpOn int, now time.Time) string {
+	diamond := GlowMagent.Render("◆")
+	appName := lipgloss.NewStyle().Foreground(Palette.Cyan).Bold(true).Render(" license-manager ")
+	ver := Dim.Render(appVersion)
+	left := diamond + appName + ver
+
+	right := fmt.Sprintf("db: %s | net: online | http: %d/3 ON | %s",
+		dbName,
+		httpOn,
+		now.Format("02/01/2006 15:04:05"),
+	)
+	rightRendered := Dim.Render(right)
+
+	gap := width - lipgloss.Width(left) - lipgloss.Width(rightRendered)
+	if gap < 1 {
+		gap = 1
 	}
-	bar := title + strings.Repeat(" ", pad) + sub
+	bar := left + strings.Repeat(" ", gap) + rightRendered
 	return lipgloss.NewStyle().
 		Background(Palette.Bg2).
 		Width(width).

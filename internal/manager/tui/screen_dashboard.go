@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -23,7 +22,7 @@ type dashboardModel struct {
 	bundle   *httpsrv.Bundle
 
 	counters struct {
-		active, revoked, expired, expiringSoon int
+		active, revoked, expired, expiringSoon, superseded int
 	}
 	activeKey struct {
 		id, name, fingerprint string
@@ -68,6 +67,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 			m.counters.revoked = msg.Revoked
 			m.counters.expired = msg.Expired
 			m.counters.expiringSoon = msg.ExpiringSoon
+			m.counters.superseded = msg.Superseded
 			m.activeKey.id = msg.ActiveKeyID
 			m.activeKey.name = msg.ActiveKeyName
 			m.activeKey.fingerprint = msg.ActiveKeyFingerprint
@@ -94,47 +94,56 @@ func (m dashboardModel) buildWidgetTree() Widget {
 		h = 40
 	}
 
-	// Counter tiles row.
-	tileW := w/4 - 2
-	activeTile := widgets.NewTile("Active", m.counters.active, "", Palette.Green,
+	// Five counter tiles with reference subtitles.
+	tileW := w/5 - 1
+	activeTile := widgets.NewTile("Actives [a]", m.counters.active,
+		"signées par la clé active", Palette.Green,
 		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "active"} } })
-	expiringTile := widgets.NewTile("Expiring Soon", m.counters.expiringSoon, "", Palette.Yellow,
-		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "expiring"} } })
-	expiredTile := widgets.NewTile("Expired", m.counters.expired, "", Palette.Red,
-		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "expired"} } })
-	revokedTile := widgets.NewTile("Revoked", m.counters.revoked, "", Palette.Red,
+	revokedTile := widgets.NewTile("Révoquées [r]", m.counters.revoked,
+		"présentes dans la CRL", Palette.Red,
 		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "revoked"} } })
+	expiredTile := widgets.NewTile("Expirées [e]", m.counters.expired,
+		"NotAfter dépassé", Palette.Orange,
+		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "expired"} } })
+	expiringTile := widgets.NewTile("Expirent < 7 j [w]", m.counters.expiringSoon,
+		"à renouveler", Palette.Yellow,
+		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "expiring"} } })
+	supersededTile := widgets.NewTile("Superseded [u]", m.counters.superseded,
+		"re-émises plus tard", Palette.Cyan,
+		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "active"} } })
 
 	tilesRow := NewFlex(Horizontal, 0,
 		FlexChild{W: activeTile, Min: tileW, Flex: 1},
-		FlexChild{W: expiringTile, Min: tileW, Flex: 1},
-		FlexChild{W: expiredTile, Min: tileW, Flex: 1},
 		FlexChild{W: revokedTile, Min: tileW, Flex: 1},
+		FlexChild{W: expiredTile, Min: tileW, Flex: 1},
+		FlexChild{W: expiringTile, Min: tileW, Flex: 1},
+		FlexChild{W: supersededTile, Min: tileW, Flex: 1},
 	)
 
-	// Left column content.
+	// Left column (~⅓): issuer key box + servers box.
 	keyContent := widgets.NewText(m.keyCardContent(), lipgloss.NewStyle())
-	keyBox := NewBox(keyContent, "Active Issuer Key", false)
+	keyBox := NewBox(keyContent, "Clé d'émission active [k] gérer", false)
 	serversContent := widgets.NewText(m.serversCardContent(), lipgloss.NewStyle())
-	serversBox := NewBox(serversContent, "Servers", false)
+	serversBox := NewBox(serversContent, "Serveurs HTTP [7] détail · [s] start/stop", false)
 	leftCol := NewFlex(Vertical, 1,
 		FlexChild{W: keyBox, Min: 6, Flex: 1},
 		FlexChild{W: serversBox, Min: 6, Flex: 1},
 	)
 
-	// Right column content.
+	// Right column (~⅔): audit log + shortcuts.
 	auditContent := widgets.NewText(m.auditCardContent(), lipgloss.NewStyle())
-	auditBox := NewBox(auditContent, "Recent Events", false)
+	auditBox := NewBox(auditContent, "5 dernières actions [8] tout l'audit", false)
 	shortcutsContent := widgets.NewText(m.shortcutsCardContent(), lipgloss.NewStyle())
-	shortcutsBox := NewBox(shortcutsContent, "Shortcuts", false)
+	shortcutsBox := NewBox(shortcutsContent, "Raccourcis touche → écran", false)
 	rightCol := NewFlex(Vertical, 1,
-		FlexChild{W: auditBox, Min: 6, Flex: 1},
-		FlexChild{W: shortcutsBox, Min: 6, Flex: 1},
+		FlexChild{W: auditBox, Min: 6, Flex: 2},
+		FlexChild{W: shortcutsBox, Min: 5, Flex: 1},
 	)
 
-	body := NewFlex(Horizontal, 2,
+	// ⅓ left / ⅔ right split.
+	body := NewFlex(Horizontal, 1,
 		FlexChild{W: leftCol, Flex: 1},
-		FlexChild{W: rightCol, Flex: 1},
+		FlexChild{W: rightCol, Flex: 2},
 	)
 
 	root := NewFlex(Vertical, 1,
@@ -161,15 +170,19 @@ func (m dashboardModel) View() string {
 	return m.buildWidgetTree().View()
 }
 
-// keyCardContent builds the text content for the key card.
+// keyCardContent builds the text content for the issuer key card.
+// The KeyID is shown large; name and fingerprint follow on subsequent lines.
+// An ACTIVE pill appears on the right of the first data line when a key is set.
 func (m dashboardModel) keyCardContent() string {
 	if m.activeKey.id == "" {
-		return Mute.Render("no active key")
+		return Mute.Render("aucune clé active")
 	}
+	pill := PillActive.Render("ACTIVE")
+	idLine := GlowCyan.Render(m.activeKey.id) + "  " + pill
 	return lipgloss.JoinVertical(lipgloss.Left,
-		Base.Render("Name:  ")+Dim.Render(m.activeKey.name),
-		Base.Render("KeyID: ")+Dim.Render(m.activeKey.id),
-		Base.Render("FP:    ")+Mute.Render(m.activeKey.fingerprint),
+		idLine,
+		Base.Render("nom ")+Dim.Render(m.activeKey.name),
+		Base.Render("fpr ")+Mute.Render(m.activeKey.fingerprint),
 	)
 }
 
@@ -217,27 +230,38 @@ func (m dashboardModel) serversCardContent() string {
 }
 
 // auditCardContent builds the text content for the recent events card.
+// Format: HH:MM:SS  kind  target  (actor)
 func (m dashboardModel) auditCardContent() string {
 	if len(m.recent) == 0 {
-		return Mute.Render("no events yet")
+		return Mute.Render("aucun événement")
 	}
 	var lines []string
 	for _, e := range m.recent {
-		ts := e.At.Format(time.RFC3339)[:19]
-		lines = append(lines, fmt.Sprintf("%-19s  %-20s  %s",
-			Mute.Render(ts), GlowMagent.Render(e.Kind), Dim.Render(e.Actor)))
+		ts := e.At.Format("15:04:05")
+		line := fmt.Sprintf("%s  %-22s  %-16s  %s",
+			Mute.Render(ts),
+			GlowMagent.Render(e.Kind),
+			Dim.Render(e.TargetID),
+			Mute.Render("("+e.Actor+")"),
+		)
+		lines = append(lines, line)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
-// shortcutsCardContent builds the text content for the shortcuts card.
+// shortcutsCardContent builds the 6-hint shortcuts grid matching the reference.
 func (m dashboardModel) shortcutsCardContent() string {
 	hints := [][2]string{
-		{"1-9", "switch view"}, {"q", "quit"}, {"?", "help"}, {"r", "refresh"},
+		{"n", "nouvelle licence"},
+		{"/", "rechercher"},
+		{"x", "révoquer"},
+		{"k", "clés d'émission"},
+		{"i", "identity.bin"},
+		{"?", "aide contextuelle"},
 	}
 	var lines []string
 	for _, h := range hints {
-		lines = append(lines, HintKey.Render(h[0])+" "+HintText.Render(h[1]))
+		lines = append(lines, HintKey.Render("["+h[0]+"]")+"  "+HintText.Render(h[1]))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }

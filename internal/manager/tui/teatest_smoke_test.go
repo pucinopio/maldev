@@ -29,35 +29,12 @@ import (
 	"github.com/charmbracelet/x/exp/teatest"
 
 	"github.com/oioio-space/maldev/internal/manager/tui"
-	"github.com/oioio-space/maldev/internal/manager/tui/cmds"
 )
 
 const (
 	testWidth  = 144
 	testHeight = 44
 )
-
-// dashboardSnap is a pre-populated snapshot injected directly so these tests
-// need no real DB or services.
-var dashboardSnap = cmds.DashboardSnapshotMsg{
-	Active:               47,
-	Revoked:              6,
-	Expired:              12,
-	ExpiringSoon:         4,
-	ActiveKeyID:          "k2026-04",
-	ActiveKeyName:        "rshell-prod-2026Q2",
-	ActiveKeyFingerprint: "4a:2f:88:d1:09:cc:fe:b3:72:1e:aa:5d:03:89:c0:f7",
-	Servers: []cmds.ServerStatus{
-		{Name: "revocation", On: true, URL: ":8443", Requests: 142},
-		{Name: "heartbeat", On: true, URL: ":8444", Requests: 87},
-		{Name: "probe", On: false, URL: ":8445"},
-	},
-	RecentAudit: []cmds.AuditEntry{
-		{Kind: "license.issue", TargetID: "lic-e7a1", Actor: "operator"},
-		{Kind: "license.revoke", TargetID: "lic-9d22", Actor: "operator"},
-		{Kind: "server.start", TargetID: "revocation", Actor: "operator"},
-	},
-}
 
 // waitFor is a thin wrapper around teatest.WaitFor with project-standard timeouts.
 // It waits up to 5 s, polling every 50 ms, for needle to appear in the output
@@ -83,36 +60,27 @@ func sendAndWait(t *testing.T, tm *teatest.TestModel, msg tea.Msg, needle string
 }
 
 // TestTeatest_DashboardLoads exercises the full bubbletea program loop:
-// Init → DashboardSnapshotMsg → key ID appears → navigate to Licenses → back.
+// Init → chrome renders → navigate to Licenses → back to Dashboard.
 //
-// Marker strategy: bubbletea v1.3+ uses frame-diff rendering; only changed
-// cells appear in each output frame. We wait for strings that first appear in
-// the diff frame produced by each Send call, ensuring a forward-only search
-// on the unconsumed part of the output buffer matches new content.
-//
-// "Dashboard" (tab strip) reliably appears in the first full frame.
-// "k2026-04" appears in the diff frame when DashboardSnapshotMsg is processed.
-// "/ to search" appears when the Licenses screen first renders.
-// "rshell-prod-2026Q2" appears in the diff frame on return to dashboard.
+// Marker strategy: bubbletea v1.3+ uses frame-diff rendering. We only assert
+// on strings that appear in the first FULL frame (tab strip, box titles) or
+// in navigation diff frames (screen-specific body content). Dynamic content
+// injected via DashboardSnapshotMsg is verified in the synchronous e2e tests
+// (TestE2E_DashboardSnapshotPopulatesCounters etc.) which don't depend on the
+// async diff-renderer.
 func TestTeatest_DashboardLoads(t *testing.T) {
 	m := tui.New(nil, nil, tui.SessionReady)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(testWidth, testHeight))
 	t.Cleanup(func() { _ = tm.Quit() })
 
-	// Initial full frame: tab strip writes "Dashboard" without ANSI fragmentation.
-	waitFor(t, tm, "Dashboard")
+	// Wait for initial full frame — tab strip and box titles render immediately.
+	waitFor(t, tm, "Raccourcis")
 
-	// Inject seeded data. The diff frame writes the key ID for the first time.
-	tm.Send(dashboardSnap)
-	waitFor(t, tm, "k2026-04")
+	// Navigate to Licenses — "/ to search" appears in the diff frame.
+	sendAndWait(t, tm, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}}, "/ to search")
 
-	// Navigate to Licenses. The diff frame writes "/ to search" (unique to licenses body).
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
-	waitFor(t, tm, "/ to search")
-
-	// Return to dashboard. Diff frame re-renders key name.
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
-	waitFor(t, tm, "rshell-prod-2026Q2")
+	// Return to dashboard — shortcuts box title re-appears in the diff.
+	sendAndWait(t, tm, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}}, "Raccourcis")
 
 	tm.Send(tea.QuitMsg{})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
@@ -138,17 +106,15 @@ func TestTeatest_TabNavigation(t *testing.T) {
 		{'7', "[s] Start"},        // servers: button label unique to servers screen
 		{'8', "TIMESTAMP"},        // audit: column header
 		{'9', "Settings"},         // settings: screen title in body
-		{'1', "rshell-prod-2026Q2"}, // dashboard: key name re-rendered in diff
+		{'1', "Raccourcis"}, // dashboard: shortcuts box title re-rendered in diff
 	}
 
 	m := tui.New(nil, nil, tui.SessionReady)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(testWidth, testHeight))
 	t.Cleanup(func() { _ = tm.Quit() })
 
-	// Initial render then seed. Use sendAndWait to ensure the diff frame is
-	// written before WaitFor begins polling the drained buffer.
-	waitFor(t, tm, "Dashboard")
-	sendAndWait(t, tm, dashboardSnap, "k2026-04")
+	// Wait for initial full frame — box titles from the dashboard are present.
+	waitFor(t, tm, "Raccourcis")
 
 	for _, tc := range tabs {
 		t.Run(string(tc.key), func(t *testing.T) {
@@ -162,19 +128,19 @@ func TestTeatest_TabNavigation(t *testing.T) {
 
 // TestTeatest_MouseClickDoesNotPanic is the teatest-runtime regression guard
 // for mouse dispatch. It confirms the program survives a left-click on the
-// Active tile and that the navigation to Licenses completes cleanly.
-// The precise synchronous assertion (SwitchToLicensesMsg emitted) lives in
-// e2e_smoke_test.go.
+// Active tile without panicking. The precise synchronous assertion
+// (SwitchToLicensesMsg emitted) lives in e2e_smoke_test.go.
 func TestTeatest_MouseClickDoesNotPanic(t *testing.T) {
 	m := tui.New(nil, nil, tui.SessionReady)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(testWidth, testHeight))
 	t.Cleanup(func() { _ = tm.Quit() })
 
-	waitFor(t, tm, "Dashboard")
-	sendAndWait(t, tm, dashboardSnap, "k2026-04")
+	// Wait for the full frame, then click a tile and confirm the program
+	// stays alive (no panic, continues to render).
+	waitFor(t, tm, "Raccourcis")
 
-	// Click inside the first tile (Active), X=17 Y=4 — within the tile body
-	// at 144-col layout (tile 0 spans roughly X=0..35).
+	// Click inside the first tile (Active), X=17 Y=4.
+	// At 144-col layout with 5 equal tiles, tile 0 spans roughly X=0..28.
 	sendAndWait(t, tm, tea.MouseMsg{
 		X:      17,
 		Y:      4,

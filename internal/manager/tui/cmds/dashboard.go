@@ -14,10 +14,11 @@ import (
 
 // DashboardSnapshot carries all data the dashboard view needs to render.
 type DashboardSnapshot struct {
-	Active      int
-	Revoked     int
-	Expired     int
+	Active       int
+	Revoked      int
+	Expired      int
 	ExpiringSoon int
+	Superseded   int
 
 	ActiveKeyID          string
 	ActiveKeyName        string
