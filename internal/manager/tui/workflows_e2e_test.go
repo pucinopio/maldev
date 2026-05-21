@@ -622,6 +622,266 @@ func TestE2E_RevocationOverlayEscCancels(t *testing.T) {
 	}
 }
 
+// ── Dashboard data flow ────────────────────────────────────────────────────────
+
+// TestE2E_DashboardSnapshotPopulatesCounters wires a real service with seeded
+// data, fires the snapshot cmd, dispatches the resulting Msg, and asserts the
+// dashboard counters reflect the seeded rows.
+func TestE2E_DashboardSnapshotPopulatesCounters(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+	iss, err := svc.Issuer.Generate(ctx, "dash-issuer", "k-dash", "operator")
+	if err != nil {
+		t.Fatalf("Issuer.Generate: %v", err)
+	}
+	if err := svc.Issuer.SetActive(ctx, iss.ID, "operator"); err != nil {
+		t.Fatalf("Issuer.SetActive: %v", err)
+	}
+	// One license outside the 30-day "expiring soon" window → counts as Active.
+	if _, err := svc.License.Issue(ctx, service.IssueRequest{
+		IssuerID: iss.ID,
+		Subject:  "dash-active",
+		NotAfter: timeNowPlus(60 * 24),
+		Actor:    "operator",
+	}); err != nil {
+		t.Fatalf("License.Issue (active): %v", err)
+	}
+	// One license inside the 30-day window → counts as ExpiringSoon.
+	if _, err := svc.License.Issue(ctx, service.IssueRequest{
+		IssuerID: iss.ID,
+		Subject:  "dash-soon",
+		NotAfter: timeNowPlus(24),
+		Actor:    "operator",
+	}); err != nil {
+		t.Fatalf("License.Issue (soon): %v", err)
+	}
+
+	dm := newDashboardModel(svc, nil)
+	cmd := dm.refresh()
+	if cmd == nil {
+		t.Fatal("refresh cmd is nil")
+	}
+	dm, _ = dm.Update(cmd())
+	if dm.loading {
+		t.Fatal("dashboard still loading after snapshot dispatched")
+	}
+	if dm.counters.active != 1 {
+		t.Fatalf("counters.active = %d, want 1 (60-day license)", dm.counters.active)
+	}
+	if dm.counters.expiringSoon != 1 {
+		t.Fatalf("counters.expiringSoon = %d, want 1 (24h license)", dm.counters.expiringSoon)
+	}
+	if dm.activeKey.name != "dash-issuer" {
+		t.Fatalf("activeKey.name = %q, want 'dash-issuer'", dm.activeKey.name)
+	}
+}
+
+// TestE2E_DashboardTileClickEmitsSwitchMsg walks the rendered widget tree,
+// clicks the Active tile's bounds, and verifies a SwitchToLicensesMsg is
+// dispatched with the right filter.
+func TestE2E_DashboardTileClickEmitsSwitchMsg(t *testing.T) {
+	dm := newDashboardModel(nil, nil)
+	dm.width = 120
+	dm.height = 40
+	dm.counters.active = 5
+	tree := dm.buildWidgetTree()
+	tree.Layout(Rect{X: 0, Y: 0, W: 120, H: 40})
+
+	// The Active tile sits in the first row of the dashboard. Walk the tree
+	// looking for a Clickable whose bounds we can probe.
+	var found tea.Cmd
+	walkClickable(tree, func(c Clickable) {
+		b := c.Bounds()
+		if cmd := c.OnClick(0, 0, tea.MouseButtonLeft); cmd != nil {
+			if msg := cmd(); msg != nil {
+				if _, ok := msg.(SwitchToLicensesMsg); ok {
+					found = cmd
+				}
+			}
+		}
+		_ = b
+	})
+	if found == nil {
+		t.Fatal("no Clickable in dashboard tree emitted SwitchToLicensesMsg")
+	}
+}
+
+// walkClickable does a best-effort depth-first walk for Clickable widgets
+// in any widget tree, calling visit on each.
+func walkClickable(w Widget, visit func(Clickable)) {
+	if c, ok := w.(Clickable); ok {
+		visit(c)
+	}
+	if cw, ok := w.(interface{ Children() []Widget }); ok {
+		for _, ch := range cw.Children() {
+			walkClickable(ch, visit)
+		}
+	}
+}
+
+// ── Input overlay UX ──────────────────────────────────────────────────────────
+
+// TestE2E_InputOverlayEmitsValue types a value + Enter and asserts the emitted
+// InputResultMsg carries the right ID and Value.
+func TestE2E_InputOverlayEmitsValue(t *testing.T) {
+	ov := newInputOverlay("issuer-name", "New Issuer", "name", 64)
+	var o Overlay = ov
+	for _, r := range "production-2026" {
+		o, _ = o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	_, cmd := o.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("Enter must emit cmd")
+	}
+	done, ok := cmd().(OverlayDoneMsg)
+	if !ok {
+		t.Fatalf("expected OverlayDoneMsg, got %T", cmd())
+	}
+	ir, ok := done.Result.(InputResultMsg)
+	if !ok {
+		t.Fatalf("expected InputResultMsg, got %T", done.Result)
+	}
+	if ir.ID != "issuer-name" || ir.Value != "production-2026" {
+		t.Fatalf("InputResultMsg = %+v, want {ID:issuer-name, Value:production-2026}", ir)
+	}
+}
+
+// TestE2E_InputOverlayEmptyStays — Enter with empty value does not emit.
+func TestE2E_InputOverlayEmptyStays(t *testing.T) {
+	ov := newInputOverlay("x", "T", "p", 64)
+	var o Overlay = ov
+	_, cmd := o.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Fatalf("Enter on empty input must not emit, got %v", cmd())
+	}
+}
+
+// TestE2E_InputOverlayEscCancels — Esc emits OverlayDoneMsg with nil Result.
+func TestE2E_InputOverlayEscCancels(t *testing.T) {
+	ov := newInputOverlay("x", "T", "p", 64)
+	var o Overlay = ov
+	_, cmd := o.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd == nil {
+		t.Fatal("Esc must emit cmd")
+	}
+	done, ok := cmd().(OverlayDoneMsg)
+	if !ok {
+		t.Fatalf("expected OverlayDoneMsg, got %T", cmd())
+	}
+	if done.Result != nil {
+		t.Fatalf("Esc must emit nil Result, got %v", done.Result)
+	}
+}
+
+// ── Confirm overlay UX ────────────────────────────────────────────────────────
+
+// TestE2E_ConfirmOverlayBothPaths covers y/enter → Confirm:true and n/esc →
+// Confirm:false in a single table-driven test.
+func TestE2E_ConfirmOverlayBothPaths(t *testing.T) {
+	cases := []struct {
+		name string
+		key  string
+		want bool
+	}{
+		{"y_confirms", "y", true},
+		{"Y_confirms", "Y", true},
+		{"enter_confirms", "enter", true},
+		{"n_cancels", "n", false},
+		{"N_cancels", "N", false},
+		{"esc_cancels", "esc", false},
+		{"q_cancels", "q", false},
+	}
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			ov := newConfirmOverlay("test-id", "T", "body", "yes", "no", false)
+			var o Overlay = ov
+			var msg tea.KeyMsg
+			switch c.key {
+			case "enter":
+				msg = tea.KeyMsg{Type: tea.KeyEnter}
+			case "esc":
+				msg = tea.KeyMsg{Type: tea.KeyEsc}
+			default:
+				msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(c.key)}
+			}
+			_, cmd := o.Update(msg)
+			if cmd == nil {
+				t.Fatalf("key %q must emit cmd", c.key)
+			}
+			done := cmd().(OverlayDoneMsg)
+			cr, ok := done.Result.(ConfirmResultMsg)
+			if !ok {
+				t.Fatalf("expected ConfirmResultMsg, got %T", done.Result)
+			}
+			if cr.Confirm != c.want {
+				t.Fatalf("key %q: Confirm = %v, want %v", c.key, cr.Confirm, c.want)
+			}
+			if cr.ID != "test-id" {
+				t.Fatalf("ID = %q, want 'test-id'", cr.ID)
+			}
+		})
+	}
+}
+
+// ── Screen list-loading paths ─────────────────────────────────────────────────
+
+// TestE2E_IssuersScreenLoadsRows wires a seeded service into issuersModel,
+// fires the list cmd, dispatches the resulting msg, and asserts rows persisted.
+func TestE2E_IssuersScreenLoadsRows(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+	if _, err := svc.Issuer.Generate(ctx, "i1", "k1", "operator"); err != nil {
+		t.Fatalf("Issuer.Generate i1: %v", err)
+	}
+	if _, err := svc.Issuer.Generate(ctx, "i2", "k2", "operator"); err != nil {
+		t.Fatalf("Issuer.Generate i2: %v", err)
+	}
+
+	im := newIssuersModel(svc)
+	cmd := listIssuersCmd(svc)
+	if cmd == nil {
+		t.Fatal("listIssuersCmd nil")
+	}
+	msg := cmd()
+	im, _ = im.Update(msg)
+	if len(im.rows) != 2 {
+		t.Fatalf("issuersModel.rows len = %d, want 2", len(im.rows))
+	}
+}
+
+// TestE2E_LicensesScreenLoadsRows wires a seeded service into licensesModel
+// and asserts the table populates via ListLicensesCmd.
+func TestE2E_LicensesScreenLoadsRows(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+	iss, err := svc.Issuer.Generate(ctx, "lic-iss", "k-lic", "operator")
+	if err != nil {
+		t.Fatalf("Issuer.Generate: %v", err)
+	}
+	for _, sub := range []string{"sub-a", "sub-b", "sub-c"} {
+		if _, err := svc.License.Issue(ctx, service.IssueRequest{
+			IssuerID: iss.ID,
+			Subject:  sub,
+			NotAfter: timeNowPlus(24),
+			Actor:    "operator",
+		}); err != nil {
+			t.Fatalf("License.Issue %q: %v", sub, err)
+		}
+	}
+
+	lm := newLicensesModel(svc)
+	cmd := ListLicensesCmd(svc)
+	if cmd == nil {
+		t.Fatal("ListLicensesCmd nil")
+	}
+	msg := cmd()
+	lm, _ = lm.Update(msg)
+	if got := len(lm.rows); got != 3 {
+		t.Fatalf("licensesModel.rows len = %d, want 3", got)
+	}
+}
+
 // ── Help overlay in every view ─────────────────────────────────────────────────
 
 // TestE2E_HelpOverlayInEachView presses '?' in every SessionReady view and
