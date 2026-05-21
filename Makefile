@@ -167,15 +167,16 @@ verify:
 
 TUI_VIEWS := dashboard licenses issuers recipients identities revocation servers audit settings
 
-.PHONY: tui-snap tui-snap-all $(addprefix tui-snap-,$(TUI_VIEWS))
+.PHONY: snap snap-all
 
-# Single-view target: make tui-snap VIEW=dashboard
+# Single-view snapshot: make snap VIEW=dashboard
+# Produces ignore/snapshots/<view>.svg (SVG — PNG path crashes on Windows w/ freeze v0.2.2).
 VIEW ?= dashboard
-tui-snap:
+snap: tui-snap
 	@bash scripts/tui-snap.sh $(VIEW)
 
 # All views in sequence.
-tui-snap-all:
+snap-all: tui-snap
 	@for v in $(TUI_VIEWS); do bash scripts/tui-snap.sh $$v; done
 
 # ── Tooling helpers ──────────────────────────────────────────────────────────

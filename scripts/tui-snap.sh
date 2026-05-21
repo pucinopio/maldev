@@ -20,7 +20,8 @@ view="${1:-dashboard}"
 width="${2:-144}"
 height="${3:-44}"
 seed="${4:-scripts/tui-snap-seeds/${view}.json}"
-out="ignore/snapshots/${view}.png"
+out="ignore/snapshots/${view}.svg"
+tmp_ansi="ignore/snapshots/${view}.ansi"
 
 mkdir -p ignore/snapshots
 
@@ -43,20 +44,27 @@ else
     freeze_cmd="freeze"
 fi
 
-# shellcheck disable=SC2086
-go run ./cmd/tui-snap \
-    -view   "${view}" \
-    -width  "${width}" \
-    -height "${height}" \
-    ${seed_arg} \
-| "${freeze_cmd}" \
+# Use prebuilt binary if available; falls back to `go run` (slower).
+if [ -x "bin/tui-snap" ] || [ -x "bin/tui-snap.exe" ]; then
+    tui_snap_bin="bin/tui-snap"
+    [ -x "bin/tui-snap.exe" ] && tui_snap_bin="bin/tui-snap.exe"
+    # shellcheck disable=SC2086
+    "${tui_snap_bin}" -view "${view}" -width "${width}" -height "${height}" ${seed_arg} > "${tmp_ansi}"
+else
+    # shellcheck disable=SC2086
+    go run ./cmd/tui-snap -view "${view}" -width "${width}" -height "${height}" ${seed_arg} > "${tmp_ansi}"
+fi
+
+# SVG output — freeze's PNG path crashes on Windows (v0.2.2 GC bug).
+# SVG renders identically in any browser, scales perfectly, faster to generate.
+"${freeze_cmd}" "${tmp_ansi}" -l ansi \
     --output "${out}" \
     --window \
-    --shadow \
     --margin 10 \
     --padding 20 \
     --font.family "JetBrains Mono" \
     --font.size 14 \
     --theme "dracula"
 
+rm -f "${tmp_ansi}"
 echo "wrote ${out}"
