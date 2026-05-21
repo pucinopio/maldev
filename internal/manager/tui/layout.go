@@ -1,0 +1,424 @@
+package tui
+
+import (
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+// Direction enumerates layout axes.
+type Direction int
+
+const (
+	Horizontal Direction = iota
+	Vertical
+)
+
+// FlexChild is a child plus layout constraints.
+// Min is the minimum cells in the flow direction.
+// Max is 0 = no maximum.
+// Flex > 0 means share remaining space proportionally; Flex == 0 means use Min.
+type FlexChild struct {
+	W    Widget
+	Min  int
+	Max  int
+	Flex int
+}
+
+// flexWidget is the composite returned by NewFlex().
+type flexWidget struct {
+	dir      Direction
+	gap      int
+	children []FlexChild
+	bounds   Rect
+}
+
+// NewFlex lays out children in a row (Horizontal) or column (Vertical), assigning
+// space proportionally by Flex factor. Returns a composite Widget.
+func NewFlex(dir Direction, gap int, children ...FlexChild) Widget {
+	return &flexWidget{dir: dir, gap: gap, children: children}
+}
+
+func (f *flexWidget) Bounds() Rect { return f.bounds }
+
+func (f *flexWidget) Layout(bounds Rect) {
+	f.bounds = bounds
+
+	if len(f.children) == 0 {
+		return
+	}
+
+	// Total space in the flow direction.
+	total := bounds.W
+	if f.dir == Vertical {
+		total = bounds.H
+	}
+
+	// Account for gaps between children.
+	gapTotal := gapCells(f.gap, len(f.children))
+	available := total - gapTotal
+	if available < 0 {
+		available = 0
+	}
+
+	// Sum fixed allocations and flex factors.
+	fixedSum := 0
+	flexSum := 0
+	for _, c := range f.children {
+		if c.Flex <= 0 {
+			fixedSum += c.Min
+		} else {
+			flexSum += c.Flex
+		}
+	}
+
+	remaining := available - fixedSum
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	// Assign sizes and compute bounds for each child.
+	cursor := 0
+	for i, c := range f.children {
+		var size int
+		if c.Flex <= 0 {
+			size = c.Min
+		} else {
+			if flexSum > 0 {
+				size = remaining * c.Flex / flexSum
+			}
+			if c.Min > 0 && size < c.Min {
+				size = c.Min
+			}
+			if c.Max > 0 && size > c.Max {
+				size = c.Max
+			}
+		}
+		// Last flex child absorbs rounding remainder.
+		if i == len(f.children)-1 && c.Flex > 0 {
+			used := 0
+			for _, prev := range f.children[:i] {
+				if prev.Flex <= 0 {
+					used += prev.Min
+				}
+			}
+			size = available - used - cursor
+			if size < 0 {
+				size = 0
+			}
+		}
+
+		var cb Rect
+		if f.dir == Horizontal {
+			cb = Rect{X: bounds.X + cursor, Y: bounds.Y, W: size, H: bounds.H}
+		} else {
+			cb = Rect{X: bounds.X, Y: bounds.Y + cursor, W: bounds.W, H: size}
+		}
+		c.W.Layout(cb)
+		f.children[i] = c
+		cursor += size + f.gap
+	}
+}
+
+func (f *flexWidget) Update(msg tea.Msg) (Widget, tea.Cmd) {
+	var cmds []tea.Cmd
+	for i, c := range f.children {
+		updated, cmd := c.W.Update(msg)
+		f.children[i].W = updated
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+	return f, tea.Batch(cmds...)
+}
+
+func (f *flexWidget) View() string {
+	views := make([]string, len(f.children))
+	for i, c := range f.children {
+		views[i] = c.W.View()
+	}
+	if f.dir == Horizontal {
+		return lipgloss.JoinHorizontal(lipgloss.Top, views...)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, views...)
+}
+
+// Children exposes child widgets for depth-first mouse dispatch.
+func (f *flexWidget) Children() []Widget {
+	cs := make([]Widget, len(f.children))
+	for i, c := range f.children {
+		cs[i] = c.W
+	}
+	return cs
+}
+
+// gapCells computes total gap cells for n children.
+func gapCells(g, n int) int {
+	if n <= 1 {
+		return 0
+	}
+	return g * (n - 1)
+}
+
+// ── Grid ──────────────────────────────────────────────────────────────────────
+
+// GridChild positions a Widget in a grid cell with optional spans.
+type GridChild struct {
+	W               Widget
+	Row, Col        int
+	RowSpan, ColSpan int
+}
+
+// gridWidget implements a fixed rows×cols grid.
+type gridWidget struct {
+	rows, cols int
+	gap        int
+	children   []GridChild
+	bounds     Rect
+	rowH       []int
+	colW       []int
+}
+
+// NewGrid lays out children in a 2D grid. Row heights and column widths are
+// distributed evenly; spans are respected.
+func NewGrid(rows, cols int, gap int, children ...GridChild) Widget {
+	return &gridWidget{rows: rows, cols: cols, gap: gap, children: children}
+}
+
+func (g *gridWidget) Bounds() Rect { return g.bounds }
+
+func (g *gridWidget) Layout(bounds Rect) {
+	g.bounds = bounds
+
+	totalW := bounds.W - gapCells(g.gap, g.cols)
+	totalH := bounds.H - gapCells(g.gap, g.rows)
+	if totalW < 0 {
+		totalW = 0
+	}
+	if totalH < 0 {
+		totalH = 0
+	}
+
+	g.colW = make([]int, g.cols)
+	g.rowH = make([]int, g.rows)
+	for c := range g.colW {
+		g.colW[c] = totalW / g.cols
+	}
+	for r := range g.rowH {
+		g.rowH[r] = totalH / g.rows
+	}
+	// Absorb rounding into last cell.
+	if g.cols > 0 {
+		used := 0
+		for _, w := range g.colW[:g.cols-1] {
+			used += w
+		}
+		g.colW[g.cols-1] = totalW - used
+	}
+	if g.rows > 0 {
+		used := 0
+		for _, h := range g.rowH[:g.rows-1] {
+			used += h
+		}
+		g.rowH[g.rows-1] = totalH - used
+	}
+
+	for i, ch := range g.children {
+		if ch.Row >= g.rows || ch.Col >= g.cols {
+			continue
+		}
+		rs := ch.RowSpan
+		if rs <= 0 {
+			rs = 1
+		}
+		cs := ch.ColSpan
+		if cs <= 0 {
+			cs = 1
+		}
+		x, y := bounds.X, bounds.Y
+		for c := 0; c < ch.Col; c++ {
+			x += g.colW[c] + g.gap
+		}
+		for r := 0; r < ch.Row; r++ {
+			y += g.rowH[r] + g.gap
+		}
+		w, h := 0, 0
+		for c := ch.Col; c < ch.Col+cs && c < g.cols; c++ {
+			w += g.colW[c]
+			if c > ch.Col {
+				w += g.gap
+			}
+		}
+		for r := ch.Row; r < ch.Row+rs && r < g.rows; r++ {
+			h += g.rowH[r]
+			if r > ch.Row {
+				h += g.gap
+			}
+		}
+		ch.W.Layout(Rect{X: x, Y: y, W: w, H: h})
+		g.children[i] = ch
+	}
+}
+
+func (g *gridWidget) Update(msg tea.Msg) (Widget, tea.Cmd) {
+	var cmds []tea.Cmd
+	for i, ch := range g.children {
+		updated, cmd := ch.W.Update(msg)
+		g.children[i].W = updated
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+	return g, tea.Batch(cmds...)
+}
+
+func (g *gridWidget) View() string {
+	// Build rows × cols cell grid.
+	type cell struct {
+		view    string
+		x, y    int
+	}
+	placed := make([]cell, len(g.children))
+	for i, ch := range g.children {
+		b := ch.W.Bounds()
+		placed[i] = cell{view: ch.W.View(), x: b.X, y: b.Y}
+	}
+
+	// Simple row-based rendering: collect children per row and join.
+	rows := make([]string, g.rows)
+	for r := 0; r < g.rows; r++ {
+		var cols []string
+		for c := 0; c < g.cols; c++ {
+			rb := g.bounds.Y
+			for ri := 0; ri < r; ri++ {
+				rb += g.rowH[ri] + g.gap
+			}
+			cb := g.bounds.X
+			for ci := 0; ci < c; ci++ {
+				cb += g.colW[ci] + g.gap
+			}
+			for _, p := range placed {
+				if p.x == cb && p.y == rb {
+					cols = append(cols, p.view)
+					break
+				}
+			}
+		}
+		rows[r] = lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+	}
+	return strings.Join(rows, "\n")
+}
+
+// Children exposes child widgets for depth-first mouse dispatch.
+func (g *gridWidget) Children() []Widget {
+	cs := make([]Widget, len(g.children))
+	for i, c := range g.children {
+		cs[i] = c.W
+	}
+	return cs
+}
+
+// ── Pad ───────────────────────────────────────────────────────────────────────
+
+type padWidget struct {
+	inner                      Widget
+	top, right, bottom, left int
+	bounds                     Rect
+}
+
+// NewPad wraps a widget with N cells of padding on each side.
+func NewPad(w Widget, top, right, bottom, left int) Widget {
+	return &padWidget{inner: w, top: top, right: right, bottom: bottom, left: left}
+}
+
+func (p *padWidget) Bounds() Rect { return p.bounds }
+
+func (p *padWidget) Layout(bounds Rect) {
+	p.bounds = bounds
+	inner := Rect{
+		X: bounds.X + p.left,
+		Y: bounds.Y + p.top,
+		W: bounds.W - p.left - p.right,
+		H: bounds.H - p.top - p.bottom,
+	}
+	if inner.W < 0 {
+		inner.W = 0
+	}
+	if inner.H < 0 {
+		inner.H = 0
+	}
+	p.inner.Layout(inner)
+}
+
+func (p *padWidget) Update(msg tea.Msg) (Widget, tea.Cmd) {
+	updated, cmd := p.inner.Update(msg)
+	p.inner = updated
+	return p, cmd
+}
+
+func (p *padWidget) View() string {
+	return lipgloss.NewStyle().
+		PaddingTop(p.top).PaddingRight(p.right).
+		PaddingBottom(p.bottom).PaddingLeft(p.left).
+		Render(p.inner.View())
+}
+
+// Children exposes the inner widget for depth-first mouse dispatch.
+func (p *padWidget) Children() []Widget { return []Widget{p.inner} }
+
+// ── Box ───────────────────────────────────────────────────────────────────────
+
+type boxWidget struct {
+	inner   Widget
+	title   string
+	focused bool
+	bounds  Rect
+}
+
+// NewBox wraps a widget with a bordered frame + optional title.
+// When focused is true the border uses the Magenta accent colour.
+func NewBox(w Widget, title string, focused bool) Widget {
+	return &boxWidget{inner: w, title: title, focused: focused}
+}
+
+func (b *boxWidget) Bounds() Rect { return b.bounds }
+
+func (b *boxWidget) Layout(bounds Rect) {
+	b.bounds = bounds
+	// Border takes 1 cell each side; padding 1 cell left+right.
+	inner := Rect{
+		X: bounds.X + 2,
+		Y: bounds.Y + 1,
+		W: bounds.W - 4,
+		H: bounds.H - 2,
+	}
+	if inner.W < 0 {
+		inner.W = 0
+	}
+	if inner.H < 0 {
+		inner.H = 0
+	}
+	b.inner.Layout(inner)
+}
+
+func (b *boxWidget) Update(msg tea.Msg) (Widget, tea.Cmd) {
+	updated, cmd := b.inner.Update(msg)
+	b.inner = updated
+	return b, cmd
+}
+
+func (b *boxWidget) View() string {
+	st := BoxStyle.Width(b.bounds.W)
+	if b.focused {
+		st = BoxFocused.Width(b.bounds.W)
+	}
+	content := b.inner.View()
+	if b.title != "" {
+		return st.Render(GlowCyan.Render(b.title) + "\n\n" + content)
+	}
+	return st.Render(content)
+}
+
+// Children exposes the inner widget for depth-first mouse dispatch.
+func (b *boxWidget) Children() []Widget { return []Widget{b.inner} }
