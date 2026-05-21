@@ -83,6 +83,17 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 	return m, nil
 }
 
+// dashBodyColW returns (leftW, rightW) for the dashboard body given terminal
+// width w. The body uses a 5:6 flex split (gap=1) matching the widget tree in
+// buildWidgetTree. Both serversCardContent and shortcutsCardContent use this
+// so the ratio is encoded exactly once.
+func dashBodyColW(w int) (left, right int) {
+	avail := w - 1 // subtract the 1-char flex gap
+	left = avail * 5 / 11
+	right = avail - left
+	return left, right
+}
+
 // buildWidgetTree constructs the full dashboard widget tree and assigns layout.
 // Called on View() and on mouse dispatch so it always reflects current data.
 // The tree is intentionally stateless — cheap for small trees.
@@ -122,30 +133,30 @@ func (m dashboardModel) buildWidgetTree() Widget {
 		FlexChild{W: supersededTile, Min: tileW, Flex: 1},
 	)
 
-	// Left column (~⅓): issuer key box + servers box.
+	// Left column (~5/11 ≈ 45%): issuer key box + servers box.
 	keyContent := widgets.NewText(m.keyCardContent(), lipgloss.NewStyle())
-	keyBox := NewBox(keyContent, "Clé d'émission active [k] gérer", false)
+	keyBox := NewBoxWithHint(keyContent, "Clé d'émission active", "[k] gérer", false)
 	serversContent := widgets.NewText(m.serversCardContent(), lipgloss.NewStyle())
-	serversBox := NewBox(serversContent, "Serveurs HTTP [7] détail · [s] start/stop", false)
+	serversBox := NewBoxWithHint(serversContent, "Serveurs HTTP", "[7] détail · [s] start/stop", false)
 	leftCol := NewFlex(Vertical, 1,
 		FlexChild{W: keyBox, Min: 6, Flex: 1},
 		FlexChild{W: serversBox, Min: 6, Flex: 1},
 	)
 
-	// Right column (~⅔): audit log + shortcuts.
+	// Right column (~6/11 ≈ 55%): audit log + shortcuts.
 	auditContent := widgets.NewText(m.auditCardContent(), lipgloss.NewStyle())
-	auditBox := NewBox(auditContent, "5 dernières actions [8] tout l'audit", false)
+	auditBox := NewBoxWithHint(auditContent, "5 dernières actions", "[8] tout l'audit", false)
 	shortcutsContent := widgets.NewText(m.shortcutsCardContent(), lipgloss.NewStyle())
-	shortcutsBox := NewBox(shortcutsContent, "Raccourcis touche → écran", false)
+	shortcutsBox := NewBoxWithHint(shortcutsContent, "Raccourcis", "touche → écran", false)
 	rightCol := NewFlex(Vertical, 1,
 		FlexChild{W: auditBox, Min: 6, Flex: 2},
 		FlexChild{W: shortcutsBox, Min: 5, Flex: 1},
 	)
 
-	// ⅓ left / ⅔ right split.
+	// 5/11 left / 6/11 right split — closer to reference 45/55 ratio.
 	body := NewFlex(Horizontal, 1,
-		FlexChild{W: leftCol, Flex: 1},
-		FlexChild{W: rightCol, Flex: 2},
+		FlexChild{W: leftCol, Flex: 5},
+		FlexChild{W: rightCol, Flex: 6},
 	)
 
 	root := NewFlex(Vertical, 1,
@@ -279,14 +290,14 @@ func serverRow(name, addr, url string, on bool, reqs uint64, uptime string, colW
 // Each server is rendered as two compact lines with the ON/OFF tag right-aligned.
 // When the bundle is wired (Phase 4+) it reads live Status snapshots directly.
 func (m dashboardModel) serversCardContent() string {
-	// body flex: Horizontal gap=1, leftFlex=1, rightFlex=2.
-	// leftColW = (w-1)/3. Box chrome = border(2) + padding(2) = 4.
-	// lipgloss Width(n) counts padding inside n, so actual text area = Width - 2 = boxW-6.
 	w := m.width
 	if w == 0 {
 		w = 120
 	}
-	colW := (w-1)/3 - 6
+	// Box chrome: border(2) + padding(0,1) left+right(2) = 4; lipgloss Width()
+	// absorbs the padding inside its argument, so text area = leftColW - 6.
+	leftColW, _ := dashBodyColW(w)
+	colW := leftColW - 6
 	if colW < 20 {
 		colW = 20
 	}
@@ -306,7 +317,7 @@ func (m dashboardModel) serversCardContent() string {
 			if s.URL != "" {
 				url = "https://manager.local" + s.URL
 			}
-			rows = append(rows, buildRows(s.Name, s.URL, url, s.On, s.Requests, ""))
+			rows = append(rows, buildRows(s.Name, s.URL, url, s.On, s.Requests, s.Uptime))
 		}
 		if len(rows) == 0 {
 			return Mute.Render("no servers configured")
@@ -365,15 +376,20 @@ func (m dashboardModel) shortcutsCardContent() string {
 		{"?", "aide contextuelle"},
 	}
 
-	// The shortcuts box lives in the right column (~⅔ of total width).
-	// body flex: Horizontal gap=1, leftFlex=1, rightFlex=2.
-	// rightColW = (w-1)*2/3 (last child absorbs remainder, safe approximation).
-	// Box inner text width = rightColW - 6 (border 2 + padding 2 + lipgloss Width offset 2).
-	// Divide by 3 cols for shortcuts grid cell width.
-	rightColW := (m.width - 1) * 2 / 3
-	cellW := (rightColW - 6) / 3
-	if cellW < 20 {
-		cellW = 20
+	// Right column width from the shared 5:6 split helper.
+	// Box text area = rightColW - 6; 3 cells share that minus 2 separator chars.
+	w := m.width
+	if w == 0 {
+		w = 120
+	}
+	_, rightColW := dashBodyColW(w)
+	textW := rightColW - 6
+	if textW < 1 {
+		textW = 1
+	}
+	cellW := (textW - 2) / 3
+	if cellW < 18 {
+		cellW = 18
 	}
 
 	sep := Mute.Render("│")

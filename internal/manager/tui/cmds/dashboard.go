@@ -37,6 +37,7 @@ type ServerStatus struct {
 	On       bool
 	URL      string
 	Requests uint64
+	Uptime   string // human-readable uptime, e.g. "2h 41m" — empty when stopped
 }
 
 // AuditEntry is a trimmed audit event for the recent-events list.

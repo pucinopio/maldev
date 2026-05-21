@@ -4,37 +4,37 @@
                                                                                                                         
 ──────────────                                                                                                          
  settings                                                                                                               
-  loading…                                                                                                              
-r refresh  P changer passphrase  V vacuum  B backup                                                              ~ tour 
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
+┌───────────────────────────────────────────────────────────┐                                                           
+┌───────────────────────────────────────────────────────────┐                                                           
+│ Defaults licence (wizard nouvelle licence)                │ │ default_argon_preset (binding password)                 
+│                                                                                                                       
+│                                                           │ │                                                         
+│                                                                                                                       
+│ default_issuer_name                                       │ │ ┌──────────────────────────────┐                        
+│                                                                                                                       
+│ default_audience                                          │ │ │  [1]  fast (t=2 m=64MiB p=1) │                        
+│                                                                                                                       
+│ default_ttl_seconds   0 s                                 │ │ └──────────────────────────────┘                        
+│                                                                                                                       
+│ default_keyid         active                              │ │ ┌──────────────────────────────────┐                    
+│                                                                                                                       
+└───────────────────────────────────────────────────────────┘ │ │  [2]  default (t=3 m=256MiB p=2) │                    
+│                                                                                                                       
+┌───────────────────────────────────────────────────────────┐ │ └──────────────────────────────────┘                    
+│                                                                                                                       
+│ Identité opérateur (audit actor)                          │ │ ┌───────────────────────────────────┐                   
+│                                                                                                                       
+│                                                           │ │ │  [3]  paranoid (t=4 m=512MiB p=2) │                   
+│                                                                                                                       
+│ operator_name                                             │ │ └───────────────────────────────────┘                   
+│                                                                                                                       
+│ Toutes les entries Audit sont taguées avec cette valeur.  │ │ Coût à la vérification côté binaire. paranoid ≈ 2.5s sur
+│                                                                                                                       
+└───────────────────────────────────────────────────────────┘ │ un i7.                                                  
+│                                                                                                                       
+┌───────────────────────────────────────────────────────────┐                                                           
+└───────────────────────────────────────────────────────────┘                                                           
+│ Cycle de vie serveurs HTTP                                │                                                           
+┌───────────────────────────────────────────────────────────┐                                                           
+│                                                           │ │ Base de données                                         
 1-9 onglets  n nouvelle licence  / rechercher  k clés actives  ? aide  q quitter                                 ~ tour 

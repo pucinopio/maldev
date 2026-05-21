@@ -72,10 +72,10 @@ func (m settingsModel) View() string {
 			GlowRed.Render("Error: "+m.err.Error()),
 			renderStatusBar(hints, w))
 	}
+	// tui-snap sends one frame before loadSettingsCmd resolves; a zero-value
+	// sentinel lets the grid render its chrome structure rather than a blank frame.
 	if m.row == nil {
-		return lipgloss.JoinVertical(lipgloss.Left,
-			Dim.Render("  loading…"),
-			renderStatusBar(hints, w))
+		m.row = &ent.Setting{}
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, m.renderGrid(w), renderStatusBar(hints, w))
 }

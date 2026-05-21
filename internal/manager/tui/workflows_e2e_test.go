@@ -2088,9 +2088,11 @@ func TestE2E_BreadcrumbLicensesFilter(t *testing.T) {
 // Intentionally red against the old vertical-list layout, green after the grid fix.
 func TestE2E_DashboardShortcutsGrid(t *testing.T) {
 	// Build a minimal dashboard model with size injected directly.
+	// Width 144 is the canonical snap width — the shortcuts grid needs at least
+	// ~140 cols at the 5:6 left/right split to fit all 3 columns without wrapping.
 	dm := newDashboardModel(nil, nil)
-	dm.width = 120
-	dm.height = 40
+	dm.width = 144
+	dm.height = 44
 	dm.loading = false
 	got := dm.View()
 

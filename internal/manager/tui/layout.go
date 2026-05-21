@@ -409,16 +409,24 @@ func (p *padWidget) Children() []Widget { return []Widget{p.inner} }
 // ── Box ───────────────────────────────────────────────────────────────────────
 
 type boxWidget struct {
-	inner   Widget
-	title   string
-	focused bool
-	bounds  Rect
+	inner     Widget
+	title     string
+	titleHint string // right-aligned hint in the title row (e.g. "[k] gérer")
+	focused   bool
+	bounds    Rect
 }
 
 // NewBox wraps a widget with a bordered frame + optional title.
 // When focused is true the border uses the Magenta accent colour.
 func NewBox(w Widget, title string, focused bool) Widget {
 	return &boxWidget{inner: w, title: title, focused: focused}
+}
+
+// NewBoxWithHint is like NewBox but adds a right-aligned hint string
+// rendered in the title row (e.g. "[k] gérer"). The hint is rendered
+// in the HintKey accent colour; the title remains in GlowCyan.
+func NewBoxWithHint(w Widget, title, hint string, focused bool) Widget {
+	return &boxWidget{inner: w, title: title, titleHint: hint, focused: focused}
 }
 
 func (b *boxWidget) Bounds() Rect { return b.bounds }
@@ -465,9 +473,33 @@ func (b *boxWidget) View() string {
 	}
 	content := b.inner.View()
 	if b.title != "" {
-		return st.Render(GlowCyan.Render(b.title) + "\n" + content)
+		// BoxStyle has Padding(0,1): 1 char left + 1 char right = 2 chars consumed
+		// inside contentW. The title row must fit in contentW-2 to avoid wrapping.
+		titleRow := b.renderTitleRow(contentW - 2)
+		return st.Render(titleRow + "\n" + content)
 	}
 	return st.Render(content)
+}
+
+// renderTitleRow builds the title line for the box.
+// When titleHint is set it is right-aligned within contentW; the main title
+// sits flush-left in GlowCyan and the hint in HintKey (magenta bold).
+// If the hint would not fit (gap < 1 after a mandatory single space) the hint
+// is silently omitted so the title never wraps to a second line.
+func (b *boxWidget) renderTitleRow(contentW int) string {
+	title := GlowCyan.Render(b.title)
+	if b.titleHint == "" {
+		return title
+	}
+	hint := HintKey.Render(b.titleHint)
+	titleW := lipgloss.Width(title)
+	hintW := lipgloss.Width(hint)
+	// Need at least 1 space between title and hint; drop hint if it won't fit.
+	if titleW+1+hintW > contentW {
+		return title
+	}
+	gap := contentW - titleW - hintW
+	return title + strings.Repeat(" ", gap) + hint
 }
 
 // Children exposes the inner widget for depth-first mouse dispatch.

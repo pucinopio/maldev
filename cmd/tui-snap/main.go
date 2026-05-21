@@ -153,6 +153,7 @@ func buildSnapshotMsg(sd *seedData) cmds.DashboardSnapshotMsg {
 		Revoked:              sd.Revoked,
 		Expired:              sd.Expired,
 		ExpiringSoon:         sd.ExpiringSoon,
+		Superseded:           sd.Superseded,
 		ActiveKeyID:          sd.ActiveKeyID,
 		ActiveKeyName:        sd.ActiveKeyName,
 		ActiveKeyFingerprint: sd.ActiveKeyFP,
@@ -163,6 +164,7 @@ func buildSnapshotMsg(sd *seedData) cmds.DashboardSnapshotMsg {
 			On:       s.On,
 			URL:      s.URL,
 			Requests: s.Requests,
+			Uptime:   s.Uptime,
 		})
 	}
 	now := time.Now()
@@ -180,6 +182,7 @@ func buildSnapshotMsg(sd *seedData) cmds.DashboardSnapshotMsg {
 			Kind:     a.Kind,
 			TargetID: a.Target,
 			Actor:    a.Actor,
+			Note:     a.Note,
 		})
 	}
 	return snap
