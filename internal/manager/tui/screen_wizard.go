@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -341,19 +340,7 @@ func (m wizardModel) View() string {
 		stripHints,
 	)
 
-	// Progress bar (filled portion proportional to current step).
-	barFilled := (m.width - 2) * cur / total
-	if barFilled < 1 {
-		barFilled = 1
-	}
-	if barFilled > m.width-2 {
-		barFilled = m.width - 2
-	}
-	bar := lipgloss.NewStyle().Foreground(Palette.Magenta).Render(
-		strings.Repeat("─", barFilled),
-	) + lipgloss.NewStyle().Foreground(Palette.Border).Render(
-		strings.Repeat("─", m.width-2-barFilled),
-	)
+	bar := renderProgressBar(m.width, cur, total)
 
 	progressStrip := lipgloss.JoinVertical(lipgloss.Left, strip, bar)
 

@@ -295,8 +295,7 @@ func (m serversModel) View() string {
 			return GlowMagent.Render("tk_aB3xZ9…") + Dim.Render(" shown once")
 		}(),
 	}
-	tabNames := [3]string{"revocation", "heartbeat", "probe"}
-	if tabNames[m.activeTab] == "probe" {
+	if serverNames[m.activeTab] == "probe" {
 		configLines = append(configLines,
 			Dim.Render("token TTL  ")+Base.Render("60s"),
 			Dim.Render("max tokens ")+Base.Render("8"),
@@ -322,7 +321,7 @@ func (m serversModel) View() string {
 	leftCol := lipgloss.JoinVertical(lipgloss.Left, statusBox, configBox)
 
 	// ── Right column: live log ────────────────────────────────────────────
-	logFilter := tabNames[m.activeTab]
+	logFilter := serverNames[m.activeTab]
 	logTitle := GlowCyan.Render(fmt.Sprintf("Live log · filter %s", logFilter)) +
 		"  " + Mute.Render("[c] clear · [a] auto-scroll")
 	logBody := m.log.View()

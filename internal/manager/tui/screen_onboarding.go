@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -226,7 +225,7 @@ func (m onboardingModel) View() string {
 
 	// stepWelcome has no progress strip — it's a full-screen welcome banner.
 	if m.step == stepWelcome {
-		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, m.viewWelcome(w))
+		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, m.viewWelcome())
 	}
 
 	// Steps 1-3 share a progress strip + centered content box.
@@ -243,13 +242,6 @@ func (m onboardingModel) View() string {
 	// Progress strip.
 	total := 3
 	cur := info.n
-	barFilled := (w - 2) * cur / total
-	if barFilled < 1 {
-		barFilled = 1
-	}
-	if barFilled > w-2 {
-		barFilled = w - 2
-	}
 	stripLeft := lipgloss.JoinHorizontal(lipgloss.Top,
 		GlowMagent.Render("◆ PREMIÈRE UTILISATION"),
 		Dim.Render("  étape  "),
@@ -263,11 +255,7 @@ func (m onboardingModel) View() string {
 		lipgloss.NewStyle().Width(w-lipgloss.Width(stripLeft)-lipgloss.Width(stripHint)-2).Render(""),
 		stripHint,
 	)
-	bar := lipgloss.NewStyle().Foreground(Palette.Magenta).Render(
-		strings.Repeat("─", barFilled),
-	) + lipgloss.NewStyle().Foreground(Palette.Border).Render(
-		strings.Repeat("─", w-2-barFilled),
-	)
+	bar := renderProgressBar(w, cur, total)
 	progressStrip := lipgloss.JoinVertical(lipgloss.Left, strip, bar)
 
 	var content string
@@ -286,7 +274,7 @@ func (m onboardingModel) View() string {
 
 // viewWelcome renders the prototype welcome banner with 4 feature cards in a
 // 2×2 grid and a "Commencer" call to action.
-func (m onboardingModel) viewWelcome(w int) string {
+func (m onboardingModel) viewWelcome() string {
 	type card struct {
 		n    int
 		text string
@@ -337,11 +325,9 @@ func (m onboardingModel) viewWelcome(w int) string {
 	header := GlowMagent.Render("◆ PREMIÈRE UTILISATION")
 	subHead := Dim.Render("Aucune base détectée")
 
-	content := lipgloss.JoinVertical(lipgloss.Left,
+	return lipgloss.JoinVertical(lipgloss.Left,
 		header, subHead, "", grid, "", note, "", action,
 	)
-	_ = w
-	return content
 }
 
 func (m onboardingModel) viewPassphrase() string {

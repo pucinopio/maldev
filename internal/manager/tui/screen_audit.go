@@ -326,8 +326,9 @@ func (m auditModel) View() string {
 	)
 
 	// ── Table box with count in title ─────────────────────────────────────
-	count := len(m.visibleRows())
-	tableTitle := GlowCyan.Render(fmt.Sprintf("Audit (%d)", count)) +
+	// Use table row count (already filtered by rebuildTable) rather than
+	// calling visibleRows() again to avoid a second O(n) scan.
+	tableTitle := GlowCyan.Render(fmt.Sprintf("Audit (%d)", len(m.table.Rows()))) +
 		"  " + Dim.Render("[d] detail · [r] refresh · [pgup/pgdn] page")
 	tableBox := lipgloss.JoinVertical(lipgloss.Left, tableTitle, m.table.View())
 

@@ -319,6 +319,27 @@ func (g *gridWidget) Children() []Widget {
 	return cs
 }
 
+// renderProgressBar renders a horizontal progress bar of width w with cur/total
+// filled cells using the Magenta accent for the filled portion and Border colour
+// for the remainder. Both screens (wizard, onboarding) share this helper.
+func renderProgressBar(w, cur, total int) string {
+	if total <= 0 {
+		total = 1
+	}
+	filled := (w - 2) * cur / total
+	if filled < 1 {
+		filled = 1
+	}
+	if filled > w-2 {
+		filled = w - 2
+	}
+	return lipgloss.NewStyle().Foreground(Palette.Magenta).Render(
+		strings.Repeat("─", filled),
+	) + lipgloss.NewStyle().Foreground(Palette.Border).Render(
+		strings.Repeat("─", w-2-filled),
+	)
+}
+
 // ── Pad ───────────────────────────────────────────────────────────────────────
 
 type padWidget struct {
