@@ -13,6 +13,16 @@ last_reviewed: 2026-05-21
 - [ ] **`--no-tui` on fresh DB should auto-bootstrap from env** — today it still launches the bubbletea onboarding TUI even with `--no-tui`, which hangs in non-TTY shells (CI, scripts). Skip TUI when `MALDEV_MGR_PASSPHRASE` + `MALDEV_MGR_OPERATOR` are set.
 - [ ] **Env var name harmonisation** — `MALDEV_MGR_PASSPHRASE` vs the rest of the codebase using `MALDEV_LICENSE_PASSPHRASE`. Pick one and alias.
 
+### v0.162.1 — E2E workflow coverage expansion (2026-05-21)
+
+- 64 tests in `internal/manager/tui` (up from 28 at v0.162.0)
+- 45.5% statement coverage on the tui package (uncovered = lipgloss styling in View() funcs)
+- Three onboarding bugs fixed + guarded against regression:
+  1. Enter on first field advances focus instead of validating prematurely
+  2. Global `1`-`9` tab routing gated on `SessionReady` (digits reach inputs during onboarding)
+  3. `OnboardingDoneMsg` now persists KEK + canary + first issuer to the DB (was a stub before)
+- Coverage now spans every overlay (confirm/input/revoke/qr/filepicker/probe), the 8-step wizard transitions, the dashboard snapshot data flow, all 9 view routes, responsive layout at 4 window sizes, and the licenses screen keybind matrix (filter/search/detail/revoke/new)
+
 ## Backend refactoring (nice-to-have)
 
 - [ ] **Extract `baseServer` for httpsrv** — Revocation/Heartbeat/Probe share ~120 lines of identical Start/Stop/Status/emit lifecycle code. An embedded `baseServer` struct would remove the duplication. Deferred from /simplify sweep (substantial refactor, not blocking).
