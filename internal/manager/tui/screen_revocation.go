@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/oioio-space/maldev/internal/manager/service"
+	"github.com/oioio-space/maldev/internal/manager/tui/widgets"
 )
 
 // RevocationLoadedMsg carries the result of fetching all revocation entries.
@@ -127,12 +128,42 @@ func (m *revocationModel) rebuildTable() {
 }
 
 func (m revocationModel) View() string {
+	// Three summary tiles matching revocation.jsx top row.
+	tileW := m.width/3 - 1
+	if tileW < 16 {
+		tileW = 16
+	}
+
+	entriesTile := widgets.NewTile("Entries CRL", len(m.rows),
+		"révocations signées", Palette.Red, nil)
+	entriesTile.Layout(Rect{W: tileW, H: 5})
+
+	// Pushed/export tiles have string values — render as small info boxes.
+	pushedTile := revocInfoTile("Pushed via :8443", "oui",
+		"serveur révocation en ligne", Palette.Green, tileW)
+	exportTile := revocInfoTile("Dernier export", "—",
+		"manager.crl.pem (offline copy)", Palette.FgDim, tileW)
+
+	tilesRow := lipgloss.JoinHorizontal(lipgloss.Top,
+		entriesTile.View(), " ", pushedTile, " ", exportTile)
+
 	body := m.table.View()
 	if m.err != nil {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
 	}
 	hints := []string{"x", "unrevoke", "E", "export CRL", "r", "refresh"}
-	return lipgloss.JoinVertical(lipgloss.Left, body, renderStatusBar(hints, m.width))
+	return lipgloss.JoinVertical(lipgloss.Left, tilesRow, body, renderStatusBar(hints, m.width))
+}
+
+// revocInfoTile renders a small bordered tile with a string value for
+// the revocation screen header (used for non-numeric summary values).
+func revocInfoTile(label, value, footer string, color lipgloss.Color, w int) string {
+	inner := lipgloss.JoinVertical(lipgloss.Left,
+		Dim.Render(label),
+		lipgloss.NewStyle().Foreground(color).Bold(true).Render(value),
+		Mute.Render(footer),
+	)
+	return BoxStyle.Width(w).Render(inner)
 }
 
 // handleRevocationConfirmResult processes confirm overlay results.

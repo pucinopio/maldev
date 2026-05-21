@@ -1721,6 +1721,42 @@ func TestE2E_RevocationScreenLoadsRows(t *testing.T) {
 	}
 }
 
+// TestE2E_RevocationTileHeader verifies that the redesigned Revocation View()
+// renders the 3-tile summary row (Entries CRL, Pushed via, Dernier export).
+// Red against the old table-only layout, green after the tile header is added.
+func TestE2E_RevocationTileHeader(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+	iss, err := svc.Issuer.Generate(ctx, "rev-tile", "k-rt", "operator")
+	if err != nil {
+		t.Fatalf("Issuer.Generate: %v", err)
+	}
+	out, err := svc.License.Issue(ctx, service.IssueRequest{
+		IssuerID: iss.ID, Subject: "tile-target", NotAfter: timeNowPlus(24), Actor: "operator",
+	})
+	if err != nil {
+		t.Fatalf("License.Issue: %v", err)
+	}
+	if err := svc.Revoke.Revoke(ctx, out.Row.ID, "test", "operator"); err != nil {
+		t.Fatalf("Revoke.Revoke: %v", err)
+	}
+
+	rm := newRevocationModel(svc)
+	rm, _ = rm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	rm, _ = rm.Update(listRevocationCmd(svc)())
+	got := rm.View()
+
+	for _, label := range []string{"Entries CRL", "Pushed via", "Dernier export"} {
+		if !strings.Contains(got, label) {
+			t.Errorf("RevocationTileHeader: tile label %q not found in view", label)
+		}
+	}
+	// The entries count tile must show "1" (one revoked license seeded above).
+	if !strings.Contains(got, "1") {
+		t.Error("RevocationTileHeader: entries count '1' not found in view")
+	}
+}
+
 // TestE2E_SettingsScreenLoadsFromService asserts loadSettingsCmd produces a
 // SettingsLoadedMsg that hydrates settingsModel without panic.
 func TestE2E_SettingsScreenLoadsFromService(t *testing.T) {
