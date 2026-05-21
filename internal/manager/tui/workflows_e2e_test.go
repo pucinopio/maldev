@@ -1998,6 +1998,56 @@ func TestE2E_DashboardShortcutsGrid(t *testing.T) {
 
 // ── Help overlay in every view ─────────────────────────────────────────────────
 
+// ── Servers screen sub-tab switching ─────────────────────────────────────────
+
+// TestE2E_ServersSubTabSwitching verifies that R/H/P hotkeys switch the active
+// sub-tab and that the view renders the expected card title for each.
+func TestE2E_ServersSubTabSwitching(t *testing.T) {
+	cases := []struct {
+		key      rune
+		wantTab  serverSubTab
+		wantText string // substring present in View() after switching
+	}{
+		{'R', serverTabRevocation, "Revocation"},
+		{'H', serverTabHeartbeat, "Heartbeat"},
+		{'P', serverTabProbe, "Fingerprint probe"},
+	}
+	for _, c := range cases {
+		c := c
+		t.Run(string(c.key), func(t *testing.T) {
+			sm := newServersModel(nil)
+			sm, _ = sm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+			sm, _ = sm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{c.key}})
+			if sm.activeTab != c.wantTab {
+				t.Fatalf("key %q: activeTab = %d, want %d", c.key, sm.activeTab, c.wantTab)
+			}
+			got := sm.View()
+			if !strings.Contains(got, c.wantText) {
+				t.Errorf("key %q: %q not found in view", c.key, c.wantText)
+			}
+		})
+	}
+}
+
+// TestE2E_ServersViewRendersSubTabBar verifies that the sub-tab bar renders
+// [R], [H], [P] hotkey labels in the servers screen view.
+func TestE2E_ServersViewRendersSubTabBar(t *testing.T) {
+	sm := newServersModel(nil)
+	sm, _ = sm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	got := sm.View()
+	for _, label := range []string{"[R]", "[H]", "[P]"} {
+		if !strings.Contains(got, label) {
+			t.Errorf("ServersViewRendersSubTabBar: %q not found in view", label)
+		}
+	}
+	// Status and Config boxes must also be present.
+	for _, box := range []string{"Status", "Configuration"} {
+		if !strings.Contains(got, box) {
+			t.Errorf("ServersViewRendersSubTabBar: %q box not found in view", box)
+		}
+	}
+}
+
 // ── Audit screen filter chips ─────────────────────────────────────────────────
 
 // TestE2E_AuditFilterChipsDirectKeys verifies that each individual hotkey (f,

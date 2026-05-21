@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -9,14 +10,24 @@ import (
 	"github.com/oioio-space/maldev/internal/manager/httpsrv"
 )
 
+// serverSubTab identifies which sub-tab (server type) is active.
+type serverSubTab int
+
+const (
+	serverTabRevocation serverSubTab = iota
+	serverTabHeartbeat
+	serverTabProbe
+)
+
 // serversModel is the root model for the Servers screen (ViewServers).
-// It composes three ServerCard widgets in a row above a serverLog pane.
+// It renders prototype sub-tabs (R/H/P) with a 2-column status+log layout.
 type serversModel struct {
 	ctrl httpsrv.Controller // nil when bundle not wired
 
 	cards [3]*ServerCard
 	log   *serverLog
 
+	activeTab serverSubTab // R / H / P sub-tab
 	width, height int
 }
 
@@ -76,6 +87,23 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
+		// Sub-tab selection — R/H/P matches prototype hotkeys.
+		case "R":
+			m.activeTab = serverTabRevocation
+			w, cmd := m.log.Update(serverLogFilterMsg{server: "revocation"})
+			m.log, _ = w.(*serverLog)
+			return m, cmd
+		case "H":
+			m.activeTab = serverTabHeartbeat
+			w, cmd := m.log.Update(serverLogFilterMsg{server: "heartbeat"})
+			m.log, _ = w.(*serverLog)
+			return m, cmd
+		case "P":
+			m.activeTab = serverTabProbe
+			w, cmd := m.log.Update(serverLogFilterMsg{server: "probe"})
+			m.log, _ = w.(*serverLog)
+			return m, cmd
+		// Legacy numeric filter keys kept for muscle-memory compatibility.
 		case "1":
 			w, cmd := m.log.Update(serverLogFilterMsg{server: ""})
 			m.log, _ = w.(*serverLog)
@@ -157,35 +185,157 @@ func (m serversModel) View() string {
 		return Mute.Render("loading…")
 	}
 
-	// ── Top action bar ────────────────────────────────────────────────────
-	var startAll, stopAll string
-	startAll = lipgloss.NewStyle().Foreground(Palette.Green).Bold(true).Padding(0, 1).
-		Border(lipgloss.NormalBorder()).BorderForeground(Palette.Green).
-		Render("[A] Start all")
-	stopAll = lipgloss.NewStyle().Foreground(Palette.Red).Bold(true).Padding(0, 1).
-		Border(lipgloss.NormalBorder()).BorderForeground(Palette.Red).
-		Render("[Z] Stop all")
-	topBar := lipgloss.JoinHorizontal(lipgloss.Top, startAll, "  ", stopAll,
-		"  ", Mute.Render("s=start  S=stop  c=clear log  1-4=filter"))
-
-	// ── Cards row ─────────────────────────────────────────────────────────
-	cardViews := make([]string, 3)
-	for i, card := range m.cards {
-		cardViews[i] = card.View()
+	// ── Sub-tab bar (R / H / P) ───────────────────────────────────────────
+	type tabDef struct {
+		key   string
+		id    serverSubTab
+		label string
+		cardI int
 	}
-	cardsRow := lipgloss.JoinHorizontal(lipgloss.Top, cardViews...)
+	tabs := []tabDef{
+		{"R", serverTabRevocation, "Revocation", 0},
+		{"H", serverTabHeartbeat, "Heartbeat", 1},
+		{"P", serverTabProbe, "Fingerprint probe", 2},
+	}
 
-	// ── Log pane ──────────────────────────────────────────────────────────
-	chips := filterChips(m.log.filter)
-	logTitle := GlowCyan.Render("Event log") + "  " + chips + "  " +
-		Mute.Render("c=clear")
+	var tabParts []string
+	for _, td := range tabs {
+		card := m.cards[td.cardI]
+		running := card.status.Running
+		dot := Mute.Render("●")
+		if running {
+			dot = GlowGreen.Render("●")
+		}
+		active := m.activeTab == td.id
+		var tab string
+		if active {
+			tab = lipgloss.NewStyle().
+				Foreground(Palette.Fg).Bold(true).
+				Padding(0, 1).
+				Border(lipgloss.NormalBorder(), false, false, true, false).
+				BorderForeground(Palette.Cyan).
+				Render(
+					GlowCyan.Render("["+td.key+"]") + " " + Base.Render(td.label) + " " + dot,
+				)
+		} else {
+			tab = lipgloss.NewStyle().
+				Foreground(Palette.FgDim).
+				Padding(0, 1).
+				Render(
+					Mute.Render("["+td.key+"]") + " " + Dim.Render(td.label) + " " + dot,
+				)
+		}
+		tabParts = append(tabParts, tab)
+	}
+	fanInNote := Mute.Render("  events fan-in via httpsrv.MergedEvents()")
+	subTabBar := lipgloss.JoinHorizontal(lipgloss.Top,
+		append(tabParts, fanInNote)...,
+	)
+
+	// ── Determine active card ─────────────────────────────────────────────
+	activeCardIdx := int(m.activeTab)
+	card := m.cards[activeCardIdx]
+	s := card.status
+
+	// ── Status box (left column top) ──────────────────────────────────────
+	statusDot := Mute.Render("●")
+	statusPill := PillOff.Render("OFF")
+	if s.Running {
+		statusDot = GlowGreen.Render("●")
+		statusPill = PillOn.Render(" ON ")
+	}
+	addrStr := s.ListenAddr
+	if addrStr == "" {
+		addrStr = "—"
+	}
+	statusLines := []string{
+		lipgloss.JoinHorizontal(lipgloss.Top, statusDot, " ", statusPill, "  ", Dim.Render("port"), " ", Base.Render(addrStr)),
+	}
+	if s.Running {
+		uptime := "—"
+		if !s.StartedAt.IsZero() {
+			uptime = formatDuration(time.Since(s.StartedAt))
+		}
+		statusLines = append(statusLines,
+			Dim.Render("url    ")+" "+GlowCyan.Render(addrStr),
+			Dim.Render("uptime ")+" "+Base.Render(uptime),
+			Dim.Render("reqs   ")+" "+Base.Render(fmt.Sprintf("%d", s.Requests)),
+		)
+	} else {
+		statusLines = append(statusLines,
+			Mute.Render("— server stopped — start with ")+HintKey.Render("s"),
+		)
+	}
+	if s.LastError != "" {
+		statusLines = append(statusLines, GlowRed.Render("⚠ "+s.LastError))
+	}
+	hintStop := Dim.Render("[s] " + func() string {
+		if s.Running {
+			return "stop"
+		}
+		return "start"
+	}())
+	statusBox := BoxFocused.Width(m.width/2 - 3).Render(
+		lipgloss.JoinVertical(lipgloss.Left,
+			GlowCyan.Render("Status")+"  "+hintStop,
+			"",
+			lipgloss.JoinVertical(lipgloss.Left, statusLines...),
+		),
+	)
+
+	// ── Config box (left column bottom) ──────────────────────────────────
+	configLines := []string{
+		Dim.Render("port       ") + Base.Render(addrStr),
+		Dim.Render("TLS cert   ") + Mute.Render("/etc/license-manager/tls.crt"),
+		Dim.Render("TLS key    ") + Mute.Render("/etc/license-manager/tls.key"),
+		Dim.Render("admin tok  ") + func() string {
+			if s.Running {
+				return Mute.Render("tk_•••••••••••••• [g] regen")
+			}
+			return GlowMagent.Render("tk_aB3xZ9…") + Dim.Render(" shown once")
+		}(),
+	}
+	tabNames := [3]string{"revocation", "heartbeat", "probe"}
+	if tabNames[m.activeTab] == "probe" {
+		configLines = append(configLines,
+			Dim.Render("token TTL  ")+Base.Render("60s"),
+			Dim.Render("max tokens ")+Base.Render("8"),
+		)
+	}
+	endpointNote := func() string {
+		switch m.activeTab {
+		case serverTabRevocation:
+			return Dim.Render("endpoint: ") + GlowCyan.Render("/crl, /revoke (admin)")
+		case serverTabHeartbeat:
+			return Dim.Render("endpoint: ") + GlowCyan.Render("/heartbeat/<id>, /metrics")
+		default:
+			return Dim.Render("endpoints: ") + GlowCyan.Render("/probe/<token> (one-shot), /probe/<token>/agent")
+		}
+	}()
+	configLines = append(configLines, "", endpointNote)
+	configBox := BoxStyle.Width(m.width/2 - 3).Render(
+		lipgloss.JoinVertical(lipgloss.Left,
+			append([]string{Dim.Render("Configuration") + "  " + Mute.Render("[e] edit · [g] regen token")},
+				configLines...)...,
+		),
+	)
+	leftCol := lipgloss.JoinVertical(lipgloss.Left, statusBox, configBox)
+
+	// ── Right column: live log ────────────────────────────────────────────
+	logFilter := tabNames[m.activeTab]
+	logTitle := GlowCyan.Render(fmt.Sprintf("Live log · filter %s", logFilter)) +
+		"  " + Mute.Render("[c] clear · [a] auto-scroll")
 	logBody := m.log.View()
+	rightCol := lipgloss.JoinVertical(lipgloss.Left, logTitle, logBody)
 
+	// ── 2-column body ─────────────────────────────────────────────────────
+	body := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "  ", rightCol)
+
+	hints := []string{"R", "revocation", "H", "heartbeat", "P", "probe", "s", "start/stop", "c", "clear log", "g", "regen token"}
 	return lipgloss.JoinVertical(lipgloss.Left,
-		topBar,
-		cardsRow,
-		logTitle,
-		logBody,
+		subTabBar,
+		body,
+		renderStatusBar(hints, m.width),
 	)
 }
 

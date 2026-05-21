@@ -3,51 +3,28 @@
 9 Settings                                                                                                              
                                                                                               ─────────────             
  servers                                                                                                                
-┌───────────────┐  ┌──────────────┐  s=start  S=stop  c=clear log  1-4=filter                                           
-│ [A] Start all │  │ [Z] Stop all │                                                                                     
-└───────────────┘  └──────────────┘                                                                                     
-┌────────────────────────────────────────┐┌────────────────────────────────────────┐┌───────────────────────────────────
-─────┐                                                                                                                  
-│ revocation   ┌──────┐                  ││ heartbeat    ┌──────┐                  ││ probe        ┌──────┐             
-│                                                                                                                       
-│              │ OFF  │                  ││              │ OFF  │                  ││              │ OFF  │             
-│                                                                                                                       
-│              └──────┘                  ││              └──────┘                  ││              └──────┘             
-│                                                                                                                       
-│ Addr:    —                             ││ Addr:    —                             ││ Addr:    —                        
-│                                                                                                                       
-│ Uptime:  —                             ││ Uptime:  —                             ││ Uptime:  —                        
-│                                                                                                                       
-│ Reqs:    0                             ││ Reqs:    0                             ││ Reqs:    0                        
-│                                                                                                                       
-│ LastReq: —                             ││ LastReq: —                             ││ LastReq: —                        
-│                                                                                                                       
-│                                        ││                                        ││                                   
-│                                                                                                                       
-│                                        ││                                        ││                                   
-│                                                                                                                       
-│                                        ││                                        ││                                   
-│                                                                                                                       
-│                                        ││                                        ││                                   
-│                                                                                                                       
-│                                        ││                                        ││                                   
-│                                                                                                                       
-│ ┌─────────────┐ ┌────────────┐         ││ ┌─────────────┐ ┌────────────┐         ││ ┌─────────────┐ ┌────────────┐    
-│                                                                                                                       
-│ │  [s] Start  │ │  [S] Stop  │         ││ │  [s] Start  │ │  [S] Stop  │         ││ │  [s] Start  │ │  [S] Stop  │    
-│                                                                                                                       
-│ └─────────────┘ └────────────┘         ││ └─────────────┘ └────────────┘         ││ └─────────────┘ └────────────┘    
-│                                                                                                                       
-└────────────────────────────────────────┘└────────────────────────────────────────┘└───────────────────────────────────
-─────┘                                                                                                                  
-Event log  ┌───────┐┌──────────────┐┌─────────────┐┌─────────┐                                                          
-│  all  ││  revocation  ││  heartbeat  ││  probe  │                                                                     
-└───────┘└──────────────┘└─────────────┘└─────────┘  c=clear                                                            
-12:00:00  revocation    started   127.0.0.1:8443                                                                        
-12:00:01  heartbeat     started   127.0.0.1:8444                                                                        
-12:00:02  revocation    request   GET /revoked.pem 200 10.0.0.1:52000                                                   
-12:00:03  probe         error     bind: address already in use                                                          
-12:00:04  heartbeat     request   POST /heartbeat 401 10.0.0.2:41000                                                    
+ [R] Revocation ●  [H] Heartbeat ●  [P] Fingerprint probe ●   events fan-in via httpsrv.MergedEvents()                  
+──────────────────                                                                                                      
+┌─────────────────────────────────────────────────────────┐  Live log · filter revocation  [c] clear · [a] auto-scroll  
+│ Status  [s] start                                       │  12:00:00  revocation    started   127.0.0.1:8443           
+│                                                         │  12:00:01  heartbeat     started   127.0.0.1:8444           
+│ ● ┌─────┐  port —                                       │  12:00:02  revocation    request   GET /revoked.pem 200     
+10.0.0.1:52000                                                                                                          
+│   │ OFF │                                               │  12:00:03  probe         error     bind: address already in 
+use                                                                                                                     
+│   └─────┘                                               │  12:00:04  heartbeat     request   POST /heartbeat 401      
+10.0.0.2:41000                                                                                                          
+│ — server stopped — start with  s                        │                                                             
+└─────────────────────────────────────────────────────────┘                                                             
+┌─────────────────────────────────────────────────────────┐                                                             
+│ Configuration  [e] edit · [g] regen token               │                                                             
+│ port       —                                            │                                                             
+│ TLS cert   /etc/license-manager/tls.crt                 │                                                             
+│ TLS key    /etc/license-manager/tls.key                 │                                                             
+│ admin tok  tk_aB3xZ9… shown once                        │                                                             
+│                                                         │                                                             
+│ endpoint: /crl, /revoke (admin)                         │                                                             
+└─────────────────────────────────────────────────────────┘                                                             
                                                                                                                         
                                                                                                                         
                                                                                                                         
@@ -56,13 +33,9 @@ Event log  ┌───────┐┌─────────────
                                                                                                                         
                                                                                                                         
                                                                                                                         
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
+ R revocation   H heartbeat   P probe   s start/stop   c clear log   g regen token                            ┌────────┐
+│ ~ tour │                                                                                                              
+└────────┘                                                                                                              
                                                                                                                         
                                                                                                                         
                                                                                                                         
