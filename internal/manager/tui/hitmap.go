@@ -13,17 +13,15 @@ type hitRect struct {
 // hits is a slice of hitRect; methods make the screen models terser.
 type hits []hitRect
 
-// reset zeroes the slice in place (keeps the backing array). Called at the top
-// of every View() so re-renders don't accumulate stale regions.
 func (h *hits) reset() { *h = (*h)[:0] }
 
-// add registers a rectangular hit zone bound to cmd.
 func (h *hits) add(x, y, w, hgt int, cmd func() tea.Cmd) {
 	*h = append(*h, hitRect{x: x, y: y, w: w, h: hgt, cmd: cmd})
 }
 
 // dispatch returns the command for the topmost hit rect containing (x,y), or
-// nil when nothing matches.
+// nil when nothing matches. Iterates in reverse so the last-registered region
+// wins when regions overlap (painter's-model stacking order).
 func (h hits) dispatch(x, y int) tea.Cmd {
 	for i := len(h) - 1; i >= 0; i-- {
 		r := h[i]

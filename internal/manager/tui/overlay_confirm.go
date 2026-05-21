@@ -22,18 +22,15 @@ type confirmOverlay struct {
 }
 
 // NewConfirmOverlay is exported for use by cmd/tui-snap.
+// newConfirmOverlay is the package-internal alias used by screen files and tests.
 func NewConfirmOverlay(id, title, body, confirmLabel, cancelLabel string, danger bool) Overlay {
 	return newConfirmOverlay(id, title, body, confirmLabel, cancelLabel, danger)
 }
 
 func newConfirmOverlay(id, title, body, confirmLabel, cancelLabel string, danger bool) *confirmOverlay {
 	return &confirmOverlay{
-		id:           id,
-		title:        title,
-		body:         body,
-		confirmLabel: confirmLabel,
-		cancelLabel:  cancelLabel,
-		danger:       danger,
+		id: id, title: title, body: body,
+		confirmLabel: confirmLabel, cancelLabel: cancelLabel, danger: danger,
 	}
 }
 

@@ -149,6 +149,17 @@ func (m auditModel) Update(msg tea.Msg) (auditModel, tea.Cmd) {
 			return m, cmd
 		}
 
+		// Filter hotkeys mirror auditKindFilter.hotkey() — one key per filter value.
+		filterByKey := map[string]auditKindFilter{
+			"f": auditFilterAll, "l": auditFilterLicense, "k": auditFilterKey,
+			"s": auditFilterServer, "i": auditFilterIdentity, "p": auditFilterProbe,
+		}
+		if f, ok := filterByKey[msg.String()]; ok {
+			m.filter = f
+			m.rebuildTable()
+			return m, nil
+		}
+
 		switch msg.String() {
 		case "d":
 			row := m.selectedRow()
@@ -157,31 +168,6 @@ func (m auditModel) Update(msg tea.Msg) (auditModel, tea.Cmd) {
 			}
 			m.detail = true
 			m.vp.SetContent(m.renderPayload(row))
-			return m, nil
-
-		case "f":
-			m.filter = auditFilterAll
-			m.rebuildTable()
-			return m, nil
-		case "l":
-			m.filter = auditFilterLicense
-			m.rebuildTable()
-			return m, nil
-		case "k":
-			m.filter = auditFilterKey
-			m.rebuildTable()
-			return m, nil
-		case "s":
-			m.filter = auditFilterServer
-			m.rebuildTable()
-			return m, nil
-		case "i":
-			m.filter = auditFilterIdentity
-			m.rebuildTable()
-			return m, nil
-		case "p":
-			m.filter = auditFilterProbe
-			m.rebuildTable()
 			return m, nil
 
 		case "r":

@@ -383,34 +383,32 @@ func (m licensesModel) View() string {
 	return body
 }
 
-// OnClick handles mouse clicks on the licenses screen.
-// Chrome=4 rows; the filter chip pills span Y=4..6 (3-row bordered pills).
-// Click on any of those rows registers as a chip click.
+// OnClick handles mouse clicks on the licenses screen. Filter chip pills span
+// Y=4..6 (3-row bordered pills); table header is at Y=7, data rows at Y=8+.
 func (m licensesModel) OnClick(x, y, _ int) tea.Cmd {
 	if y >= 4 && y <= 6 {
-		// fall through to chip hit-test
-	} else {
-		// Table click handling: header at Y=7, data rows Y=8+.
-		const tableHeaderY = 7
-		if y > tableHeaderY {
-			row := y - tableHeaderY - 1
-			if row >= 0 && row < len(m.rows) {
-				target := row
-				return func() tea.Msg { return tableSelectRowMsg{row: target} }
+		// Hit-test the filter chip bar. Mirror renderFilterBar layout:
+		// 1 PaddingLeft + each pill(label+4 border/padding) + 1 separator space.
+		cursor := 1
+		for _, f := range []licenseFilter{licFilterAll, licFilterActive, licFilterExpiring, licFilterExpired, licFilterRevoked, licFilterSuperseded} {
+			w := lipgloss.Width(f.String()) + 4
+			if x >= cursor && x < cursor+w {
+				target := f
+				return func() tea.Msg { return licenseFilterClickMsg{f: target} }
 			}
+			cursor += w + 1
 		}
 		return nil
 	}
-	filters := []licenseFilter{licFilterAll, licFilterActive, licFilterExpiring, licFilterExpired, licFilterRevoked, licFilterSuperseded}
-	// Mirror renderFilterBar layout: 1 PaddingLeft + each pill(label+4 border/padding) + 1 separator space.
-	cursor := 1
-	for _, f := range filters {
-		w := lipgloss.Width(f.String()) + 4
-		if x >= cursor && x < cursor+w {
-			target := f
-			return func() tea.Msg { return licenseFilterClickMsg{f: target} }
+
+	// Table rows: header at Y=7, data at Y=8+.
+	const tableHeaderY = 7
+	if y > tableHeaderY {
+		row := y - tableHeaderY - 1
+		if row >= 0 && row < len(m.rows) {
+			target := row
+			return func() tea.Msg { return tableSelectRowMsg{row: target} }
 		}
-		cursor += w + 1
 	}
 	return nil
 }

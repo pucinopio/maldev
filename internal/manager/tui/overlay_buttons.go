@@ -21,9 +21,7 @@ type button struct {
 }
 
 // renderButtons builds a right-aligned footer row of buttons separated by two
-// spaces, padded to width. Each button reads as `[hot] label` with a coloured
-// border per kind; focused buttons are bold-coloured. Matches the prototype's
-// `Btn` component (overlays.jsx Btn).
+// spaces, padded to width. Matches the prototype's `Btn` component (overlays.jsx Btn).
 func renderButtons(width int, btns ...button) string {
 	if len(btns) == 0 {
 		return ""
@@ -39,8 +37,6 @@ func renderButtons(width int, btns ...button) string {
 	return lipgloss.NewStyle().Width(width).Align(lipgloss.Right).Render(row)
 }
 
-// joinSpaced returns parts interleaved with sep cells so they keep a uniform gap
-// when assembled via lipgloss.JoinHorizontal.
 func joinSpaced(parts []string, sep string) []string {
 	if len(parts) <= 1 {
 		return parts

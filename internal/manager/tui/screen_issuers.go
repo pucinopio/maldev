@@ -181,8 +181,8 @@ func (m *issuersModel) rebuildTable() {
 	stretchLastColumn(&m.table, m.width)
 }
 
-// OnClick handles row clicks on the issuers table. Chrome takes Y=0..3,
-// the table header is at Y=4, data rows start at Y=5.
+// OnClick selects the clicked table row. Chrome occupies Y=0..3; table header
+// is at Y=4, data rows start at Y=5.
 func (m issuersModel) OnClick(x, y, _ int) tea.Cmd {
 	const headerY = 4
 	if y <= headerY {
@@ -192,9 +192,6 @@ func (m issuersModel) OnClick(x, y, _ int) tea.Cmd {
 	if row < 0 || row >= len(m.rows) {
 		return nil
 	}
-	// SetCursor is on the pointer receiver of bubbles/table.Model; we have
-	// it by value, so mutate via the model's exported API on a pointer.
-	// Wrapping in a Cmd lets Update receive a tableSelectRowMsg and apply it.
 	target := row
 	return func() tea.Msg { return tableSelectRowMsg{row: target} }
 }

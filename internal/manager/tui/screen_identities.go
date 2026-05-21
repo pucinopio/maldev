@@ -176,6 +176,8 @@ func (m *identitiesModel) rebuildTable() {
 	stretchLastColumn(&m.table, m.width)
 }
 
+// OnClick selects the clicked table row. Chrome occupies Y=0..3; data rows
+// start at Y=5.
 func (m identitiesModel) OnClick(x, y, _ int) tea.Cmd {
 	const headerY = 4
 	if y <= headerY {

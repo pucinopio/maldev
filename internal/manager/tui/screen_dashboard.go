@@ -94,9 +94,8 @@ func dashBodyColW(w int) (left, right int) {
 	return left, right
 }
 
-// buildWidgetTree constructs the full dashboard widget tree and assigns layout.
-// Called on View() and on mouse dispatch so it always reflects current data.
-// The tree is intentionally stateless — cheap for small trees.
+// buildWidgetTree constructs the full dashboard widget tree. Called on every
+// View() and mouse dispatch; intentionally stateless so each call is cheap.
 func (m dashboardModel) buildWidgetTree() Widget {
 	w, h := m.width, m.height
 	if w == 0 {
@@ -198,39 +197,25 @@ func (m dashboardModel) View() string {
 	return m.buildWidgetTree().View()
 }
 
-// truncateFingerprint shortens a raw hex fingerprint like
-// "4a:2f:88:d1:09:cc:fe:b3:72:1e:aa:5d:03:89:c0:f7"
-// to "ed25519:4a2f…c0f7" (algo prefix + first 4 hex chars + ellipsis + last 4).
-// When the input already looks like "algo:…" it is returned unchanged.
-// The function never returns a string longer than ~24 chars, preventing wraps.
+// truncateFingerprint shortens a hex fingerprint (colon-separated or raw) to
+// "ed25519:XXXX…XXXX" — at most ~24 chars so it never wraps in the key card.
 func truncateFingerprint(fpr string) string {
 	if fpr == "" {
 		return ""
 	}
-	// Already in algo:digest form — trust it.
-	if strings.Contains(fpr, ":") {
-		// Strip colons to get raw hex bytes, then format.
-		raw := strings.ReplaceAll(fpr, ":", "")
-		if len(raw) < 8 {
-			return fpr
-		}
-		return "ed25519:" + raw[:4] + "…" + raw[len(raw)-4:]
-	}
-	if len(fpr) < 8 {
+	// Strip colons so "4a:2f:…" and "4a2f…" are handled identically.
+	raw := strings.ReplaceAll(fpr, ":", "")
+	if len(raw) < 8 {
 		return fpr
 	}
-	return "ed25519:" + fpr[:4] + "…" + fpr[len(fpr)-4:]
+	return "ed25519:" + raw[:4] + "…" + raw[len(raw)-4:]
 }
 
-// keyCardContent builds the text content for the issuer key card.
-// The KeyID is shown large; name and fingerprint follow on subsequent lines.
-// An ACTIVE pill appears on the right of the first data line when a key is set.
-// keyActivePill is the inline ACTIVE badge — flat (no border) so it stays
-// on one line. The bordered PillActive is 3 lines tall and cannot be used inline.
+// keyActivePill is the inline ACTIVE badge — flat (no border) so it can be
+// embedded mid-string. The bordered PillActive is 3 lines tall and cannot be
+// used inline without injecting newlines into the card layout.
 var keyActivePill = GlowGreen
 
-// keyCardContent builds the issuer key card text for the given inner text width.
-// The ACTIVE pill is right-aligned on the KeyID line so it mirrors the reference.
 func (m dashboardModel) keyCardContent(textW int) string {
 	if m.activeKey.id == "" {
 		return Mute.Render("aucune clé active")
@@ -252,11 +237,10 @@ func (m dashboardModel) keyCardContent(textW int) string {
 	)
 }
 
-// serverPillStyle returns a single-line colored tag for running/stopped state.
-// Unlike the bordered PillOn/PillOff styles used in tables, the inline variant
-// is flat (no border) so it can be embedded mid-string without injecting \n.
+// serverPillOn/Off are flat (no border) so they can be embedded mid-string.
+// The bordered PillOn/PillOff styles used in tables are 3 lines tall.
 var (
-	serverPillOn  = GlowGreen // reuses theme constant — green bold flat tag for ON state
+	serverPillOn  = GlowGreen
 	serverPillOff = lipgloss.NewStyle().Foreground(Palette.FgMute).Bold(true)
 )
 
@@ -267,16 +251,11 @@ var (
 //
 // The ON/OFF tag is right-aligned to colW on the first line.
 func serverRow(name, addr, url string, on bool, reqs uint64, uptime string, colW int) string {
-	bullet := Mute.Render("●")
-	if !on {
-		bullet = Mute.Render("○")
-	}
-
-	var tag string
+	bullet := Mute.Render("○")
+	tag := serverPillOff.Render("OFF")
 	if on {
+		bullet = Mute.Render("●")
 		tag = serverPillOn.Render("ON")
-	} else {
-		tag = serverPillOff.Render("OFF")
 	}
 
 	nameAddr := GlowCyan.Render(name) + "  " + Dim.Render(addr)
@@ -321,22 +300,17 @@ func (m dashboardModel) serversCardContent() string {
 		colW = 20
 	}
 
-	// sep is reused by both bundle-nil and live paths.
 	sep := Mute.Render(strings.Repeat("╌", colW))
-
-	buildRows := func(name, addr, url string, on bool, reqs uint64, uptime string) string {
-		return serverRow(name, addr, url, on, reqs, uptime, colW)
-	}
 
 	if m.bundle == nil {
 		var rows []string
 		for _, s := range m.servers {
-			// s.URL holds the listen address (":8443"). Build a full URL for display.
+			// s.URL is the listen address (":8443"); build a display URL from it.
 			url := ""
 			if s.URL != "" {
 				url = "https://manager.local" + s.URL
 			}
-			rows = append(rows, buildRows(s.Name, s.URL, url, s.On, s.Requests, s.Uptime))
+			rows = append(rows, serverRow(s.Name, s.URL, url, s.On, s.Requests, s.Uptime, colW))
 		}
 		if len(rows) == 0 {
 			return Mute.Render("no servers configured")
@@ -346,17 +320,15 @@ func (m dashboardModel) serversCardContent() string {
 
 	// Live path: read directly from Bundle.Statuses().
 	statuses := m.bundle.Statuses()
-	names := []string{"revocation", "heartbeat", "probe"}
 	var rows []string
-	for _, name := range names {
+	for _, name := range []string{"revocation", "heartbeat", "probe"} {
 		s, ok := statuses[name]
 		addr, url := "—", ""
-		var reqs uint64
 		if ok && s.ListenAddr != "" {
 			addr = s.ListenAddr
 			url = "https://manager.local" + s.ListenAddr
 		}
-		rows = append(rows, buildRows(name, addr, url, ok && s.Running, reqs, ""))
+		rows = append(rows, serverRow(name, addr, url, ok && s.Running, 0, "", colW))
 	}
 	return strings.Join(rows, "\n"+sep+"\n")
 }

@@ -147,8 +147,8 @@ func (m *recipientsModel) rebuildTable() {
 	stretchLastColumn(&m.table, m.width)
 }
 
-// OnClick handles row clicks on the recipients table. Chrome=4 rows; data
-// starts at Y=5.
+// OnClick selects the clicked table row. Chrome occupies Y=0..3; data rows
+// start at Y=5.
 func (m recipientsModel) OnClick(x, y, _ int) tea.Cmd {
 	const headerY = 4
 	if y <= headerY {
