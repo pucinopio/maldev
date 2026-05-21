@@ -2570,6 +2570,36 @@ func TestE2E_TabCyclesViews(t *testing.T) {
 	}
 }
 
+// TestE2E_ConfirmOverlayClickDispatch drives the full root model: open a
+// confirm overlay, click on the right half of the button row, assert the
+// overlay dismissed (it produced ConfirmResultMsg).
+func TestE2E_ConfirmOverlayClickDispatch(t *testing.T) {
+	var m tea.Model = New(nil, nil, SessionReady)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	m, _ = m.Update(pushOverlayMsg{newConfirmOverlay("test", "Title", "Body?", "OK", "Cancel", false)})
+	if r := rootOf(t, m); len(r.overlays) != 1 {
+		t.Fatalf("expected 1 overlay after push, got %d", len(r.overlays))
+	}
+	// Overlay 54x12 centered in 160x50 → topY=(50-12)/2=19, leftX=(160-54)/2=53.
+	// Footer at overlay-Y=7 → absolute Y=26. Right button click at X≈53+40=93.
+	updated, cmd := m.Update(tea.MouseMsg{
+		X: 93, Y: 26,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionPress,
+	})
+	for cmd != nil {
+		if msg := cmd(); msg != nil {
+			updated, cmd = updated.Update(msg)
+		} else {
+			break
+		}
+	}
+	m = updated
+	if r := rootOf(t, m); len(r.overlays) != 0 {
+		t.Errorf("expected overlay dismissed after click, got %d", len(r.overlays))
+	}
+}
+
 // TestE2E_WizardAllStepsRender verifies every wizard step (1..8) renders a
 // non-empty view and accepts ctrl+c to cancel.
 func TestE2E_WizardAllStepsRender(t *testing.T) {

@@ -16,13 +16,17 @@ func NewHelpOverlay() Overlay { return &helpOverlay{} }
 func (o *helpOverlay) Init() tea.Cmd { return nil }
 
 func (o *helpOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
-	km, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return o, nil
-	}
-	switch km.String() {
-	case "esc", "enter", "q", "?":
-		return o, func() tea.Msg { return OverlayDoneMsg{Result: nil} }
+	switch m := msg.(type) {
+	case tea.KeyMsg:
+		switch m.String() {
+		case "esc", "enter", "q", "?":
+			return o, func() tea.Msg { return OverlayDoneMsg{Result: nil} }
+		}
+	case tea.MouseMsg:
+		// Click anywhere dismisses the help overlay — it's a read-only modal.
+		if m.Button == tea.MouseButtonLeft && m.Action == tea.MouseActionPress {
+			return o, func() tea.Msg { return OverlayDoneMsg{Result: nil} }
+		}
 	}
 	return o, nil
 }

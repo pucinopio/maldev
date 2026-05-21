@@ -40,20 +40,40 @@ func newConfirmOverlay(id, title, body, confirmLabel, cancelLabel string, danger
 func (o *confirmOverlay) Init() tea.Cmd { return nil }
 
 func (o *confirmOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
-	km, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return o, nil
-	}
-	switch km.String() {
-	case "y", "Y", "enter":
-		id := o.id
+	id := o.id
+	switch m := msg.(type) {
+	case tea.KeyMsg:
+		switch m.String() {
+		case "y", "Y", "enter":
+			return o, func() tea.Msg {
+				return OverlayDoneMsg{Result: ConfirmResultMsg{ID: id, Confirm: true}}
+			}
+		case "n", "N", "esc", "q":
+			return o, func() tea.Msg {
+				return OverlayDoneMsg{Result: ConfirmResultMsg{ID: id, Confirm: false}}
+			}
+		}
+	case tea.MouseMsg:
+		if m.Button != tea.MouseButtonLeft || m.Action != tea.MouseActionPress {
+			return o, nil
+		}
+		// Modal is centered inside a 54x12 lipgloss.Place box. Top padding =
+		// (12-9)/2 = 1 row, so the footer line sits at overlay Y=7. Cancel
+		// occupies the left half of the inner row, Confirm the right half.
+		// Coordinates have already been translated to overlay-relative by
+		// rootModel.updateOverlay.
+		if m.Y != 7 {
+			return o, nil
+		}
+		// Inside the modal, the button row spans X≈3..51 (border+padding=3 left).
+		// Cancel is the left button (X<27), Confirm is the right (X≥27).
+		if m.X < 27 {
+			return o, func() tea.Msg {
+				return OverlayDoneMsg{Result: ConfirmResultMsg{ID: id, Confirm: false}}
+			}
+		}
 		return o, func() tea.Msg {
 			return OverlayDoneMsg{Result: ConfirmResultMsg{ID: id, Confirm: true}}
-		}
-	case "n", "N", "esc", "q":
-		id := o.id
-		return o, func() tea.Msg {
-			return OverlayDoneMsg{Result: ConfirmResultMsg{ID: id, Confirm: false}}
 		}
 	}
 	return o, nil

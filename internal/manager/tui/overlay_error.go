@@ -28,13 +28,17 @@ func newErrorOverlayWithDetails(title, msg, details string) *errorOverlay {
 func (o *errorOverlay) Init() tea.Cmd { return nil }
 
 func (o *errorOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
-	km, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return o, nil
-	}
-	switch km.String() {
-	case "esc", "enter", "q":
-		return o, func() tea.Msg { return OverlayDoneMsg{Result: nil} }
+	switch m := msg.(type) {
+	case tea.KeyMsg:
+		switch m.String() {
+		case "esc", "enter", "q":
+			return o, func() tea.Msg { return OverlayDoneMsg{Result: nil} }
+		}
+	case tea.MouseMsg:
+		// Single-button modal: any click on the footer row dismisses.
+		if m.Button == tea.MouseButtonLeft && m.Action == tea.MouseActionPress {
+			return o, func() tea.Msg { return OverlayDoneMsg{Result: nil} }
+		}
 	}
 	return o, nil
 }

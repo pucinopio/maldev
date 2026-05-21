@@ -4,6 +4,8 @@
 package tui
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -412,6 +414,25 @@ func (m *rootModel) replayEventRing() tea.Cmd {
 
 func (m rootModel) updateOverlay(msg tea.Msg) (tea.Model, tea.Cmd) {
 	top := m.overlays[len(m.overlays)-1]
+	// Translate absolute mouse coords into overlay-relative coords so the
+	// overlay's Update can hit-test its button row without knowing where
+	// composeOverlay centered it.
+	if mm, ok := msg.(tea.MouseMsg); ok && m.width > 0 && m.hgt > 0 {
+		ov := top.View()
+		ovLines := strings.Split(ov, "\n")
+		ovH := len(ovLines)
+		ovW := 0
+		for _, l := range ovLines {
+			if w := lipgloss.Width(l); w > ovW {
+				ovW = w
+			}
+		}
+		topY := (m.hgt - ovH) / 2
+		leftX := (m.width - ovW) / 2
+		mm.X -= leftX
+		mm.Y -= topY
+		msg = mm
+	}
 	updated, cmd := top.Update(msg)
 
 	if done, ok := msg.(OverlayDoneMsg); ok {
