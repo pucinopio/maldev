@@ -323,7 +323,9 @@ func (m licensesModel) renderFilterBar() string {
 		}
 		parts = append(parts, " ")
 	}
-	return " " + lipgloss.JoinHorizontal(lipgloss.Top, parts...)
+	// PaddingLeft applies to every line of the multi-line chip block; a leading
+	// space concat would only indent the first row (top border).
+	return lipgloss.NewStyle().PaddingLeft(1).Render(lipgloss.JoinHorizontal(lipgloss.Top, parts...))
 }
 
 func (m licensesModel) renderDetail() string {

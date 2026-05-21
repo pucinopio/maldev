@@ -330,12 +330,9 @@ func (m serversModel) View() string {
 	// ── 2-column body ─────────────────────────────────────────────────────
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "  ", rightCol)
 
-	hints := []string{"R", "revocation", "H", "heartbeat", "P", "probe", "s", "start/stop", "c", "clear log", "g", "regen token"}
-	return lipgloss.JoinVertical(lipgloss.Left,
-		subTabBar,
-		body,
-		renderStatusBar(hints, m.width),
-	)
+	// Status bar is rendered by the root chrome (viewReady picks up Hints()
+	// via the ScreenWithHints interface) — don't duplicate it here.
+	return lipgloss.JoinVertical(lipgloss.Left, subTabBar, body)
 }
 
 // startAllCmd issues Start for every server name via the controller.

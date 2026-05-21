@@ -81,7 +81,12 @@ func (tb *TabBar) View() string {
 }
 
 // OnClick implements core.Clickable. x is relative to bounds.X.
+// Forces a View() pass when tabWidths is empty so callers (e.g. the root
+// mouse dispatcher) can hit-test without first having to render.
 func (tb *TabBar) OnClick(x, _ int, _ tea.MouseButton) tea.Cmd {
+	if len(tb.tabWidths) == 0 {
+		_ = tb.View()
+	}
 	cursor := 0
 	for i, w := range tb.tabWidths {
 		if x >= cursor && x < cursor+w {

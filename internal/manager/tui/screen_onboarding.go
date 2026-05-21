@@ -296,7 +296,10 @@ func (m onboardingModel) View() string {
 		content = m.viewLicense()
 	}
 
-	centred := lipgloss.Place(w, h-3, lipgloss.Center, lipgloss.Center, content)
+	// Top-center the form: horizontally centred, but anchored to the top of the
+	// available area so the content sits just under the progress strip instead
+	// of floating in the middle of the screen.
+	centred := lipgloss.Place(w, h-3, lipgloss.Center, lipgloss.Top, content)
 	return lipgloss.JoinVertical(lipgloss.Left, progressStrip, centred)
 }
 
@@ -360,9 +363,12 @@ func (m onboardingModel) viewWelcome() string {
 	header := GlowMagent.Render("◆ PREMIÈRE UTILISATION")
 	subHead := Dim.Render("Aucune base détectée")
 
-	return lipgloss.JoinVertical(lipgloss.Left,
+	inner := lipgloss.JoinVertical(lipgloss.Left,
 		header, subHead, "", grid, "", note, "", action,
 	)
+	// Frame the welcome banner so it reads as a single coherent card rather
+	// than floating prose. Card width = 2 * cardW + 1 separator.
+	return BoxStyle.Padding(1, 2).Render(inner)
 }
 
 func (m onboardingModel) viewPassphrase() string {

@@ -366,7 +366,7 @@ func renderProgressBar(w, cur, total int) string {
 	}
 	return lipgloss.NewStyle().Foreground(Palette.Magenta).Render(
 		strings.Repeat("─", filled),
-	) + lipgloss.NewStyle().Foreground(Palette.Border).Render(
+	) + lipgloss.NewStyle().Foreground(Palette.BorderBright).Render(
 		strings.Repeat("─", w-2-filled),
 	)
 }

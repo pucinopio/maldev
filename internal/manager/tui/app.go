@@ -559,10 +559,12 @@ func (m rootModel) View() string {
 		body = m.viewReady()
 	}
 
-	// Render overlay on top when present.
+	// Render overlay on top when present, with the body dimmed underneath so
+	// the operator keeps spatial context (matches design/prototype/overlays.jsx
+	// Scrim — `dim via Faint` per the prototype comment).
 	if len(m.overlays) > 0 {
 		overlay := m.overlays[len(m.overlays)-1].View()
-		return lipgloss.Place(m.width, m.hgt, lipgloss.Center, lipgloss.Center, overlay)
+		return composeOverlay(body, overlay, m.width, m.hgt)
 	}
 	return body
 }

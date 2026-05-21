@@ -66,18 +66,16 @@ func (m settingsModel) View() string {
 	if w == 0 {
 		w = 120 // safe default when no WindowSizeMsg yet
 	}
-	hints := []string{"r", "refresh", "P", "changer passphrase", "V", "vacuum", "B", "backup"}
 	if m.err != nil {
-		return lipgloss.JoinVertical(lipgloss.Left,
-			GlowRed.Render("Error: "+m.err.Error()),
-			renderStatusBar(hints, w))
+		return GlowRed.Render("Error: " + m.err.Error())
 	}
 	// tui-snap sends one frame before loadSettingsCmd resolves; a zero-value
 	// sentinel lets the grid render its chrome structure rather than a blank frame.
 	if m.row == nil {
 		m.row = &ent.Setting{}
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, m.renderGrid(w), renderStatusBar(hints, w))
+	// Status bar is added by root chrome via Hints().
+	return m.renderGrid(w)
 }
 
 // renderGrid builds the 2-column grid matching settings.jsx layout.
@@ -86,9 +84,12 @@ func (m settingsModel) View() string {
 // different content heights than the left column boxes.
 func (m settingsModel) renderGrid(w int) string {
 	r := m.row
-	colW := w/2 - 1
-	if colW < 20 {
-		colW = 20
+	// Each settingsBox renders as a box that is colW+2 cells wide (lipgloss
+	// adds 1 border on each side outside the style Width). The two columns are
+	// joined with " " so total = 2*(colW+2) + 1 ≤ w.
+	colW := (w-1)/2 - 2
+	if colW < 18 {
+		colW = 18
 	}
 
 	leftBoxes := []string{

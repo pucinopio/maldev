@@ -4,37 +4,37 @@
                                                                                                                         
 ──────────────                                                                                                          
  settings                                                                                                               
-┌───────────────────────────────────────────────────────────┐                                                           
-┌───────────────────────────────────────────────────────────┐                                                           
-│ Defaults licence (wizard nouvelle licence)                │ │ default_argon_preset (binding password)                 
-│                                                                                                                       
-│                                                           │ │                                                         
-│                                                                                                                       
-│ default_issuer_name                                       │ │    [1]  fast (t=2 m=64MiB p=1)                          
-│                                                                                                                       
-│ default_audience                                          │ │    [2]  default (t=3 m=256MiB p=2)                      
-│                                                                                                                       
-│ default_ttl_seconds   0 s                                 │ │    [3]  paranoid (t=4 m=512MiB p=2)                     
-│                                                                                                                       
-│ default_keyid         active                              │ │ Coût à la vérification côté binaire. paranoid ≈ 2.5s sur
-│                                                                                                                       
-└───────────────────────────────────────────────────────────┘ │ un i7.                                                  
-│                                                                                                                       
-┌───────────────────────────────────────────────────────────┐                                                           
-└───────────────────────────────────────────────────────────┘                                                           
-│ Identité opérateur (audit actor)                          │                                                           
-┌───────────────────────────────────────────────────────────┐                                                           
-│                                                           │ │ Base de données                                         
-│                                                                                                                       
-│ operator_name                                             │ │                                                         
-│                                                                                                                       
-│ Toutes les entries Audit sont taguées avec cette valeur.  │ │ chemin                ~/.config/license-                
-manager/db.sqlite │                                                                                                     
-└───────────────────────────────────────────────────────────┘ │ passphrase            résolue via                       
-│                                                                                                                       
-┌───────────────────────────────────────────────────────────┐ │ MALDEV_MGR_PASSPHRASE_FILE / env                        
-│                                                                                                                       
-│ Cycle de vie serveurs HTTP                                │ │                                                         
-│                                                                                                                       
-│                                                           │ │  [P]  changer la passphrase (rekey complet en           
+┌─────────────────────────────────────────────────────────┐ ┌─────────────────────────────────────────────────────────┐ 
+│ Defaults licence (wizard nouvelle licence)              │ │ default_argon_preset (binding password)                 │ 
+│                                                         │ │                                                         │ 
+│ default_issuer_name                                     │ │    [1]  fast (t=2 m=64MiB p=1)                          │ 
+│ default_audience                                        │ │    [2]  default (t=3 m=256MiB p=2)                      │ 
+│ default_ttl_seconds   0 s                               │ │    [3]  paranoid (t=4 m=512MiB p=2)                     │ 
+│ default_keyid         active                            │ │ Coût à la vérification côté binaire. paranoid ≈ 2.5s    │ 
+└─────────────────────────────────────────────────────────┘ │ sur un i7.                                              │ 
+┌─────────────────────────────────────────────────────────┐ └─────────────────────────────────────────────────────────┘ 
+│ Identité opérateur (audit actor)                        │ ┌─────────────────────────────────────────────────────────┐ 
+│                                                         │ │ Base de données                                         │ 
+│ operator_name                                           │ │                                                         │ 
+│ Toutes les entries Audit sont taguées avec cette        │ │ chemin                ~/.config/license-                │ 
+│ valeur.                                                 │ │ manager/db.sqlite                                       │ 
+└─────────────────────────────────────────────────────────┘ │ passphrase            résolue via                       │ 
+┌─────────────────────────────────────────────────────────┐ │ MALDEV_MGR_PASSPHRASE_FILE / env                        │ 
+│ Cycle de vie serveurs HTTP                              │ │                                                         │ 
+│                                                         │ │  [P]  changer la passphrase (rekey complet en           │ 
+│ À la fermeture                                          │ │ transaction)                                            │ 
+│ [ ] confirm_quit_with_servers — modal si serveur(s) ON  │ │  [V]  vacuum + analyse                                  │ 
+│ off                                                     │ │  [B]  backup chiffré → fichier…                         │ 
+│ [✓] arrêter tous les serveurs avant de sortir  on       │ └─────────────────────────────────────────────────────────┘ 
+│ ───────────────────────────────────────────────────     │ ┌─────────────────────────────────────────────────────────┐ 
+│ Au démarrage                                            │ │ Apparence                                               │ 
+│ [ ] auto_start_servers — démarrer les serveurs au boot  │ │                                                         │ 
+│ off                                                     │ │ thème : ●  [1]  neon     [2]  mono     [3]  nord-soft   │ 
+│ [✓] ouvrir directement Dashboard (défaut)  on           │ │ [✓] bold + couleur saturée (équivalent glow en TUI)  on │ 
+└─────────────────────────────────────────────────────────┘ │ [ ] densité confort (+1 ligne de padding partout)  off  │ 
+┌─────────────────────────────────────────────────────────┐ │ [ ] show timestamps en local au lieu d'UTC  off         │ 
+│ Cascade passphrase au boot (read-only)                  │ └─────────────────────────────────────────────────────────┘ 
+│                                                         │                                                             
+│ La passphrase est résolue selon la cascade :            │                                                             
+│   1. --passphrase-file <path>                           │                                                             
 r rafraîchir  P passphrase  V vacuum  B backup  q quitter                                                        ~ tour 
