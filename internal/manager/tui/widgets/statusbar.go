@@ -45,16 +45,16 @@ type statusStyleSet struct {
 
 var statusStyleCache = sync.OnceValue(func() statusStyleSet {
 	return statusStyleSet{
-		key:  lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true).Padding(0, 1),
+		key:  lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true),
 		text: lipgloss.NewStyle().Foreground(core.Colors.FgDim),
 		sep:  lipgloss.NewStyle().Foreground(core.Colors.FgMute),
-		// "~ tour" pill: yellow foreground, bordered — mirrors the prototype's yellow pill.
+		// "~ tour" tag: flat single-line style so the status bar stays exactly 1 row.
+		// A bordered pill is 3 rows tall and would overflow the 1-row chrome slot.
 		tour: lipgloss.NewStyle().
 			Foreground(core.Colors.Yellow).
 			Bold(true).
 			Padding(0, 1).
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(core.Colors.Yellow),
+			Background(lipgloss.Color("#2a2200")),
 	}
 })
 
@@ -63,7 +63,7 @@ func (s *StatusBar) View() string {
 
 	parts := make([]string, len(s.Hints))
 	for i, h := range s.Hints {
-		parts[i] = st.key.Render(h.Key) + st.text.Render(h.Desc)
+		parts[i] = st.key.Render(h.Key) + " " + st.text.Render(h.Desc)
 	}
 	hintsStr := strings.Join(parts, st.sep.Render("  "))
 

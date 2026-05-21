@@ -32,9 +32,11 @@ type Tile struct {
 	// Footer is the dim subtitle line below the value, or "" to omit.
 	Footer string
 	// Color is the foreground color for Value.
-	Color   lipgloss.Color
-	OnPress func() tea.Cmd
-	bounds  core.Rect
+	Color lipgloss.Color
+	// NoLeftBorder suppresses the left border so adjacent tiles share a single wall.
+	NoLeftBorder bool
+	OnPress      func() tea.Cmd
+	bounds       core.Rect
 }
 
 // NewTile constructs a Tile.
@@ -69,23 +71,38 @@ func (t *Tile) Bounds() core.Rect      { return t.bounds }
 func (t *Tile) Update(_ tea.Msg) (core.Widget, tea.Cmd) { return t, nil }
 
 type tileStyleSet struct {
-	header, hotkey, footer, border lipgloss.Style
+	header, hotkey, footer lipgloss.Style
 }
 
 var tileStyleCache = sync.OnceValue(func() tileStyleSet {
 	return tileStyleSet{
+		// No Padding on header — the outer border already provides 1-char left/right
+		// margin via the NormalBorder box. Adding Padding here would double-consume
+		// width and cause label/hotkey to wrap on narrow tiles.
 		header: lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder(), false, false, true, false).
 			BorderForeground(core.Colors.Border).
-			Foreground(core.Colors.FgDim).
-			Padding(0, 1),
+			Foreground(core.Colors.FgDim),
 		hotkey: lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true),
 		footer: lipgloss.NewStyle().Foreground(core.Colors.FgDim),
-		border: lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(core.Colors.Border),
 	}
 })
+
+// tileOuterBorder returns the outer border style for a tile.
+// When noLeftBorder is true the left wall is omitted so adjacent tiles share a
+// single │ rather than rendering ││ between them.
+// lipgloss.BorderLeft(false) suppresses the left edge at render time without
+// affecting the border size calculation (corners remain in the struct but the
+// renderer skips the left column), so innerW must account for this.
+func tileOuterBorder(noLeftBorder bool) lipgloss.Style {
+	st := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(core.Colors.Border)
+	if noLeftBorder {
+		st = st.BorderLeft(false)
+	}
+	return st
+}
 
 func (t *Tile) View() string {
 	st := tileStyleCache()
@@ -94,8 +111,13 @@ func (t *Tile) View() string {
 		w = 4
 	}
 
-	// border (1 each side) + padding (1 each side) = 4 cells consumed by the outer box.
-	innerW := w - 4
+	// Outer border: left(1) + right(1) = 2 chars consumed horizontally.
+	// When NoLeftBorder, lipgloss suppresses the left column but still reserves
+	// it in Width(); subtract only 1 to use the recovered char for content.
+	innerW := w - 2
+	if t.NoLeftBorder {
+		innerW = w - 1
+	}
 	if innerW < 1 {
 		innerW = 1
 	}
@@ -105,21 +127,39 @@ func (t *Tile) View() string {
 	if t.Hotkey != "" {
 		headerRight = st.hotkey.Render("[" + t.Hotkey + "]")
 	}
-	headerContent := t.Label +
-		strings.Repeat(" ", max(0, innerW-lipgloss.Width(t.Label)-lipgloss.Width(headerRight))) +
-		headerRight
+	labelW := lipgloss.Width(t.Label)
+	hotkeyW := lipgloss.Width(headerRight)
+	gap := innerW - labelW - hotkeyW
+	if gap < 0 {
+		gap = 0
+	}
+	headerContent := t.Label + strings.Repeat(" ", gap) + headerRight
 	headerRow := st.header.Width(innerW).Render(headerContent)
 
-	// Value row: instance Color applied per-call (Color is not in the shared cache).
+	// Value row: Color applied per-call (not in shared cache).
 	valueRow := lipgloss.NewStyle().Foreground(t.Color).Bold(true).
-		Width(innerW).Padding(0, 1).Render(fmt.Sprintf("%d", t.Value))
+		Width(innerW).Render(fmt.Sprintf("%d", t.Value))
 
 	rows := []string{headerRow, valueRow}
 	if t.Footer != "" {
-		rows = append(rows, st.footer.Width(innerW).Padding(0, 1).Render(t.Footer))
+		// Truncate footer to innerW so it never wraps — compact single-line layout.
+		footer := t.Footer
+		if lipgloss.Width(footer) > innerW {
+			// Trim to innerW-1 and append ellipsis.
+			runes := []rune(footer)
+			for lipgloss.Width(string(runes)+"…") > innerW && len(runes) > 0 {
+				runes = runes[:len(runes)-1]
+			}
+			footer = string(runes) + "…"
+		}
+		rows = append(rows, st.footer.Width(innerW).Render(footer))
 	}
 
-	return st.border.Width(w).Render(strings.Join(rows, "\n"))
+	// Do NOT pass Width() to the border style — rows are already padded to
+	// innerW, and adding Width(w) would set the content area to w then add
+	// borders on top, making total visual width = w+2 instead of w.
+	borderStyle := tileOuterBorder(t.NoLeftBorder)
+	return borderStyle.Render(strings.Join(rows, "\n"))
 }
 
 // OnClick implements core.Clickable.

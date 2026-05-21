@@ -319,6 +319,24 @@ func (g *gridWidget) Children() []Widget {
 	return cs
 }
 
+// clampToHeight trims s to at most h lines, padding short content with blank
+// lines if necessary. This enforces a hard height ceiling that lipgloss.Height()
+// cannot provide (it only pads, never truncates). The w parameter is unused but
+// kept for call-site clarity — callers can pass 0 when padding is not needed.
+func clampToHeight(s string, h, _ int) string {
+	if h <= 0 {
+		return ""
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) > h {
+		lines = lines[:h]
+	}
+	for len(lines) < h {
+		lines = append(lines, "")
+	}
+	return strings.Join(lines, "\n")
+}
+
 // renderProgressBar renders a horizontal progress bar of width w with cur/total
 // filled cells using the Magenta accent for the filled portion and Border colour
 // for the remainder. Both screens (wizard, onboarding) share this helper.
@@ -407,11 +425,14 @@ func (b *boxWidget) Bounds() Rect { return b.bounds }
 
 func (b *boxWidget) Layout(bounds Rect) {
 	b.bounds = bounds
-	// Border takes 1 cell each side; padding 1 cell left+right.
+	// BoxStyle visual overhead: border(1) + padding(1) each side = 2 per side.
+	// lipgloss Width(n) includes the padding in n, so the actual text area is
+	// Width(n) - padding(2) = (bounds.W - 4) - 2 = bounds.W - 6.
+	// Inner Layout receives the true usable text width so child content never wraps.
 	inner := Rect{
 		X: bounds.X + 2,
 		Y: bounds.Y + 1,
-		W: bounds.W - 4,
+		W: bounds.W - 6,
 		H: bounds.H - 2,
 	}
 	if inner.W < 0 {
@@ -430,13 +451,21 @@ func (b *boxWidget) Update(msg tea.Msg) (Widget, tea.Cmd) {
 }
 
 func (b *boxWidget) View() string {
-	st := BoxStyle.Width(b.bounds.W)
+	// BoxStyle has Border (2 chars) + Padding(0,1) (2 chars) = 4 chars of horizontal
+	// overhead. Width() sets the CONTENT width before borders are applied, so passing
+	// bounds.W would make the visual total = bounds.W + 4. Pass bounds.W - 4 instead
+	// so the rendered box visual width equals bounds.W exactly.
+	contentW := b.bounds.W - 4
+	if contentW < 1 {
+		contentW = 1
+	}
+	st := BoxStyle.Width(contentW)
 	if b.focused {
-		st = BoxFocused.Width(b.bounds.W)
+		st = BoxFocused.Width(contentW)
 	}
 	content := b.inner.View()
 	if b.title != "" {
-		return st.Render(GlowCyan.Render(b.title) + "\n\n" + content)
+		return st.Render(GlowCyan.Render(b.title) + "\n" + content)
 	}
 	return st.Render(content)
 }
