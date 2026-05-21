@@ -137,6 +137,7 @@ func (m *recipientsModel) rebuildTable() {
 	}
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
+	stretchLastColumn(&m.table, m.width)
 }
 
 func (m recipientsModel) View() string {

@@ -124,6 +124,7 @@ func (m *revocationModel) rebuildTable() {
 	}
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
+	stretchLastColumn(&m.table, m.width)
 }
 
 func (m revocationModel) View() string {

@@ -168,6 +168,7 @@ func (m *issuersModel) rebuildTable() {
 	}
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
+	stretchLastColumn(&m.table, m.width)
 }
 
 func (m issuersModel) View() string {

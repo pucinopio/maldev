@@ -265,6 +265,7 @@ func (m *auditModel) rebuildTable() {
 	}
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
+	stretchLastColumn(&m.table, m.width)
 	if m.detail {
 		m.vp.Height = m.hgt - tableH - 6
 		if m.vp.Height < 3 {

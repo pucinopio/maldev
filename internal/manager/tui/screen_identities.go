@@ -166,6 +166,7 @@ func (m *identitiesModel) rebuildTable() {
 	}
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
+	stretchLastColumn(&m.table, m.width)
 }
 
 func (m identitiesModel) View() string {
