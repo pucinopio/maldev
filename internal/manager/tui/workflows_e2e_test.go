@@ -11,14 +11,19 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/google/uuid"
 
 	"github.com/oioio-space/maldev/internal/manager/crypto"
 	"github.com/oioio-space/maldev/internal/manager/httpsrv"
 	"github.com/oioio-space/maldev/internal/manager/service"
 	"github.com/oioio-space/maldev/internal/manager/store"
 )
+
+func timeNowPlus(hours int) time.Time { return time.Now().Add(time.Duration(hours) * time.Hour) }
+func newTestUUID() uuid.UUID          { return uuid.New() }
 
 // ── drive helpers ──────────────────────────────────────────────────────────────
 
@@ -476,6 +481,145 @@ func (tc *testCtrl) Statuses() map[string]httpsrv.Status { return nil }
 
 func (tc *testCtrl) MergedEvents() <-chan httpsrv.Event {
 	return make(chan httpsrv.Event)
+}
+
+// ── License issuance + revocation via service (workflow 7+8 from spec) ────────
+
+// TestE2E_LicenseIssueViaService seeds a wired *service.Services with an
+// issuer, drives LicenseService.Issue with a minimal IssueRequest, and asserts
+// the returned PEM + persisted row. This is the same code path the wizard
+// step 8 (Issue) hits when the operator confirms in the UI.
+func TestE2E_LicenseIssueViaService(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+
+	iss, err := svc.Issuer.Generate(ctx, "e2e-issuer", "k-e2e", "operator")
+	if err != nil {
+		t.Fatalf("Issuer.Generate: %v", err)
+	}
+
+	out, err := svc.License.Issue(ctx, service.IssueRequest{
+		IssuerID:  iss.ID,
+		Subject:   "alice@example.test",
+		NotAfter:  timeNowPlus(24),
+		Actor:     "operator",
+	})
+	if err != nil {
+		t.Fatalf("License.Issue: %v", err)
+	}
+	if len(out.PEM) == 0 {
+		t.Fatal("issued license has empty PEM")
+	}
+	if out.Row.LicenseUUID == "" {
+		t.Fatal("issued license has empty UUID")
+	}
+
+	rows, err := svc.License.List(ctx, service.ListFilter{})
+	if err != nil {
+		t.Fatalf("License.List: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 license row, got %d", len(rows))
+	}
+}
+
+// TestE2E_LicenseIssueAndRevokeFullFlow stitches Issue + Revoke + ListRevoked
+// together to assert the full lifecycle reaches the persisted revocation row.
+func TestE2E_LicenseIssueAndRevokeFullFlow(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+
+	iss, err := svc.Issuer.Generate(ctx, "rev-issuer", "k-rev", "operator")
+	if err != nil {
+		t.Fatalf("Issuer.Generate: %v", err)
+	}
+	out, err := svc.License.Issue(ctx, service.IssueRequest{
+		IssuerID: iss.ID,
+		Subject:  "bob@example.test",
+		NotAfter: timeNowPlus(24),
+		Actor:    "operator",
+	})
+	if err != nil {
+		t.Fatalf("License.Issue: %v", err)
+	}
+
+	if err := svc.Revoke.Revoke(ctx, out.Row.ID, "compromised key", "operator"); err != nil {
+		t.Fatalf("Revoke.Revoke: %v", err)
+	}
+
+	revoked, err := svc.Revoke.ListRevoked(ctx)
+	if err != nil {
+		t.Fatalf("Revoke.ListRevoked: %v", err)
+	}
+	if len(revoked) != 1 {
+		t.Fatalf("expected 1 revoked row, got %d", len(revoked))
+	}
+	if revoked[0].Reason != "compromised key" {
+		t.Fatalf("reason = %q, want 'compromised key'", revoked[0].Reason)
+	}
+}
+
+// ── Revoke overlay UI behaviour ────────────────────────────────────────────────
+
+// TestE2E_RevocationOverlayEmitsConfirmedMsg drives the revokeOverlay through
+// reason entry + Enter and asserts the emitted message carries the right
+// LicenseID and reason. This is the UI half of the revocation flow.
+func TestE2E_RevocationOverlayEmitsConfirmedMsg(t *testing.T) {
+	licenseID := newTestUUID()
+	ov := newRevokeOverlay(licenseID, "alice@example.test")
+
+	var o Overlay = ov
+	for _, r := range "compromised key" {
+		o, _ = o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	_, cmd := o.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("Enter must emit OverlayDoneMsg cmd, got nil")
+	}
+	done, ok := cmd().(OverlayDoneMsg)
+	if !ok {
+		t.Fatalf("expected OverlayDoneMsg, got %T", cmd())
+	}
+	rc, ok := done.Result.(RevokeConfirmedMsg)
+	if !ok {
+		t.Fatalf("expected RevokeConfirmedMsg result, got %T", done.Result)
+	}
+	if rc.LicenseID != licenseID {
+		t.Fatalf("LicenseID = %v, want %v", rc.LicenseID, licenseID)
+	}
+	if rc.Reason != "compromised key" {
+		t.Fatalf("Reason = %q, want 'compromised key'", rc.Reason)
+	}
+}
+
+// TestE2E_RevocationOverlayEmptyReasonStays asserts pressing Enter on an
+// empty reason input does NOT emit OverlayDoneMsg (the overlay should stay
+// open until a reason is typed).
+func TestE2E_RevocationOverlayEmptyReasonStays(t *testing.T) {
+	ov := newRevokeOverlay(newTestUUID(), "alice")
+	var o Overlay = ov
+	_, cmd := o.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Fatalf("Enter with empty reason must not emit, got cmd=%v", cmd())
+	}
+}
+
+// TestE2E_RevocationOverlayEscCancels asserts Esc emits OverlayDoneMsg with
+// nil Result (cancellation path).
+func TestE2E_RevocationOverlayEscCancels(t *testing.T) {
+	ov := newRevokeOverlay(newTestUUID(), "alice")
+	var o Overlay = ov
+	_, cmd := o.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd == nil {
+		t.Fatal("Esc must emit OverlayDoneMsg, got nil")
+	}
+	done, ok := cmd().(OverlayDoneMsg)
+	if !ok {
+		t.Fatalf("expected OverlayDoneMsg, got %T", cmd())
+	}
+	if done.Result != nil {
+		t.Fatalf("Esc must emit nil Result, got %T: %v", done.Result, done.Result)
+	}
 }
 
 // ── Help overlay in every view ─────────────────────────────────────────────────
