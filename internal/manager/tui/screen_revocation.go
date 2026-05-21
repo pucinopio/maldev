@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/oioio-space/maldev/internal/manager/service"
-	"github.com/oioio-space/maldev/internal/manager/tui/widgets"
 )
 
 // RevocationLoadedMsg carries the result of fetching all revocation entries.
@@ -128,24 +127,22 @@ func (m *revocationModel) rebuildTable() {
 }
 
 func (m revocationModel) View() string {
-	// Three summary tiles matching revocation.jsx top row.
+	// Three uniform info boxes in the header row — all use revocInfoTile so
+	// they have identical structure and align cleanly with JoinHorizontal.
 	tileW := m.width/3 - 1
 	if tileW < 16 {
 		tileW = 16
 	}
-
-	entriesTile := widgets.NewTile("Entries CRL", len(m.rows),
-		"révocations signées", Palette.Red, nil)
-	entriesTile.Layout(Rect{W: tileW, H: 5})
-
-	// Pushed/export tiles have string values — render as small info boxes.
+	entriesTile := revocInfoTile("Entries CRL",
+		fmt.Sprintf("%d", len(m.rows)),
+		"révocations signées", Palette.Red, tileW)
 	pushedTile := revocInfoTile("Pushed via :8443", "oui",
 		"serveur révocation en ligne", Palette.Green, tileW)
 	exportTile := revocInfoTile("Dernier export", "—",
 		"manager.crl.pem (offline copy)", Palette.FgDim, tileW)
 
 	tilesRow := lipgloss.JoinHorizontal(lipgloss.Top,
-		entriesTile.View(), " ", pushedTile, " ", exportTile)
+		entriesTile, " ", pushedTile, " ", exportTile)
 
 	body := m.table.View()
 	if m.err != nil {
