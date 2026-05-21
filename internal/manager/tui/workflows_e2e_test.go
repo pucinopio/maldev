@@ -9,6 +9,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/oioio-space/maldev/internal/manager/httpsrv"
 	"github.com/oioio-space/maldev/internal/manager/service"
 	"github.com/oioio-space/maldev/internal/manager/store"
+	"github.com/oioio-space/maldev/internal/manager/store/ent"
 	"github.com/oioio-space/maldev/internal/manager/tui/wizard"
 )
 
@@ -991,6 +993,203 @@ func TestE2E_WizardIssueResultCancelledEmitsDoneNil(t *testing.T) {
 type errCancelled struct{}
 
 func (errCancelled) Error() string { return "cancelled" }
+
+// ── Probe drawer state machine ────────────────────────────────────────────────
+
+// TestE2E_ProbeDrawerStateMachine walks the probe drawer through its 3
+// happy-path states: issuing → waiting → received → confirm.
+func TestE2E_ProbeDrawerStateMachine(t *testing.T) {
+	var capturedMachineID string
+	onResult := func(machineID string) tea.Cmd {
+		capturedMachineID = machineID
+		return func() tea.Msg { return nil }
+	}
+	ov := newProbeDrawerOverlay(nil, onResult)
+	if ov.state != probeStateIssuing {
+		t.Fatalf("initial state = %d, want probeStateIssuing", ov.state)
+	}
+
+	// Simulate token issuance success.
+	tok := &ent.ProbeToken{ID: "abc-tok", CompositeHex: "machine-fp"}
+	var o Overlay = ov
+	o, cmd := o.Update(ProbeTokenIssuedMsg{Token: tok})
+	if ov.state != probeStateWaiting {
+		t.Fatalf("after token issued, state = %d, want probeStateWaiting", ov.state)
+	}
+	if cmd == nil {
+		t.Fatal("after token issued, subscribe cmd must be returned")
+	}
+
+	// Simulate agent callback arriving with a result.
+	o, _ = o.Update(ProbeAgentResultMsg{Token: tok})
+	if ov.state != probeStateReceived {
+		t.Fatalf("after agent result, state = %d, want probeStateReceived", ov.state)
+	}
+
+	// Enter on received → onResult callback fires with the machine ID.
+	o, cmd = o.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("Enter on probeStateReceived must emit cmd")
+	}
+	// Drain the batch to fire onResult.
+	if batch := cmd(); batch != nil {
+		if bm, ok := batch.(tea.BatchMsg); ok {
+			for _, c := range bm {
+				if c != nil {
+					c()
+				}
+			}
+		}
+	}
+	if capturedMachineID != "machine-fp" {
+		t.Fatalf("onResult got machineID = %q, want 'machine-fp'", capturedMachineID)
+	}
+	_ = o
+}
+
+// TestE2E_ProbeDrawerErrorOnTokenFail asserts an issuance failure transitions
+// to probeStateError.
+func TestE2E_ProbeDrawerErrorOnTokenFail(t *testing.T) {
+	ov := newProbeDrawerOverlay(nil, nil)
+	var o Overlay = ov
+	o, _ = o.Update(ProbeTokenIssuedMsg{Err: errCancelled{}})
+	if ov.state != probeStateError {
+		t.Fatalf("on token err, state = %d, want probeStateError", ov.state)
+	}
+	if ov.errMsg == "" {
+		t.Fatal("errMsg must be populated on error")
+	}
+	_ = o
+}
+
+// ── File picker navigation ────────────────────────────────────────────────────
+
+// TestE2E_FilePickerCursorMoves verifies ↑/↓ move the cursor without going OOB.
+func TestE2E_FilePickerCursorMoves(t *testing.T) {
+	ov := newFilePickerOverlay(nil)
+	if len(ov.entries) < 2 {
+		t.Skip("home dir has fewer than 2 visible entries — cannot test cursor movement")
+	}
+	startCursor := ov.cursor
+
+	var o Overlay = ov
+	o, _ = o.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if ov.cursor != startCursor+1 {
+		t.Fatalf("after Down, cursor = %d, want %d", ov.cursor, startCursor+1)
+	}
+	o, _ = o.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if ov.cursor != startCursor {
+		t.Fatalf("after Up, cursor = %d, want %d", ov.cursor, startCursor)
+	}
+	// Up at row 0 must stay at 0.
+	o, _ = o.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if ov.cursor < 0 {
+		t.Fatalf("cursor went negative: %d", ov.cursor)
+	}
+	_ = o
+}
+
+// TestE2E_FilePickerEscCancels asserts Esc emits OverlayDoneMsg{Result: nil}.
+func TestE2E_FilePickerEscCancels(t *testing.T) {
+	ov := newFilePickerOverlay(nil)
+	var o Overlay = ov
+	_, cmd := o.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd == nil {
+		t.Fatal("Esc must emit cmd")
+	}
+	done, ok := cmd().(OverlayDoneMsg)
+	if !ok {
+		t.Fatalf("expected OverlayDoneMsg, got %T", cmd())
+	}
+	if done.Result != nil {
+		t.Fatalf("Esc must emit nil Result, got %v", done.Result)
+	}
+}
+
+// ── QR overlay UX ─────────────────────────────────────────────────────────────
+
+// TestE2E_QROverlayCloseKeys covers the three close paths (Esc, Enter, q).
+func TestE2E_QROverlayCloseKeys(t *testing.T) {
+	for _, key := range []tea.KeyType{tea.KeyEsc, tea.KeyEnter} {
+		key := key
+		t.Run(keyName(key), func(t *testing.T) {
+			ov := NewQROverlay(nil)
+			_, cmd := ov.Update(tea.KeyMsg{Type: key})
+			if cmd == nil {
+				t.Fatalf("key %v must emit cmd", key)
+			}
+			done, ok := cmd().(OverlayDoneMsg)
+			if !ok {
+				t.Fatalf("expected OverlayDoneMsg, got %T", cmd())
+			}
+			if done.Result != nil {
+				t.Fatalf("close must emit nil Result, got %v", done.Result)
+			}
+		})
+	}
+	t.Run("q_closes", func(t *testing.T) {
+		ov := NewQROverlay(nil)
+		_, cmd := ov.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+		if cmd == nil {
+			t.Fatal("q must emit close cmd")
+		}
+	})
+}
+
+// TestE2E_QROverlayQRSavedMsgUpdatesState asserts QRSavedMsg{Path: ...}
+// sets the saved field, and {Err: ...} sets saveErr.
+func TestE2E_QROverlayQRSavedMsgUpdatesState(t *testing.T) {
+	ov := newQROverlay(nil)
+	var o Overlay = ov
+	o, _ = o.Update(QRSavedMsg{Path: "/tmp/licence.pem"})
+	if ov.saved != "/tmp/licence.pem" {
+		t.Fatalf("saved = %q, want '/tmp/licence.pem'", ov.saved)
+	}
+
+	o, _ = o.Update(QRSavedMsg{Err: errCancelled{}})
+	if ov.saveErr == "" {
+		t.Fatal("saveErr must be populated on error msg")
+	}
+	_ = o
+}
+
+// keyName is a debug helper for table-driven key tests.
+func keyName(k tea.KeyType) string {
+	switch k {
+	case tea.KeyEsc:
+		return "esc_closes"
+	case tea.KeyEnter:
+		return "enter_closes"
+	default:
+		return "key"
+	}
+}
+
+// ── Responsive layout (WindowSizeMsg propagation) ──────────────────────────────
+
+// TestE2E_WindowSizePropagatesToScreens drives several window sizes and
+// confirms View() never panics and produces non-empty output at each size.
+func TestE2E_WindowSizePropagatesToScreens(t *testing.T) {
+	sizes := []struct{ w, h int }{
+		{80, 24},   // minimum
+		{120, 40},  // standard
+		{160, 50},  // wide
+		{200, 60},  // ultra-wide
+	}
+	for _, sz := range sizes {
+		sz := sz
+		t.Run(fmt.Sprintf("%dx%d", sz.w, sz.h), func(t *testing.T) {
+			var m tea.Model = New(nil, nil, SessionReady)
+			m, _ = m.Update(tea.WindowSizeMsg{Width: sz.w, Height: sz.h})
+			for _, k := range []rune{'1', '2', '3', '7'} {
+				m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{k}})
+				if got := m.View(); got == "" {
+					t.Fatalf("View() empty at %dx%d on view %c", sz.w, sz.h, k)
+				}
+			}
+		})
+	}
+}
 
 // ── Help overlay in every view ─────────────────────────────────────────────────
 
