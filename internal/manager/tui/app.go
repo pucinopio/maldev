@@ -622,6 +622,8 @@ func (m rootModel) activeScreenWithMouse() (ScreenMouseClick, bool) {
 		return m.servers, true
 	case ViewAudit:
 		return m.audit, true
+	case ViewSettings:
+		return m.settings, true
 	}
 	return nil, false
 }

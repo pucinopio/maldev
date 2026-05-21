@@ -53,6 +53,22 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 		m.err = msg.Err
 		m.row = msg.Row
 		return m, nil
+	case settingsSetThemeMsg:
+		// Persist would go through svc.Settings.SetTheme; for now we just
+		// acknowledge so the UI feedback proves the click landed. Wire to the
+		// real service in a follow-up once the schema lands.
+		_ = msg
+		return m, loadSettingsCmd(m.svc)
+
+	case settingsSetArgonMsg:
+		if m.svc != nil && m.row != nil {
+			m.row.DefaultArgonPreset = msg.preset
+			// Persistence hook: a follow-up will replace this with
+			// svc.Settings.SetArgonPreset(ctx, preset). For now we mutate the
+			// in-memory row so the user sees the click reflected immediately.
+		}
+		return m, nil
+
 	case settingsActionMsg:
 		// Action dispatch wires the toolbar + future click handlers to the
 		// same code path so the user sees identical behaviour from either input.
@@ -88,6 +104,90 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 // settingsActionMsg is dispatched by both key handlers and OnClick so the
 // keyboard and mouse paths converge in one place.
 type settingsActionMsg struct{ kind string }
+
+// settingsSetThemeMsg / settingsSetArgonMsg dispatch theme / argon-preset
+// changes from clicks; the model handles them in Update.
+type settingsSetThemeMsg struct{ idx int } // 1=neon, 2=mono, 3=nord-soft
+type settingsSetArgonMsg struct{ preset setting.DefaultArgonPreset }
+
+// OnClick implements ScreenMouseClick for the settings screen. It rebuilds
+// the hit map on every call (cheap; settings render is small) and dispatches
+// to the matching action. Y is absolute terminal row; chrome occupies rows
+// 0..3 so the first settings content row is Y=4.
+func (m settingsModel) OnClick(x, y, width int) tea.Cmd {
+	h := m.buildHits(width)
+	return h.dispatch(x, y)
+}
+
+// buildHits computes the click regions for every interactive element in the
+// current settings render. Mirrors the layout of renderGrid + box helpers so
+// that clicks land on the same cells the user sees.
+func (m settingsModel) buildHits(width int) hits {
+	if width <= 0 {
+		return nil
+	}
+	colW := (width-1)/2 - 2
+	if colW < 18 {
+		colW = 18
+	}
+	// Right column starts at colW+3 (left col width = colW+2, then 1-cell gap).
+	rightX := colW + 3
+	rightInnerX := rightX + 2 // border(1) + padding(1)
+
+	// Chrome rows: title(1) + tabs(2) + breadcrumb(1) = 4. Content Y=4.
+	const chromeRows = 4
+
+	var h hits
+
+	// Right column box layout (constant heights per content):
+	//   boxArgonPreset  → 8 rows (top, title, blank, p1, p2, p3, footer, bottom)
+	//   boxBaseDeDonnees→ 10 rows (top, title, blank, chemin, passphrase, blank, [P], [V], [B], bottom)
+	//   boxApparence    → 8 rows (top, title, blank, theme, t1, t2, t3, bottom)
+	argonY := chromeRows                       // 4
+	baseY := argonY + 8                        // 12
+	apparenceY := baseY + 10                   // 22
+
+	// ── Argon presets (3 clickable rows in argon box) ─────────────────────
+	// Rows: 3 (preset 1), 4 (preset 2), 5 (preset 3) inside the box.
+	presets := []setting.DefaultArgonPreset{
+		setting.DefaultArgonPresetFast,
+		setting.DefaultArgonPresetDefault,
+		setting.DefaultArgonPresetParanoid,
+	}
+	for i, p := range presets {
+		p := p
+		h.add(rightInnerX, argonY+3+i, colW-2, 1, func() tea.Cmd {
+			return func() tea.Msg { return settingsSetArgonMsg{preset: p} }
+		})
+	}
+
+	// ── DB action chips [P] [V] [B] (rows 6, 7, 8 inside base box) ────────
+	actions := []string{"rekey", "vacuum", "backup"}
+	for i, a := range actions {
+		a := a
+		h.add(rightInnerX, baseY+6+i, colW-2, 1, func() tea.Cmd {
+			return func() tea.Msg { return settingsActionMsg{kind: a} }
+		})
+	}
+
+	// ── Theme markers in apparence box (row 3 inside the box) ─────────────
+	// Layout: "thème : ●  [1]  neon     [2]  mono     [3]  nord-soft"
+	// Each marker+label takes ~14 cells; we register 3 overlapping regions
+	// roughly aligned with the rendered widths.
+	const themeStartOffset = 9 // "thème : " is 8 chars + 1 margin
+	themeCellWidth := (colW - 2 - themeStartOffset) / 3
+	if themeCellWidth < 8 {
+		themeCellWidth = 8
+	}
+	for i := 1; i <= 3; i++ {
+		idx := i
+		h.add(rightInnerX+themeStartOffset+(idx-1)*themeCellWidth, apparenceY+3, themeCellWidth, 1, func() tea.Cmd {
+			return func() tea.Msg { return settingsSetThemeMsg{idx: idx} }
+		})
+	}
+
+	return h
+}
 
 func (m settingsModel) View() string {
 	w := m.width
