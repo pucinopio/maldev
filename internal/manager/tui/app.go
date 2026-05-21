@@ -261,7 +261,12 @@ func (m rootModel) updateOverlay(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if done, ok := msg.(OverlayDoneMsg); ok {
 		m.overlays = m.overlays[:len(m.overlays)-1]
 		// Dispatch overlay result to the active screen.
-		return m.dispatchOverlayResult(done.Result), cmd
+		m = m.dispatchOverlayResult(done.Result)
+		// When a wizard completes, reload the licence list so the new row appears.
+		if _, isLicense := done.Result.(*service.IssuedLicense); isLicense {
+			cmd = tea.Batch(cmd, ListLicensesCmd(m.services))
+		}
+		return m, cmd
 	}
 	m.overlays[len(m.overlays)-1] = updated
 	return m, cmd
@@ -274,6 +279,14 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 	}
 
 	switch res := result.(type) {
+	case *service.IssuedLicense:
+		// Wizard completed successfully — show QR overlay.
+		// License list reload is triggered via pendingCmd returned by updateOverlay.
+		if res != nil {
+			m.overlays = append(m.overlays, newQROverlay(res))
+		}
+		return m
+
 	case RevokeConfirmedMsg:
 		updated, _ := m.licenses.handleRevokeResult(res)
 		m.licenses = updated

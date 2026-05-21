@@ -162,10 +162,7 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 			return m, nil
 
 		case "n":
-			// Wizard not yet implemented — Phase 3.
-			return m, func() tea.Msg {
-				return pushOverlayMsg{newErrorOverlay("Phase 3", "License wizard not yet implemented.\nComing in Phase 3.")}
-			}
+			return m, openWizardCmd(m.svc)
 
 		case "x":
 			row := m.selectedRow()
