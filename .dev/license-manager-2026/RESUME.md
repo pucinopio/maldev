@@ -92,3 +92,57 @@ make snap VIEW=dashboard    # one TUI screenshot
 - v0.163.0 — cmd/tui-snap workflow + first visual pass
 - v0.164.0 — full prototype alignment (8 screens refactored)
 - v0.165.0 — bounds discipline + chips horizontal + status bar dedup
+- v0.166.0 — visual polish: right-aligned hints, ACTIVE pill, uptime, settings skeleton, revocation alignment
+
+---
+
+## Session 0002 — 2026-05-21
+
+### Commits (diff base: `4caa2d6` tag `v0.165.0`)
+
+| SHA | Subject |
+|---|---|
+| `394dab5` | fix(tui/dashboard): right-aligned box title hints + server uptime + settings skeleton (P2/P4/P5) |
+| `a779889` | fix(tui/dashboard): ACTIVE pill right-aligned in issuer key card (P3) |
+| `76cf8ea` | fix(tui/revocation): uniform 3-box header row alignment (P0/P6) |
+
+Tag: `v0.166.0` at `76cf8ea`
+
+### Defects addressed
+
+| Priority | Defect | Status |
+|---|---|---|
+| P0 | Box column heights misaligned (revocation header) | Fixed — all 3 boxes now `revocInfoTile` |
+| P1 | Counter tile numbers not colored | Pre-existing — Color field IS applied in tile.go; freeze SVG renders it. Verified correct in source. |
+| P2 | Box title hints not right-aligned | Fixed — `NewBoxWithHint` + `renderTitleRow(contentW-2)` |
+| P3 | ACTIVE pill not right-aligned in key card | Fixed — `keyCardContent(textW)` with right-aligned gap |
+| P4 | Settings page shows "loading…" forever | Fixed — zero-value `*ent.Setting` sentinel renders grid skeleton |
+| P5 | Server rows missing uptime + full URL | Fixed — `ServerStatus.Uptime` field added; seed passes through |
+| P6 | Alignment audit other screens | Done — licenses/issuers/recipients/identities/audit all clean |
+
+### Current visual gap vs `01-dashboard-reference.png`
+
+- **Column ratio**: dashboard left/right is 5:6 (45/55%); reference looks ~45/55 — close.
+- **Counter colors**: colors are set in code (Green/Red/Orange/Yellow/Cyan) and should render in a real terminal. The freeze SVG output may appear white depending on font/renderer but the ANSI codes are present.
+- **Settings grid alignment**: right column boxes staircase slightly due to `lipgloss.JoinHorizontal` on boxes of different heights — pre-existing, not regressed this session.
+- **Wizard/onboarding/overlays**: not polished yet (still pending P6 follow-up).
+
+### Build / test / CI status
+
+- `go build ./internal/manager/... ./cmd/tui-snap/...` — clean
+- `go test ./internal/manager/tui/... -count=1` — all pass (golden snapshots updated)
+- CI: all 3 workflows (build / docs / mdbook) green on `76cf8ea`
+
+### What to look at first when resuming
+
+1. Run `bash scripts/tui-snap.sh dashboard` and compare to `.dev/license-manager-2026/design/01-dashboard-reference.png` — the main remaining gap is the settings grid column alignment.
+2. Wizard steps polish — render `make snap VIEW=wizard` (not yet in tui-snap; add `-view wizard` support first), compare to `design/prototype/screens/wizard.jsx`.
+3. Overlay alignment audit — run each overlay via `-keys` flag in tui-snap.
+
+### Pending backlog (from `.dev/license-manager-2026/backlog.md`)
+
+- [ ] Wizard 8 steps — visual polish per prototype
+- [ ] Onboarding screen — match prototype
+- [ ] Overlay polish (confirm, error, revoke, QR, file-picker)
+- [ ] Settings grid — fix right-column box height alignment
+- [ ] Context-aware status bar hints per screen
