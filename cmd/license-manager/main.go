@@ -65,21 +65,12 @@ func run() error {
 		return err
 	}
 
-	svc := service.New(st, kek)
-	defer func() { _ = svc.Close() }()
-
-	if flags.NoTUI {
-		return printSmokeSummary(ctx, svc)
-	}
-
-	root := tui.New(svc, nil /* httpsrv wired in Phase 4 */, tui.SessionReady)
-	p := tea.NewProgram(root, tea.WithAltScreen(), tea.WithMouseCellMotion())
-	_, err = p.Run()
-	return err
+	return runMainTUI(ctx, st, kek, flags)
 }
 
-// runOnboarding launches the first-launch wizard for a fresh DB, then
-// persists the KEK, canary, and first issuer using the collected passphrase.
+// runOnboarding launches the first-launch wizard for a fresh DB, persists
+// the KEK/canary/issuer, then chains directly into the main TUI so the
+// operator doesn't need to relaunch.
 func runOnboarding(flags cliFlags) error {
 	ctx := context.Background()
 	root := tui.New(nil, nil, tui.SessionOnboarding)
@@ -103,7 +94,40 @@ func runOnboarding(flags cliFlags) error {
 		return fmt.Errorf("onboarding: persist: %w", err)
 	}
 	fmt.Fprintln(os.Stderr, "license-manager: database initialised at", flags.DBPath)
-	return nil
+
+	// Chain into the main TUI with the just-collected passphrase; no relaunch needed.
+	passphrase := result.Passphrase
+	defer wipeString(&passphrase)
+
+	st, err := store.New(ctx, flags.DBPath)
+	if err != nil {
+		return fmt.Errorf("onboarding: open store: %w", err)
+	}
+
+	kek, err := tryUnlock(ctx, st, passphrase)
+	if err != nil {
+		_ = st.Close()
+		return fmt.Errorf("onboarding: verify canary: %w", err)
+	}
+
+	return runMainTUI(ctx, st, kek, flags)
+}
+
+// runMainTUI builds *service.Services from an already-opened store + KEK and
+// either launches the bubbletea program or prints a smoke summary (--no-tui).
+// It owns st and kek from the call onwards and closes both on return.
+func runMainTUI(ctx context.Context, st *store.Store, kek *crypto.KEK, flags cliFlags) error {
+	svc := service.New(st, kek)
+	defer func() { _ = svc.Close() }()
+
+	if flags.NoTUI {
+		return printSmokeSummary(ctx, svc)
+	}
+
+	root := tui.New(svc, nil /* httpsrv wired in Phase 4 */, tui.SessionReady)
+	p := tea.NewProgram(root, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	_, err := p.Run()
+	return err
 }
 
 // resolvePassphraseSilent walks the cascade without opening a TTY prompt.
