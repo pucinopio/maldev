@@ -1,6 +1,8 @@
 package widgets
 
 import (
+	"sync"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -37,39 +39,49 @@ func (tb *TabBar) Bounds() core.Rect      { return tb.bounds }
 
 func (tb *TabBar) Update(_ tea.Msg) (core.Widget, tea.Cmd) { return tb, nil }
 
-var (
-	tabActive   = lipgloss.NewStyle().Foreground(lipgloss.Color("#e6e6ff")).Bold(true).Padding(0, 2).Border(lipgloss.NormalBorder(), false, false, true, false).BorderForeground(lipgloss.Color("#ff36d4"))
-	tabInactive = lipgloss.NewStyle().Foreground(lipgloss.Color("#7a7ab8")).Padding(0, 2)
-	tabDim      = lipgloss.NewStyle().Foreground(lipgloss.Color("#7a7ab8"))
-)
+type tabStyleSet struct{ active, inactive, dim lipgloss.Style }
+
+// tabStyleCache initialises styles once after tui/theme.go's init() has
+// populated core.Colors. lipgloss.Style is a value type — safe to cache.
+var tabStyleCache = sync.OnceValue(func() tabStyleSet {
+	return tabStyleSet{
+		active: lipgloss.NewStyle().
+			Foreground(core.Colors.Fg).Bold(true).Padding(0, 2).
+			Border(lipgloss.NormalBorder(), false, false, true, false).
+			BorderForeground(core.Colors.Magenta),
+		inactive: lipgloss.NewStyle().Foreground(core.Colors.FgDim).Padding(0, 2),
+		dim:      lipgloss.NewStyle().Foreground(core.Colors.FgDim),
+	}
+})
 
 func (tb *TabBar) View() string {
+	s := tabStyleCache()
+	activeStyle, inactiveStyle, dimStyle := s.active, s.inactive, s.dim
 	tb.tabWidths = make([]int, len(tb.Tabs))
 	parts := make([]string, len(tb.Tabs))
 	for i, tab := range tb.Tabs {
 		label := tab.Label
 		if i < 9 {
-			label = tabDim.Render(string(rune('1'+i))) + " " + label
+			label = dimStyle.Render(string(rune('1'+i))) + " " + label
 		}
 		var rendered string
 		if tab.ID == tb.Active {
-			rendered = tabActive.Render(label)
+			rendered = activeStyle.Render(label)
 		} else {
-			rendered = tabInactive.Render(label)
+			rendered = inactiveStyle.Render(label)
 		}
 		parts[i] = rendered
 		tb.tabWidths[i] = lipgloss.Width(rendered)
 	}
 	strip := lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 	return lipgloss.NewStyle().
-		Background(lipgloss.Color("#0a0a18")).
+		Background(core.Colors.Bg1).
 		Width(tb.bounds.W).
 		Render(strip)
 }
 
 // OnClick implements core.Clickable. x is relative to bounds.X.
 func (tb *TabBar) OnClick(x, _ int, _ tea.MouseButton) tea.Cmd {
-	// Walk accumulated tab widths to find which tab was clicked.
 	cursor := 0
 	for i, w := range tb.tabWidths {
 		if x >= cursor && x < cursor+w {

@@ -1,6 +1,24 @@
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/oioio-space/maldev/internal/manager/tui/core"
+)
+
+func init() {
+	// Populate core.Colors so that widgets/ can use palette values without
+	// importing tui (which would create a cycle).
+	core.Colors.Bg1 = "#0a0a18"
+	core.Colors.Border = "#2a2a52"
+	core.Colors.Fg = "#e6e6ff"
+	core.Colors.FgDim = "#7a7ab8"
+	core.Colors.FgMute = "#4a4a78"
+	core.Colors.Magenta = "#ff36d4"
+	core.Colors.Green = "#39ff88"
+	core.Colors.Yellow = "#ffce39"
+	core.Colors.Red = "#ff3c5f"
+}
 
 var Palette = struct {
 	Bg, Bg1, Bg2, Bg3                                                    lipgloss.Color

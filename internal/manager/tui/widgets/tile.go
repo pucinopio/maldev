@@ -38,7 +38,7 @@ func (t *Tile) Update(_ tea.Msg) (core.Widget, tea.Cmd) { return t, nil }
 
 func (t *Tile) View() string {
 	valStyle := lipgloss.NewStyle().Foreground(t.Color).Bold(true)
-	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#7a7ab8"))
+	dimStyle := lipgloss.NewStyle().Foreground(core.Colors.FgDim)
 
 	inner := lipgloss.JoinVertical(lipgloss.Center,
 		valStyle.Render(fmt.Sprintf("%d", t.Value)),
@@ -50,7 +50,7 @@ func (t *Tile) View() string {
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("#2a2a52")).
+		BorderForeground(core.Colors.Border).
 		Padding(0, 1).
 		Width(t.bounds.W).
 		Align(lipgloss.Center).

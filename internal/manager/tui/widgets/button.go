@@ -49,7 +49,7 @@ func (b *Button) View() string {
 	}
 	st := b.style
 	if b.focused {
-		st = st.BorderForeground(lipgloss.Color("#ff36d4"))
+		st = st.BorderForeground(core.Colors.Magenta)
 	}
 	return st.Render(label)
 }

@@ -2,6 +2,7 @@ package widgets
 
 import (
 	"strings"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -31,20 +32,25 @@ func (s *StatusBar) Bounds() core.Rect      { return s.bounds }
 
 func (s *StatusBar) Update(_ tea.Msg) (core.Widget, tea.Cmd) { return s, nil }
 
-var (
-	hintKey  = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff36d4")).Bold(true).Padding(0, 1)
-	hintText = lipgloss.NewStyle().Foreground(lipgloss.Color("#7a7ab8"))
-	hintDim  = lipgloss.NewStyle().Foreground(lipgloss.Color("#4a4a78"))
-)
+type statusStyleSet struct{ key, text, sep lipgloss.Style }
+
+var statusStyleCache = sync.OnceValue(func() statusStyleSet {
+	return statusStyleSet{
+		key:  lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true).Padding(0, 1),
+		text: lipgloss.NewStyle().Foreground(core.Colors.FgDim),
+		sep:  lipgloss.NewStyle().Foreground(core.Colors.FgMute),
+	}
+})
 
 func (s *StatusBar) View() string {
+	st := statusStyleCache()
 	parts := make([]string, len(s.Hints))
 	for i, h := range s.Hints {
-		parts[i] = hintKey.Render(h.Key) + hintText.Render(h.Desc)
+		parts[i] = st.key.Render(h.Key) + st.text.Render(h.Desc)
 	}
-	bar := strings.Join(parts, hintDim.Render("  "))
+	bar := strings.Join(parts, st.sep.Render("  "))
 	return lipgloss.NewStyle().
-		Background(lipgloss.Color("#0a0a18")).
+		Background(core.Colors.Bg1).
 		Width(s.bounds.W).
 		Render(bar)
 }
