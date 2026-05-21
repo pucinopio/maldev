@@ -144,6 +144,11 @@ func (m onboardingModel) handleEnter() (onboardingModel, tea.Cmd) {
 		return m, nil
 
 	case stepPassphrase:
+		// Enter on field 0 advances focus to confirm; validation only runs on
+		// field 1 so the operator never sees "do not match" before confirming.
+		if m.passFocused == 0 {
+			return m.advanceFocus(), nil
+		}
 		p := m.passInput.Value()
 		c := m.passConfirm.Value()
 		if p == "" {
@@ -160,6 +165,11 @@ func (m onboardingModel) handleEnter() (onboardingModel, tea.Cmd) {
 		return m, nil
 
 	case stepIssuer:
+		// Enter on name field advances focus to key ID; validation only runs on
+		// field 1.
+		if m.issuerFocus == 0 {
+			return m.advanceFocus(), nil
+		}
 		name := m.issuerName.Value()
 		keyID := m.issuerKeyID.Value()
 		if name == "" || keyID == "" {
