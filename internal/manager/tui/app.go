@@ -1,6 +1,6 @@
 // Package tui implements the bubbletea-based terminal UI for license-manager.
 // It covers the full operator workflow: onboarding, passphrase unlock, dashboard,
-// and placeholder screens for views that ship in later phases.
+// and all operator views including the live Servers screen.
 package tui
 
 import (
@@ -11,6 +11,10 @@ import (
 	"github.com/oioio-space/maldev/internal/manager/service"
 	"github.com/oioio-space/maldev/internal/manager/tui/widgets"
 )
+
+// eventRingCap is the maximum number of httpsrv events retained in the root
+// ring buffer so the Servers log retains history across screen switches.
+const eventRingCap = 500
 
 // SessionState describes which top-level flow the TUI enters on start.
 type SessionState int
@@ -74,8 +78,13 @@ type rootModel struct {
 	audit      auditModel
 	settings   settingsModel
 
-	// Servers stays placeholder until Phase 4.
-	serversPH placeholderModel
+	// Phase 4 — live Servers screen.
+	servers serversModel
+
+	// eventRing retains the last eventRingCap httpsrv events so the Servers
+	// log has history when the operator navigates away and back.
+	eventRing    []httpsrv.Event
+	eventRingIdx int // next write position (modulo cap)
 }
 
 // New constructs the root model ready to be handed to tea.NewProgram.
@@ -84,7 +93,7 @@ type rootModel struct {
 //   - services == nil + sess==SessionLocked → passphrase prompt
 //   - services == nil + sess==SessionOnboarding → onboarding wizard
 func New(services *service.Services, bundle *httpsrv.Bundle, sess SessionState) rootModel {
-	return rootModel{
+	m := rootModel{
 		session:    sess,
 		active:     ViewDashboard,
 		services:   services,
@@ -102,20 +111,57 @@ func New(services *service.Services, bundle *httpsrv.Bundle, sess SessionState) 
 		audit:      newAuditModel(services),
 		settings:   newSettingsModel(services),
 
-		serversPH: newPlaceholderModel(ViewServers, "Phase 4"),
+		servers:   newServersModel(bundleAsController(bundle)),
+		eventRing: make([]httpsrv.Event, 0, eventRingCap),
+	}
+	return m
+}
+
+// bundleAsController converts a *Bundle to a Controller interface, returning
+// nil (typed nil interface) when bundle itself is nil. This avoids the
+// classic Go footgun where assigning a nil *Bundle to an interface variable
+// produces a non-nil interface value that panics on method dispatch.
+func bundleAsController(b *httpsrv.Bundle) httpsrv.Controller {
+	if b == nil {
+		return nil
+	}
+	return b
+}
+
+// listenServerEvents returns a tea.Cmd that reads one event from the merged
+// channel and wraps it as serverEventMsg. The program re-issues this command
+// after each delivery, forming a self-perpetuating listener that exits cleanly
+// when the channel is closed. Nil bundle → returns nil (no-op).
+func listenServerEvents(bundle *httpsrv.Bundle) tea.Cmd {
+	if bundle == nil {
+		return nil
+	}
+	ch := bundle.MergedEvents()
+	return func() tea.Msg {
+		ev, ok := <-ch
+		if !ok {
+			return nil // channel closed — program is shutting down
+		}
+		return serverEventMsg{ev: ev}
 	}
 }
 
 func (m rootModel) Init() tea.Cmd {
+	var cmds []tea.Cmd
 	switch m.session {
 	case SessionReady:
-		return m.dashboard.refresh()
+		cmds = append(cmds, m.dashboard.refresh())
 	case SessionLocked:
-		return m.passphrase.Init()
+		cmds = append(cmds, m.passphrase.Init())
 	case SessionOnboarding:
-		return m.onboarding.Init()
+		cmds = append(cmds, m.onboarding.Init())
 	}
-	return nil
+	// Start fan-in listener regardless of session state so events accumulate
+	// in the ring buffer as soon as the program starts.
+	if m.httpsrv != nil {
+		cmds = append(cmds, listenServerEvents(m.httpsrv))
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -138,8 +184,17 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.revocation, _ = m.revocation.Update(msg)
 		m.audit, _ = m.audit.Update(msg)
 		m.settings, _ = m.settings.Update(msg)
-		m.serversPH, _ = m.serversPH.Update(msg)
+		m.servers, _ = m.servers.Update(msg)
 		return m, nil
+
+	case serverEventMsg:
+		// Store in root ring buffer so log history survives screen switches.
+		m.appendEventRing(msg.ev)
+		// Forward to the Servers screen (updates cards + log).
+		updated, cmd := m.servers.Update(msg)
+		m.servers = updated
+		// Re-arm the listener for the next event.
+		return m, tea.Batch(cmd, listenServerEvents(m.httpsrv))
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -228,6 +283,18 @@ func (m rootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.dashboard.loading = true
 			return m, m.dashboard.refresh()
 		}
+
+	case "A":
+		// Start all servers (capital A, servers screen shortcut).
+		if m.active == ViewServers && m.httpsrv != nil {
+			return m, startAllCmd(m.httpsrv)
+		}
+
+	case "Z":
+		// Stop all servers (capital Z, servers screen shortcut).
+		if m.active == ViewServers && m.httpsrv != nil {
+			return m, stopAllCmd(m.httpsrv)
+		}
 	}
 
 	return m.routeToActive(msg)
@@ -250,8 +317,47 @@ func (m *rootModel) initScreen(id ViewID) tea.Cmd {
 		return m.audit.Init()
 	case ViewSettings:
 		return m.settings.Init()
+	case ViewServers:
+		// Replay ring buffer into the servers log so history is visible
+		// even when the operator navigated away and back.
+		return m.replayEventRing()
 	}
 	return nil
+}
+
+// appendEventRing inserts ev into the root ring buffer, evicting the oldest
+// entry when the capacity is reached. Uses a slice with modulo write index
+// rather than container/ring to keep the snapshot serialisable.
+func (m *rootModel) appendEventRing(ev httpsrv.Event) {
+	if len(m.eventRing) < eventRingCap {
+		m.eventRing = append(m.eventRing, ev)
+		return
+	}
+	m.eventRing[m.eventRingIdx%eventRingCap] = ev
+	m.eventRingIdx++
+}
+
+// replayEventRing returns a Cmd that drains the ordered ring buffer into
+// the servers log model as a batch of serverEventMsg messages.
+func (m *rootModel) replayEventRing() tea.Cmd {
+	if len(m.eventRing) == 0 {
+		return nil
+	}
+	// Build ordered slice: oldest first.
+	ordered := make([]httpsrv.Event, len(m.eventRing))
+	if len(m.eventRing) < eventRingCap {
+		copy(ordered, m.eventRing)
+	} else {
+		start := m.eventRingIdx % eventRingCap
+		copy(ordered, m.eventRing[start:])
+		copy(ordered[eventRingCap-start:], m.eventRing[:start])
+	}
+	cmds := make([]tea.Cmd, len(ordered))
+	for i, ev := range ordered {
+		e := ev
+		cmds[i] = func() tea.Msg { return serverEventMsg{ev: e} }
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m rootModel) updateOverlay(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -373,8 +479,8 @@ func (m rootModel) routeReady(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.revocation = updated
 		return m, cmd
 	case ViewServers:
-		updated, cmd := m.serversPH.Update(msg)
-		m.serversPH = updated
+		updated, cmd := m.servers.Update(msg)
+		m.servers = updated
 		return m, cmd
 	case ViewAudit:
 		updated, cmd := m.audit.Update(msg)
@@ -478,7 +584,7 @@ func (m rootModel) viewReady() string {
 	case ViewRevocation:
 		content = m.revocation.View()
 	case ViewServers:
-		content = m.serversPH.View()
+		content = m.servers.View()
 	case ViewAudit:
 		content = m.audit.View()
 	case ViewSettings:

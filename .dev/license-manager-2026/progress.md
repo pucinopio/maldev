@@ -1,8 +1,20 @@
 ---
-title: license-manager backend — implementation progress
+title: license-manager — implementation progress
 last_reviewed: 2026-05-21
-reflects_commit: 9d7fd91
+reflects_commit: HEAD
 ---
+
+# Status — license-manager TUI complete (Phases 1..4)
+
+All four TUI phases shipped on top of the v0.161.0 backend:
+
+- **Phase 1** — runnable foundation (rootModel, chrome, dashboard, passphrase prompt, onboarding wizard)
+- **Phase 2** — Licenses table + 6 simple screens (Issuers, Recipients, Identities, Revocation, Audit, Settings) + minimal overlays (Confirm, Error, Input, Revoke)
+- **Phase 2.5** — composable widget system, responsive layout, mouse support (a978fdc..eeb3c5f)
+- **Phase 3** — 8-step new-license wizard + probe drawer + QR/filepicker overlays (d61aea3)
+- **Phase 4** — Servers screen + httpsrv.Bundle event fan-in + live log streaming + dashboard server counter (this commit)
+
+Tagged v0.162.0.
 
 # Status — license-manager backend M1 complete
 

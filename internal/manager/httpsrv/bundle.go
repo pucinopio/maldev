@@ -1,9 +1,14 @@
 package httpsrv
 
 import (
+	"context"
+	"fmt"
 	"sync"
 	"time"
 )
+
+// Ensure Bundle satisfies Controller at compile time.
+var _ Controller = (*Bundle)(nil)
 
 // Bundle aggregates the three server instances and exposes a single merged
 // event stream for the TUI live-log view.
@@ -72,6 +77,72 @@ func (b *Bundle) forward(src <-chan Event) {
 			return
 		}
 	}
+}
+
+// Start starts the named server ("revocation", "heartbeat", "probe").
+// It satisfies Controller so the TUI can manage servers uniformly.
+func (b *Bundle) Start(ctx context.Context, name string) error {
+	switch name {
+	case "revocation":
+		if b.Revocation == nil {
+			return fmt.Errorf("revocation server not configured")
+		}
+		return b.Revocation.Start(ctx)
+	case "heartbeat":
+		if b.Heartbeat == nil {
+			return fmt.Errorf("heartbeat server not configured")
+		}
+		return b.Heartbeat.Start(ctx)
+	case "probe":
+		if b.Probe == nil {
+			return fmt.Errorf("probe server not configured")
+		}
+		return b.Probe.Start(ctx)
+	default:
+		return fmt.Errorf("unknown server %q", name)
+	}
+}
+
+// Stop stops the named server with a 5-second graceful timeout.
+// It satisfies Controller so the TUI can manage servers uniformly.
+func (b *Bundle) Stop(name string) error {
+	const timeout = 5 * time.Second
+	switch name {
+	case "revocation":
+		if b.Revocation == nil {
+			return nil
+		}
+		return b.Revocation.Stop(timeout)
+	case "heartbeat":
+		if b.Heartbeat == nil {
+			return nil
+		}
+		return b.Heartbeat.Stop(timeout)
+	case "probe":
+		if b.Probe == nil {
+			return nil
+		}
+		return b.Probe.Stop(timeout)
+	default:
+		return fmt.Errorf("unknown server %q", name)
+	}
+}
+
+// Statuses returns a snapshot of all three servers, keyed by Name().
+// It satisfies Controller so the TUI can render status cards without knowing
+// concrete server types.
+func (b *Bundle) Statuses() map[string]Status {
+	out := make(map[string]Status, 3)
+	if b.Revocation != nil {
+		out[b.Revocation.Name()] = b.Revocation.Status()
+	}
+	if b.Heartbeat != nil {
+		out[b.Heartbeat.Name()] = b.Heartbeat.Status()
+	}
+	if b.Probe != nil {
+		out[b.Probe.Name()] = b.Probe.Status()
+	}
+	return out
 }
 
 // StopAll stops every server with the given timeout and closes the fan-in

@@ -174,19 +174,44 @@ func (m dashboardModel) keyCardContent() string {
 }
 
 // serversCardContent builds the text content for the servers card.
+// When the bundle is wired (Phase 4+) it reads live Status snapshots directly
+// so the dashboard always reflects the current running state.
 func (m dashboardModel) serversCardContent() string {
 	if m.bundle == nil {
-		return Mute.Render("Phase 4 — to be wired")
+		// Bundle not wired — fall back to the snapshot injected by DashboardSnapshotMsg.
+		var lines []string
+		for _, s := range m.servers {
+			var pill string
+			if s.On {
+				pill = PillOn.Render("ON")
+			} else {
+				pill = PillOff.Render("OFF")
+			}
+			lines = append(lines, fmt.Sprintf("%-12s %s  %s", s.Name, pill, Mute.Render(s.URL)))
+		}
+		if len(lines) == 0 {
+			return Mute.Render("no servers configured")
+		}
+		return lipgloss.JoinVertical(lipgloss.Left, lines...)
 	}
-	var lines []string
-	for _, s := range m.servers {
+
+	// Live path: read directly from Bundle.Statuses().
+	statuses := m.bundle.Statuses()
+	names := []string{"revocation", "heartbeat", "probe"}
+	lines := make([]string, 0, len(names))
+	for _, name := range names {
+		s, ok := statuses[name]
 		var pill string
-		if s.On {
+		if ok && s.Running {
 			pill = PillOn.Render("ON")
 		} else {
 			pill = PillOff.Render("OFF")
 		}
-		lines = append(lines, fmt.Sprintf("%-12s %s  %s", s.Name, pill, Mute.Render(s.URL)))
+		addr := "—"
+		if ok && s.ListenAddr != "" {
+			addr = s.ListenAddr
+		}
+		lines = append(lines, fmt.Sprintf("%-12s %s  %s", name, pill, Mute.Render(addr)))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
