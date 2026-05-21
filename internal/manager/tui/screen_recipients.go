@@ -71,6 +71,10 @@ func (m recipientsModel) Update(msg tea.Msg) (recipientsModel, tea.Cmd) {
 		m.rebuildTable()
 		return m, nil
 
+	case tableSelectRowMsg:
+		m.table.SetCursor(msg.row)
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "d":
@@ -141,6 +145,21 @@ func (m *recipientsModel) rebuildTable() {
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
 	stretchLastColumn(&m.table, m.width)
+}
+
+// OnClick handles row clicks on the recipients table. Chrome=4 rows; data
+// starts at Y=5.
+func (m recipientsModel) OnClick(x, y, _ int) tea.Cmd {
+	const headerY = 4
+	if y <= headerY {
+		return nil
+	}
+	row := y - headerY - 1
+	if row < 0 || row >= len(m.rows) {
+		return nil
+	}
+	target := row
+	return func() tea.Msg { return tableSelectRowMsg{row: target} }
 }
 
 func (m recipientsModel) View() string {

@@ -65,6 +65,10 @@ func (m identitiesModel) Update(msg tea.Msg) (identitiesModel, tea.Cmd) {
 		m.rebuildTable()
 		return m, nil
 
+	case tableSelectRowMsg:
+		m.table.SetCursor(msg.row)
+		return m, nil
+
 	case IdentitiesLoadedMsg:
 		m.err = msg.Err
 		m.rows = msg.Rows
@@ -170,6 +174,19 @@ func (m *identitiesModel) rebuildTable() {
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
 	stretchLastColumn(&m.table, m.width)
+}
+
+func (m identitiesModel) OnClick(x, y, _ int) tea.Cmd {
+	const headerY = 4
+	if y <= headerY {
+		return nil
+	}
+	row := y - headerY - 1
+	if row < 0 || row >= len(m.rows) {
+		return nil
+	}
+	target := row
+	return func() tea.Msg { return tableSelectRowMsg{row: target} }
 }
 
 func (m identitiesModel) View() string {

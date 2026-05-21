@@ -64,6 +64,10 @@ func (m revocationModel) Update(msg tea.Msg) (revocationModel, tea.Cmd) {
 		m.rebuildTable()
 		return m, nil
 
+	case tableSelectRowMsg:
+		m.table.SetCursor(msg.row)
+		return m, nil
+
 	case RevocationLoadedMsg:
 		m.err = msg.Err
 		m.rows = msg.Rows
@@ -128,6 +132,21 @@ func (m *revocationModel) rebuildTable() {
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
 	stretchLastColumn(&m.table, m.width)
+}
+
+// OnClick handles row clicks on the revocation table. Chrome=4 rows; the 3
+// summary tiles take 5 rows (one box height) → table header at Y=9.
+func (m revocationModel) OnClick(x, y, _ int) tea.Cmd {
+	const headerY = 9
+	if y <= headerY {
+		return nil
+	}
+	row := y - headerY - 1
+	if row < 0 || row >= len(m.rows) {
+		return nil
+	}
+	target := row
+	return func() tea.Msg { return tableSelectRowMsg{row: target} }
 }
 
 func (m revocationModel) View() string {

@@ -639,6 +639,14 @@ func (m rootModel) activeScreenWithMouse() (ScreenMouseClick, bool) {
 	switch m.active {
 	case ViewLicenses:
 		return m.licenses, true
+	case ViewIssuers:
+		return m.issuers, true
+	case ViewRecipients:
+		return m.recipients, true
+	case ViewIdentities:
+		return m.identities, true
+	case ViewRevocation:
+		return m.revocation, true
 	case ViewServers:
 		return m.servers, true
 	case ViewAudit:
