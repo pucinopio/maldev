@@ -41,27 +41,23 @@ func (svc *ProbeService) NewToken(ctx context.Context, label string, ttl time.Du
 	}
 	id := hex.EncodeToString(raw[:])
 
-	tx, err := svc.store.Client.Tx(ctx)
+	var row *ent.ProbeToken
+	err := withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		var e error
+		row, e = tx.ProbeToken.Create().
+			SetID(id).
+			SetLabel(label).
+			SetExpiresAt(time.Now().Add(ttl)).
+			Save(ctx)
+		if e != nil {
+			return e
+		}
+		return svc.audit.AppendTx(ctx, tx, "probe.token.new", actor,
+			Target{Kind: "ProbeToken", ID: id},
+			map[string]any{"label": label, "ttl_seconds": int(ttl.Seconds())})
+	})
 	if err != nil {
 		return nil, err
-	}
-	row, err := tx.ProbeToken.Create().
-		SetID(id).
-		SetLabel(label).
-		SetExpiresAt(time.Now().Add(ttl)).
-		Save(ctx)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := svc.audit.AppendTx(ctx, tx, "probe.token.new", actor,
-		Target{Kind: "ProbeToken", ID: id},
-		map[string]any{"label": label, "ttl_seconds": int(ttl.Seconds())}); err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit: %w", err)
 	}
 	return row, nil
 }
@@ -102,31 +98,26 @@ func (svc *ProbeService) ConsumeToken(ctx context.Context, tokenID string, resul
 		return fmt.Errorf("probe: token %s already used", tokenID)
 	}
 
-	tx, err := svc.store.Client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-	updated, err := tx.ProbeToken.UpdateOneID(tokenID).
-		SetUsedAt(now).
-		SetRemoteAddr(remoteAddr).
-		SetHostname(result.Hostname).
-		SetOs(result.OS).
-		SetArch(result.Arch).
-		SetCPUBrand(result.CPUBrand).
-		SetLocalHex(result.LocalHex).
-		SetCompositeHex(result.CompositeHex).
-		Save(ctx)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err := svc.audit.AppendTx(ctx, tx, "probe.token.consumed", "remote",
-		Target{Kind: "ProbeToken", ID: tokenID},
-		map[string]any{"hostname": result.Hostname, "os": result.OS}); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err := tx.Commit(); err != nil {
+	var updated *ent.ProbeToken
+	if err := withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		var e error
+		updated, e = tx.ProbeToken.UpdateOneID(tokenID).
+			SetUsedAt(now).
+			SetRemoteAddr(remoteAddr).
+			SetHostname(result.Hostname).
+			SetOs(result.OS).
+			SetArch(result.Arch).
+			SetCPUBrand(result.CPUBrand).
+			SetLocalHex(result.LocalHex).
+			SetCompositeHex(result.CompositeHex).
+			Save(ctx)
+		if e != nil {
+			return e
+		}
+		return svc.audit.AppendTx(ctx, tx, "probe.token.consumed", "remote",
+			Target{Kind: "ProbeToken", ID: tokenID},
+			map[string]any{"hostname": result.Hostname, "os": result.OS})
+	}); err != nil {
 		return err
 	}
 
@@ -157,18 +148,11 @@ func (svc *ProbeService) History(ctx context.Context, limit int) ([]*ent.ProbeTo
 
 // Revoke marks an unused token as expired (sets expires_at to now).
 func (svc *ProbeService) Revoke(ctx context.Context, tokenID, actor string) error {
-	tx, err := svc.store.Client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-	if _, err := tx.ProbeToken.UpdateOneID(tokenID).SetExpiresAt(time.Now()).Save(ctx); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err := svc.audit.AppendTx(ctx, tx, "probe.token.revoke", actor,
-		Target{Kind: "ProbeToken", ID: tokenID}, nil); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	return tx.Commit()
+	return withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		if _, err := tx.ProbeToken.UpdateOneID(tokenID).SetExpiresAt(time.Now()).Save(ctx); err != nil {
+			return err
+		}
+		return svc.audit.AppendTx(ctx, tx, "probe.token.revoke", actor,
+			Target{Kind: "ProbeToken", ID: tokenID}, nil)
+	})
 }

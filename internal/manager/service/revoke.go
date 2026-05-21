@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/oioio-space/maldev/internal/manager/store"
+	"github.com/oioio-space/maldev/internal/manager/store/ent"
 	licenseent "github.com/oioio-space/maldev/internal/manager/store/ent/license"
 	"github.com/oioio-space/maldev/license/revoke"
 )
@@ -38,64 +39,47 @@ func (svc *RevokeService) Revoke(ctx context.Context, licenseID uuid.UUID, reaso
 		return nil // idempotent
 	}
 
-	tx, err := svc.store.Client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-	if _, err := tx.Revocation.Create().
-		SetReason(reason).
-		SetRevokedBy(actor).
-		SetLicenseID(licenseID).
-		Save(ctx); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("create revocation: %w", err)
-	}
-	if _, err := tx.License.UpdateOneID(licenseID).
-		SetStatus(licenseent.StatusRevoked).
-		Save(ctx); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err := svc.audit.AppendTx(ctx, tx, "license.revoke", actor,
-		Target{Kind: "License", ID: licenseID.String()},
-		map[string]any{"reason": reason}); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	return tx.Commit()
+	return withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		if _, err := tx.Revocation.Create().
+			SetReason(reason).
+			SetRevokedBy(actor).
+			SetLicenseID(licenseID).
+			Save(ctx); err != nil {
+			return fmt.Errorf("create revocation: %w", err)
+		}
+		if _, err := tx.License.UpdateOneID(licenseID).
+			SetStatus(licenseent.StatusRevoked).
+			Save(ctx); err != nil {
+			return err
+		}
+		return svc.audit.AppendTx(ctx, tx, "license.revoke", actor,
+			Target{Kind: "License", ID: licenseID.String()},
+			map[string]any{"reason": reason})
+	})
 }
 
 // Unrevoke deletes the Revocation row and resets status back to active.
 // Useful for admin error correction.
 func (svc *RevokeService) Unrevoke(ctx context.Context, licenseID uuid.UUID, actor string) error {
-	tx, err := svc.store.Client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-	row, err := tx.License.Get(ctx, licenseID)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	rev, err := row.QueryRevocation().Only(ctx)
-	if err == nil && rev != nil {
-		if err := tx.Revocation.DeleteOneID(rev.ID).Exec(ctx); err != nil {
-			_ = tx.Rollback()
+	return withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		row, err := tx.License.Get(ctx, licenseID)
+		if err != nil {
 			return err
 		}
-	}
-	if _, err := tx.License.UpdateOneID(licenseID).
-		SetStatus(licenseent.StatusActive).
-		Save(ctx); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err := svc.audit.AppendTx(ctx, tx, "license.unrevoke", actor,
-		Target{Kind: "License", ID: licenseID.String()}, nil); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	return tx.Commit()
+		rev, err := row.QueryRevocation().Only(ctx)
+		if err == nil && rev != nil {
+			if err := tx.Revocation.DeleteOneID(rev.ID).Exec(ctx); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.License.UpdateOneID(licenseID).
+			SetStatus(licenseent.StatusActive).
+			Save(ctx); err != nil {
+			return err
+		}
+		return svc.audit.AppendTx(ctx, tx, "license.unrevoke", actor,
+			Target{Kind: "License", ID: licenseID.String()}, nil)
+	})
 }
 
 // RevocationView aggregates a revoked licence's metadata for the UI.

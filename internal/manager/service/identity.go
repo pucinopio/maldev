@@ -52,27 +52,22 @@ func (svc *IdentityService) Import(ctx context.Context, name string, bytes []byt
 
 func (svc *IdentityService) insertIdentity(ctx context.Context, name string, bytes []byte, actor string) (*ent.Identity, error) {
 	sha := licensekg.HashIdentity(bytes)
-
-	tx, err := svc.store.Client.Tx(ctx)
+	var row *ent.Identity
+	err := withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		var e error
+		row, e = tx.Identity.Create().
+			SetName(name).
+			SetBytes(bytes).
+			SetSha256(sha).
+			Save(ctx)
+		if e != nil {
+			return e
+		}
+		return svc.audit.AppendTx(ctx, tx, "identity.create", actor,
+			Target{Kind: "Identity", ID: row.ID.String()},
+			map[string]any{"name": name, "sha256": sha})
+	})
 	if err != nil {
-		return nil, err
-	}
-	row, err := tx.Identity.Create().
-		SetName(name).
-		SetBytes(bytes).
-		SetSha256(sha).
-		Save(ctx)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := svc.audit.AppendTx(ctx, tx, "identity.create", actor,
-		Target{Kind: "Identity", ID: row.ID.String()},
-		map[string]any{"name": name, "sha256": sha}); err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return row, nil
@@ -116,24 +111,17 @@ func (svc *IdentityService) Regenerate(ctx context.Context, id uuid.UUID, confir
 	}
 	sha := licensekg.HashIdentity(b[:])
 
-	tx, err := svc.store.Client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-	if _, err := tx.Identity.UpdateOneID(id).
-		SetBytes(b[:]).
-		SetSha256(sha).
-		Save(ctx); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err := svc.audit.AppendTx(ctx, tx, "identity.regenerate", actor,
-		Target{Kind: "Identity", ID: id.String()},
-		map[string]any{"new_sha256": sha}); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	return tx.Commit()
+	return withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		if _, err := tx.Identity.UpdateOneID(id).
+			SetBytes(b[:]).
+			SetSha256(sha).
+			Save(ctx); err != nil {
+			return err
+		}
+		return svc.audit.AppendTx(ctx, tx, "identity.regenerate", actor,
+			Target{Kind: "Identity", ID: id.String()},
+			map[string]any{"new_sha256": sha})
+	})
 }
 
 // UsageCount returns the number of License rows whose IdentitySHA256 matches
@@ -157,18 +145,11 @@ func (svc *IdentityService) Delete(ctx context.Context, id uuid.UUID, actor stri
 	if count > 0 {
 		return fmt.Errorf("identity: %d licence(s) reference this identity", count)
 	}
-	tx, err := svc.store.Client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-	if err := tx.Identity.DeleteOneID(id).Exec(ctx); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err := svc.audit.AppendTx(ctx, tx, "identity.delete", actor,
-		Target{Kind: "Identity", ID: id.String()}, nil); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	return tx.Commit()
+	return withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		if err := tx.Identity.DeleteOneID(id).Exec(ctx); err != nil {
+			return err
+		}
+		return svc.audit.AppendTx(ctx, tx, "identity.delete", actor,
+			Target{Kind: "Identity", ID: id.String()}, nil)
+	})
 }

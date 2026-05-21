@@ -45,29 +45,25 @@ func (svc *IssuerService) Generate(ctx context.Context, name, keyID, actor strin
 		return nil, err
 	}
 
-	tx, err := svc.store.Client.Tx(ctx)
+	var row *ent.Issuer
+	err = withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		var e error
+		row, e = tx.Issuer.Create().
+			SetName(name).
+			SetKeyID(keyID).
+			SetPublicKey(pub).
+			SetEncryptedPriv(wrapped).
+			SetActive(false).
+			Save(ctx)
+		if e != nil {
+			return e
+		}
+		return svc.audit.AppendTx(ctx, tx, "issuer.generate", actor,
+			Target{Kind: "Issuer", ID: row.ID.String()},
+			map[string]any{"name": name, "key_id": keyID})
+	})
 	if err != nil {
 		return nil, err
-	}
-	row, err := tx.Issuer.Create().
-		SetName(name).
-		SetKeyID(keyID).
-		SetPublicKey(pub).
-		SetEncryptedPriv(wrapped).
-		SetActive(false).
-		Save(ctx)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := svc.audit.AppendTx(ctx, tx, "issuer.generate", actor,
-		Target{Kind: "Issuer", ID: row.ID.String()},
-		map[string]any{"name": name, "key_id": keyID}); err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit: %w", err)
 	}
 	return row, nil
 }
@@ -89,53 +85,41 @@ func (svc *IssuerService) Import(ctx context.Context, name, keyID string, privat
 		return nil, err
 	}
 
-	tx, err := svc.store.Client.Tx(ctx)
+	var row *ent.Issuer
+	err = withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		var e error
+		row, e = tx.Issuer.Create().
+			SetName(name).
+			SetKeyID(keyID).
+			SetPublicKey(pub).
+			SetEncryptedPriv(wrapped).
+			SetActive(false).
+			Save(ctx)
+		if e != nil {
+			return e
+		}
+		return svc.audit.AppendTx(ctx, tx, "issuer.import", actor,
+			Target{Kind: "Issuer", ID: row.ID.String()},
+			map[string]any{"name": name, "key_id": keyID})
+	})
 	if err != nil {
 		return nil, err
-	}
-	row, err := tx.Issuer.Create().
-		SetName(name).
-		SetKeyID(keyID).
-		SetPublicKey(pub).
-		SetEncryptedPriv(wrapped).
-		SetActive(false).
-		Save(ctx)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := svc.audit.AppendTx(ctx, tx, "issuer.import", actor,
-		Target{Kind: "Issuer", ID: row.ID.String()},
-		map[string]any{"name": name, "key_id": keyID}); err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit: %w", err)
 	}
 	return row, nil
 }
 
 // SetActive marks id active and unsets all other issuers, in one tx.
 func (svc *IssuerService) SetActive(ctx context.Context, id uuid.UUID, actor string) error {
-	tx, err := svc.store.Client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-	if _, err := tx.Issuer.Update().SetActive(false).Save(ctx); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if _, err := tx.Issuer.UpdateOneID(id).SetActive(true).Save(ctx); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err := svc.audit.AppendTx(ctx, tx, "issuer.set_active", actor,
-		Target{Kind: "Issuer", ID: id.String()}, nil); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	return tx.Commit()
+	return withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		if _, err := tx.Issuer.Update().SetActive(false).Save(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.Issuer.UpdateOneID(id).SetActive(true).Save(ctx); err != nil {
+			return err
+		}
+		return svc.audit.AppendTx(ctx, tx, "issuer.set_active", actor,
+			Target{Kind: "Issuer", ID: id.String()}, nil)
+	})
 }
 
 // Active returns the currently active issuer, or an error if none is set.

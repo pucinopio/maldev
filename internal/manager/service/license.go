@@ -210,78 +210,70 @@ func (svc *LicenseService) Issue(ctx context.Context, req IssueRequest) (*Issued
 	}
 
 	// Persist row + TOTP secrets + audit in a single transaction.
-	tx, err := svc.store.Client.Tx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	create := tx.License.Create().
-		SetLicenseUUID(parsed.ID).
-		SetSubject(parsed.Subject).
-		SetIssuerName(parsed.Issuer).
-		SetAudience(parsed.Audience).
-		SetFeatures(parsed.Features).
-		SetNotBefore(parsed.NotBefore).
-		SetNotAfter(parsed.NotAfter).
-		SetPayloadKind(payloadKind).
-		SetPem(pemBytes).
-		SetIssuerID(issRow.ID)
-	if identitySha != "" {
-		create = create.SetIdentitySha256(identitySha)
-	}
-	if req.BinarySHA256 != "" {
-		create = create.SetBinarySha256(req.BinarySHA256)
-	}
-	if req.ReplacesID != nil {
-		create = create.SetReplacesLicenseID(*req.ReplacesID)
-	}
-	licRow, err := create.Save(ctx)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, fmt.Errorf("persist license: %w", err)
-	}
-
-	// Persist TOTP secrets — one row per binding, KEK-wrapped.
+	var licRow *ent.License
 	var provs []TOTPProvisioning
-	for _, p := range totps {
-		wrapped, err := svc.kek.Wrap([]byte(p.secret))
-		if err != nil {
-			_ = tx.Rollback()
-			return nil, err
+	if err := withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		create := tx.License.Create().
+			SetLicenseUUID(parsed.ID).
+			SetSubject(parsed.Subject).
+			SetIssuerName(parsed.Issuer).
+			SetAudience(parsed.Audience).
+			SetFeatures(parsed.Features).
+			SetNotBefore(parsed.NotBefore).
+			SetNotAfter(parsed.NotAfter).
+			SetPayloadKind(payloadKind).
+			SetPem(pemBytes).
+			SetIssuerID(issRow.ID)
+		if identitySha != "" {
+			create = create.SetIdentitySha256(identitySha)
 		}
-		_, err = tx.TOTPSecret.Create().
-			SetEncryptedSecret(wrapped).
-			SetAccountLabel(p.accountLabel).
-			SetLicenseID(licRow.ID).
-			Save(ctx)
-		if err != nil {
-			_ = tx.Rollback()
-			return nil, err
+		if req.BinarySHA256 != "" {
+			create = create.SetBinarySha256(req.BinarySHA256)
 		}
-		ascii, _ := totp.QRImageASCII(p.secret, p.accountLabel, issRow.Name)
-		png, _ := totp.QRImagePNG(p.secret, p.accountLabel, issRow.Name, 256)
-		provs = append(provs, TOTPProvisioning{
-			BindingIndex: p.idx,
-			Secret:       p.secret,
-			OtpauthURI:   totp.URI(p.secret, p.accountLabel, issRow.Name),
-			QRImageASCII: ascii,
-			QRImagePNG:   png,
-		})
-	}
+		if req.ReplacesID != nil {
+			create = create.SetReplacesLicenseID(*req.ReplacesID)
+		}
+		var e error
+		licRow, e = create.Save(ctx)
+		if e != nil {
+			return fmt.Errorf("persist license: %w", e)
+		}
 
-	if err := svc.audit.AppendTx(ctx, tx, "license.issue", req.Actor,
-		Target{Kind: "License", ID: licRow.ID.String()},
-		map[string]any{
-			"subject":  req.Subject,
-			"key_id":   issRow.KeyID,
-			"audience": req.AudienceList,
-			"features": req.Features,
-			"bindings": len(req.Bindings),
-		}); err != nil {
-		_ = tx.Rollback()
+		// Persist TOTP secrets — one row per binding, KEK-wrapped.
+		for _, p := range totps {
+			wrapped, e := svc.kek.Wrap([]byte(p.secret))
+			if e != nil {
+				return e
+			}
+			if _, e = tx.TOTPSecret.Create().
+				SetEncryptedSecret(wrapped).
+				SetAccountLabel(p.accountLabel).
+				SetLicenseID(licRow.ID).
+				Save(ctx); e != nil {
+				return e
+			}
+			ascii, _ := totp.QRImageASCII(p.secret, p.accountLabel, issRow.Name)
+			png, _ := totp.QRImagePNG(p.secret, p.accountLabel, issRow.Name, 256)
+			provs = append(provs, TOTPProvisioning{
+				BindingIndex: p.idx,
+				Secret:       p.secret,
+				OtpauthURI:   totp.URI(p.secret, p.accountLabel, issRow.Name),
+				QRImageASCII: ascii,
+				QRImagePNG:   png,
+			})
+		}
+
+		return svc.audit.AppendTx(ctx, tx, "license.issue", req.Actor,
+			Target{Kind: "License", ID: licRow.ID.String()},
+			map[string]any{
+				"subject":  req.Subject,
+				"key_id":   issRow.KeyID,
+				"audience": req.AudienceList,
+				"features": req.Features,
+				"bindings": len(req.Bindings),
+			})
+	}); err != nil {
 		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit: %w", err)
 	}
 
 	return &IssuedLicense{Row: licRow, PEM: pemBytes, TOTPs: provs}, nil
@@ -425,45 +417,40 @@ func (svc *LicenseService) Import(ctx context.Context, pemBytes []byte, label, a
 		return nil, fmt.Errorf("no issuer registered for KeyID %q", parsed.KeyID)
 	}
 
-	tx, err := svc.store.Client.Tx(ctx)
-	if err != nil {
-		return nil, err
-	}
 	payloadKind := licenseent.PayloadKindNone
 	if len(parsed.SealedPayload) > 0 {
 		payloadKind = licenseent.PayloadKindSealed
 	} else if len(parsed.Payload) > 0 {
 		payloadKind = licenseent.PayloadKindCleartext
 	}
-	create := tx.License.Create().
-		SetLicenseUUID(parsed.ID).
-		SetSubject(parsed.Subject).
-		SetIssuerName(parsed.Issuer).
-		SetAudience(parsed.Audience).
-		SetFeatures(parsed.Features).
-		SetNotBefore(parsed.NotBefore).
-		SetNotAfter(parsed.NotAfter).
-		SetPayloadKind(payloadKind).
-		SetPem(pemBytes).
-		SetIssuerID(*issuerID)
-	if parsed.IdentitySHA256 != "" {
-		create = create.SetIdentitySha256(parsed.IdentitySHA256)
-	}
-	if parsed.BinarySHA256 != "" {
-		create = create.SetBinarySha256(parsed.BinarySHA256)
-	}
-	row, err := create.Save(ctx)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := svc.audit.AppendTx(ctx, tx, "license.import", actor,
-		Target{Kind: "License", ID: row.ID.String()},
-		map[string]any{"label": label}); err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
+	var row *ent.License
+	if err := withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		create := tx.License.Create().
+			SetLicenseUUID(parsed.ID).
+			SetSubject(parsed.Subject).
+			SetIssuerName(parsed.Issuer).
+			SetAudience(parsed.Audience).
+			SetFeatures(parsed.Features).
+			SetNotBefore(parsed.NotBefore).
+			SetNotAfter(parsed.NotAfter).
+			SetPayloadKind(payloadKind).
+			SetPem(pemBytes).
+			SetIssuerID(*issuerID)
+		if parsed.IdentitySHA256 != "" {
+			create = create.SetIdentitySha256(parsed.IdentitySHA256)
+		}
+		if parsed.BinarySHA256 != "" {
+			create = create.SetBinarySha256(parsed.BinarySHA256)
+		}
+		var e error
+		row, e = create.Save(ctx)
+		if e != nil {
+			return e
+		}
+		return svc.audit.AppendTx(ctx, tx, "license.import", actor,
+			Target{Kind: "License", ID: row.ID.String()},
+			map[string]any{"label": label})
+	}); err != nil {
 		return nil, err
 	}
 	return row, nil

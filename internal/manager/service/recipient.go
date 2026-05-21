@@ -39,27 +39,23 @@ func (svc *RecipientService) Generate(ctx context.Context, name, actor string) (
 		priv[i] = 0
 	}
 
-	tx, err := svc.store.Client.Tx(ctx)
+	var row *ent.RecipientKey
+	err = withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		var e error
+		row, e = tx.RecipientKey.Create().
+			SetName(name).
+			SetPublicKey(pub).
+			SetEncryptedPriv(wrapped).
+			Save(ctx)
+		if e != nil {
+			return e
+		}
+		return svc.audit.AppendTx(ctx, tx, "recipient.generate", actor,
+			Target{Kind: "RecipientKey", ID: row.ID.String()},
+			map[string]any{"name": name})
+	})
 	if err != nil {
 		return nil, err
-	}
-	row, err := tx.RecipientKey.Create().
-		SetName(name).
-		SetPublicKey(pub).
-		SetEncryptedPriv(wrapped).
-		Save(ctx)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := svc.audit.AppendTx(ctx, tx, "recipient.generate", actor,
-		Target{Kind: "RecipientKey", ID: row.ID.String()},
-		map[string]any{"name": name}); err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit: %w", err)
 	}
 	return row, nil
 }
@@ -74,26 +70,22 @@ func (svc *RecipientService) Import(ctx context.Context, name string, pub, priv 
 	if err != nil {
 		return nil, err
 	}
-	tx, err := svc.store.Client.Tx(ctx)
+	var row *ent.RecipientKey
+	err = withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		var e error
+		row, e = tx.RecipientKey.Create().
+			SetName(name).
+			SetPublicKey(pub).
+			SetEncryptedPriv(wrapped).
+			Save(ctx)
+		if e != nil {
+			return e
+		}
+		return svc.audit.AppendTx(ctx, tx, "recipient.import", actor,
+			Target{Kind: "RecipientKey", ID: row.ID.String()},
+			map[string]any{"name": name})
+	})
 	if err != nil {
-		return nil, err
-	}
-	row, err := tx.RecipientKey.Create().
-		SetName(name).
-		SetPublicKey(pub).
-		SetEncryptedPriv(wrapped).
-		Save(ctx)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := svc.audit.AppendTx(ctx, tx, "recipient.import", actor,
-		Target{Kind: "RecipientKey", ID: row.ID.String()},
-		map[string]any{"name": name}); err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return row, nil
@@ -130,20 +122,13 @@ func (svc *RecipientService) PrivateKey(ctx context.Context, id uuid.UUID) ([]by
 }
 
 func (svc *RecipientService) Delete(ctx context.Context, id uuid.UUID, actor string) error {
-	tx, err := svc.store.Client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-	if err := tx.RecipientKey.DeleteOneID(id).Exec(ctx); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err := svc.audit.AppendTx(ctx, tx, "recipient.delete", actor,
-		Target{Kind: "RecipientKey", ID: id.String()}, nil); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	return tx.Commit()
+	return withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		if err := tx.RecipientKey.DeleteOneID(id).Exec(ctx); err != nil {
+			return err
+		}
+		return svc.audit.AppendTx(ctx, tx, "recipient.delete", actor,
+			Target{Kind: "RecipientKey", ID: id.String()}, nil)
+	})
 }
 
 // suppress unused
