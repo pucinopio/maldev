@@ -9,32 +9,32 @@
 │42                    ││3                     ││7                     ││5                     ││0                     │
 │signées par la clé ac…││présentes dans la CRL ││NotAfter dépassé      ││à renouveler          ││re-émises plus tard   │
 └──────────────────────┘└──────────────────────┘└──────────────────────┘└──────────────────────┘└──────────────────────┘
-┌──────────────────────────────────────────────────┐┌────────────────────────────────────────────────────────────┐      
-│ Clé d'émission active                 [k] gérer  ││ 5 dernières actions                      [8] tout l'audit  │      
-│ maldev-prod-01                            ACTIVE ││ 00:00:00 license.issue uuid-1 (operator)                   │      
-│ nom production-2026                              ││ 00:00:00 issuer.create uuid-2 (operator)                   │      
-│ fpr ed25519:abcd…ef01                            ││                                                            │      
-│                                                  ││                                                            │      
-│                                                  ││                                                            │      
-│                                                  ││                                                            │      
-│                                                  ││                                                            │      
-│                                                  ││                                                            │      
-│                                                  ││                                                            │      
-└──────────────────────────────────────────────────┘│                                                            │      
-┌──────────────────────────────────────────────────┐│                                                            │      
-│ Serveurs HTTP       [7] détail · [s] start/stop  ││                                                            │      
-│ ● Revocation  https://revoke.example.com:8443 ON ││                                                            │      
-│                                                  │└────────────────────────────────────────────────────────────┘      
-│ https://manager.localhttps://revoke.example.com: │┌────────────────────────────────────────────────────────────┐      
-│ 8443                                             ││ Raccourcis                                 touche → écran  │      
-│ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ ││  [n]  nouvelle                                             │      
-│ ● Heartbeat  https://heartbeat.example.com:8444  ││ licence            │ [/]  rechercher   │ [x]  révoquer     │      
-│ ON                                               ││ ───────────────────┼───────────────────┼────────────────── │      
-│                                                  ││ ─                                                          │      
-│ https://manager.localhttps://heartbeat.example.c ││  [k]  clés                                                 │      
-│ om:8444                                          ││ d'émission         │ [i]  identity.bin │ [?]  aide         │      
-│ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ ││ contextuelle                                               │      
-│ ○ Probe  —                                   OFF │└────────────────────────────────────────────────────────────┘      
-│   arrêté · démarrer via onglet [7]               │                                                                    
-└──────────────────────────────────────────────────┘                                                                    
+                                                                                                                        
+                                                                                                                        
+┌────────────────────────────────────────────────────┐ ┌──────────────────────────────────────────────────────────────┐ 
+│ Clé d'émission active                   [k] gérer  │ │ 5 dernières actions                        [8] tout l'audit  │ 
+│ maldev-prod-01                            ACTIVE   │ │ 00:00:00 license.issue uuid-1 (operator)                     │ 
+│ nom production-2026                                │ │ 00:00:00 issuer.create uuid-2 (operator)                     │ 
+│ fpr ed25519:abcd…ef01                              │ │                                                              │ 
+│                                                    │ │                                                              │ 
+│                                                    │ │                                                              │ 
+│                                                    │ │                                                              │ 
+│                                                    │ │                                                              │ 
+│                                                    │ │                                                              │ 
+│                                                    │ │                                                              │ 
+└────────────────────────────────────────────────────┘ │                                                              │ 
+                                                       │                                                              │ 
+                                                       │                                                              │ 
+┌────────────────────────────────────────────────────┐ │                                                              │ 
+│ Serveurs HTTP         [7] détail · [s] start/stop  │ └──────────────────────────────────────────────────────────────┘ 
+│ ● Revocation  https://revoke.example.com:8443 ON   │                                                                  
+│                                                    │                                                                  
+│ https://manager.localhttps://revoke.example.com:   │ ┌──────────────────────────────────────────────────────────────┐ 
+│ 8443                                               │ │ Raccourcis                                   touche → écran  │ 
+│ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌   │ │  [n]  nouvelle                                               │ 
+│ ● Heartbeat  https://heartbeat.example.com:8444    │ │ licence            │ [/]  rechercher   │ [x]  révoquer       │ 
+│ ON                                                 │ │ ───────────────────┼───────────────────┼──────────────────   │ 
+│                                                    │ │ ─                                                            │ 
+│ https://manager.localhttps://heartbeat.example.c   │ │  [k]  clés                                                   │ 
+│ om:8444                                            │ │ d'émission         │ [i]  identity.bin │ [?]  aide           │ 
 1-9 onglets  n nouvelle licence  / rechercher  k clés actives  ? aide  q quitter                                 ~ tour 

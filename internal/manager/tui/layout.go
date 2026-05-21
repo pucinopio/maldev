@@ -134,9 +134,19 @@ func (f *flexWidget) Update(msg tea.Msg) (Widget, tea.Cmd) {
 }
 
 func (f *flexWidget) View() string {
-	views := make([]string, len(f.children))
+	views := make([]string, 0, len(f.children)*2)
 	for i, c := range f.children {
-		views[i] = c.W.View()
+		if i > 0 && f.gap > 0 {
+			// Layout reserved `gap` cells between children; without inserting
+			// a spacer at View() time the children would render flush against
+			// each other AND leave a `gap`-wide hole on the trailing side.
+			if f.dir == Horizontal {
+				views = append(views, strings.Repeat(" ", f.gap))
+			} else {
+				views = append(views, strings.Repeat("\n", f.gap))
+			}
+		}
+		views = append(views, c.W.View())
 	}
 	if f.dir == Horizontal {
 		return lipgloss.JoinHorizontal(lipgloss.Top, views...)
@@ -472,11 +482,11 @@ func (b *boxWidget) Update(msg tea.Msg) (Widget, tea.Cmd) {
 }
 
 func (b *boxWidget) View() string {
-	// BoxStyle has Border (2 chars) + Padding(0,1) (2 chars) = 4 chars of horizontal
-	// overhead. Width() sets the CONTENT width before borders are applied, so passing
-	// bounds.W would make the visual total = bounds.W + 4. Pass bounds.W - 4 instead
-	// so the rendered box visual width equals bounds.W exactly.
-	contentW := b.bounds.W - 4
+	// lipgloss.Width(N) already subsumes Padding(0,1) — the rendered visual
+	// width is N + 2 (border only adds outside Width). So pass bounds.W - 2 to
+	// hit bounds.W exactly. (Verified empirically; the prior `-4` formula left
+	// 2 trailing cells per box, visible as misalignment on the dashboard right.)
+	contentW := b.bounds.W - 2
 	if contentW < 1 {
 		contentW = 1
 	}
