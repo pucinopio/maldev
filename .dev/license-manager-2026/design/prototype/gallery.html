@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>license-manager · TUI gallery</title>
+<meta name="viewport" content="width=1480">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Pull in the same TUI palette + components stylesheet from index.html.
+     We embed it inline so the gallery works as a self-contained print target. */
+  :root {
+    --bg: #0a0a18;
+    --bg-1: #0a0a18;
+    --bg-2: #10102a;
+    --bg-3: #16163a;
+    --border: #2a2a52;
+    --border-bright: #4a4aa0;
+    --fg: #e6e6ff;
+    --fg-dim: #7a7ab8;
+    --fg-mute: #4a4a78;
+    --cyan: #00f0ff;
+    --magenta: #ff36d4;
+    --green: #39ff88;
+    --yellow: #ffce39;
+    --orange: #ff8a3c;
+    --red: #ff3c5f;
+    --violet: #a070ff;
+    --faint-mask: rgba(10, 10, 24, 0.55);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #04040a; color: var(--fg); font-family: "JetBrains Mono", monospace; font-size: 14px; line-height: 1.5; font-feature-settings: "calt" 0, "liga" 0; }
+
+  /* === gallery chrome (Inter for titles, mono for the frames) === */
+  .page {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 30px 20px 80px;
+  }
+  .page-head { font-family: "Inter", sans-serif; padding: 0 20px 28px; border-bottom: 1px solid #1a1a30; margin-bottom: 28px; }
+  .page-head h1 { margin: 0 0 6px; color: var(--magenta); font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
+  .page-head p  { margin: 0; color: var(--fg-dim); font-size: 14px; }
+  .page-head .kbd { font-family: "JetBrains Mono", monospace; color: var(--cyan); padding: 1px 6px; background: #0e0e1c; border: 1px solid #1f1f3a; }
+
+  /* TOC */
+  .toc { font-family: "Inter", sans-serif; columns: 3; padding: 14px 20px; margin-bottom: 28px; border: 1px solid #1a1a30; background: #07070f; }
+  .toc-title { color: var(--cyan); font-weight: 700; margin-bottom: 6px; }
+  .toc a { display: block; color: var(--fg-dim); text-decoration: none; padding: 2px 0; font-size: 12px; break-inside: avoid; }
+  .toc a:hover { color: var(--fg); }
+
+  /* each TUI frame */
+  .frame { margin: 36px 0; break-inside: avoid; page-break-inside: avoid; }
+  .frame-title {
+    font-family: "Inter", sans-serif;
+    color: var(--fg);
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 0 6px;
+    padding: 4px 10px;
+    display: flex; align-items: baseline; gap: 14px;
+    border-left: 3px solid var(--magenta);
+  }
+  .frame-title .id { color: var(--magenta); font-family: "JetBrains Mono", monospace; font-size: 13px; min-width: 4ch; }
+  .frame-title .sub { color: var(--fg-dim); font-weight: 400; font-size: 13px; }
+  .frame-viewport {
+    width: 1440px;
+    height: 900px;
+    border: 1px solid #1a1a30;
+    background: var(--bg);
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 0 0 1px #050510 inset;
+  }
+
+  /* === COPY-PASTE FROM index.html — components stylesheet =================== */
+  .c-cyan    { color: var(--cyan); }
+  .c-magenta { color: var(--magenta); }
+  .c-green   { color: var(--green); }
+  .c-red     { color: var(--red); }
+  .c-yellow  { color: var(--yellow); }
+  .c-violet  { color: var(--violet); }
+  .b-cyan    { color: var(--cyan);    font-weight: 700; }
+  .b-magenta { color: var(--magenta); font-weight: 700; }
+  .b-green   { color: var(--green);   font-weight: 700; }
+  .b-red     { color: var(--red);     font-weight: 700; }
+  .b-yellow  { color: var(--yellow);  font-weight: 700; }
+  .b-violet  { color: var(--violet);  font-weight: 700; }
+  .glow-cyan, .glow-magenta, .glow-green, .glow-red, .glow-yellow, .glow-violet { font-weight: 700; }
+  .glow-cyan { color: var(--cyan); }
+  .glow-magenta { color: var(--magenta); }
+  .glow-green { color: var(--green); }
+  .glow-red { color: var(--red); }
+  .glow-yellow { color: var(--yellow); }
+  .glow-violet { color: var(--violet); }
+  .dim  { color: var(--fg-dim); }
+  .mute { color: var(--fg-mute); }
+  .faint { opacity: 0.5; }
+  @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+  .caret { display: inline-block; width: 0.6ch; background: var(--magenta); color: var(--bg); animation: blink 1s steps(1) infinite; }
+  .caret::before { content: " "; }
+  @keyframes spin-frames { 0% { content: "⠋"; } 12% { content: "⠙"; } 25% { content: "⠹"; } 37% { content: "⠸"; } 50% { content: "⠼"; } 62% { content: "⠴"; } 75% { content: "⠦"; } 87% { content: "⠧"; } 100% { content: "⠇"; } }
+  .spinner::before { content: "⠋"; animation: spin-frames 1s steps(8) infinite; color: var(--cyan); }
+  .scroll { overflow: hidden; }
+  .row { padding: 2px 12px; display: flex; gap: 16px; }
+  .row.selected { background: rgba(255, 54, 212, 0.10); box-shadow: inset 2px 0 0 var(--magenta); }
+  .tab { padding: 6px 14px; border-right: 1px solid var(--border); color: var(--fg-dim); white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+  .tab .num { color: var(--fg-mute); font-weight: 700; }
+  .tab.active { background: var(--bg-2); color: var(--fg); box-shadow: inset 0 -2px 0 var(--magenta); }
+  .tab.active .num { color: var(--magenta); font-weight: 700; }
+  .box { border: 1px solid var(--border); background: var(--bg-1); }
+  .box-title { padding: 3px 10px; border-bottom: 1px solid var(--border); color: var(--cyan); font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
+  .box-title.focused { border-bottom-color: var(--magenta); color: var(--magenta); }
+  .box.focused-box { border-color: var(--magenta); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--border); color: var(--fg-dim); }
+  .chip .k { background: var(--bg-3); padding: 0 4px; color: var(--cyan); border-right: 1px solid var(--border); margin: 0 4px 0 -8px; font-weight: 700; }
+  .chip.active { border-color: var(--magenta); color: var(--magenta); }
+  .chip.active .k { color: var(--magenta); }
+  .dot { display: inline-block; width: 1ch; text-align: center; }
+  .dot::before { content: "●"; }
+  .dot.green::before  { color: var(--green); }
+  .dot.red::before    { color: var(--red); }
+  .dot.yellow::before { color: var(--yellow); }
+  .dot.dim::before    { color: var(--fg-mute); content: "○"; }
+  .hk { color: var(--fg); margin-right: 14px; }
+  .hk .k { color: var(--magenta); padding: 0 4px; font-weight: 700; }
+  .scrim { position: absolute; inset: 0; background: var(--faint-mask); z-index: 50; display: flex; align-items: center; justify-content: center; }
+  .modal { border: 1px solid var(--magenta); background: var(--bg-1); min-width: 56ch; max-width: 80ch; }
+  .modal.danger { border-color: var(--red); }
+  .modal.ok     { border-color: var(--green); }
+  .drawer-wrap { position: absolute; inset: 0; display: flex; z-index: 40; pointer-events: none; }
+  .drawer-wrap > .scrim-mute { flex: 1; background: var(--faint-mask); pointer-events: auto; }
+  .drawer { width: 62%; background: var(--bg-1); border-left: 1px solid var(--cyan); pointer-events: auto; }
+  .key-hint { color: var(--magenta); font-weight: 700; }
+  .progress-track { height: 1em; background: var(--bg-3); border: 1px solid var(--border); position: relative; overflow: hidden; line-height: 1; }
+  .progress-bar { height: 100%; background: linear-gradient(90deg, var(--cyan), var(--magenta)); }
+  .ascii { white-space: pre; line-height: 1.05; font-size: 11px; }
+  .ascii.qr { font-size: 9px; line-height: 0.95; }
+  .crumb { color: var(--fg-dim); }
+  .crumb .here { color: var(--cyan); font-weight: 700; }
+
+  /* === print stylesheet === */
+  @page { size: 1500px 940px landscape; margin: 0; }
+  @media print {
+    body { background: white; }
+    .page { max-width: none; padding: 0; }
+    .page-head { display: none; }
+    .toc { display: none; }
+    .frame { margin: 0; page-break-after: always; padding: 14px; background: #04040a; }
+    .frame-title { color: var(--fg); border-left-color: var(--magenta); margin-bottom: 8px; }
+    .frame-viewport { width: 1440px; height: 870px; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-head">
+      <h1>license-manager · TUI gallery</h1>
+      <p>Tous les écrans + overlays figés côte à côte pour handoff visuel. <span class="kbd">Ctrl/Cmd + P</span> → enregistrer en PDF.</p>
+    </header>
+    <nav class="toc" id="toc"><div class="toc-title">SECTIONS</div></nav>
+    <div id="root"></div>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script src="data.js"></script>
+  <script type="text/babel" src="primitives.jsx"></script>
+  <script type="text/babel" src="chrome.jsx"></script>
+  <script type="text/babel" src="overlays.jsx"></script>
+  <script type="text/babel" src="screens/dashboard.jsx"></script>
+  <script type="text/babel" src="screens/licenses.jsx"></script>
+  <script type="text/babel" src="screens/wizard.jsx"></script>
+  <script type="text/babel" src="screens/issuers.jsx"></script>
+  <script type="text/babel" src="screens/recipients.jsx"></script>
+  <script type="text/babel" src="screens/identities.jsx"></script>
+  <script type="text/babel" src="screens/revocation.jsx"></script>
+  <script type="text/babel" src="screens/servers.jsx"></script>
+  <script type="text/babel" src="screens/audit.jsx"></script>
+  <script type="text/babel" src="screens/settings.jsx"></script>
+  <script type="text/babel" src="screens/onboarding.jsx"></script>
+  <script type="text/babel" src="gallery.jsx"></script>
+</body>
+</html>

@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>license-manager — TUI design</title>
+<meta name="viewport" content="width=1440">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* palette traduisible en lipgloss.Color hex */
+    --bg: #0a0a18;
+    --bg-1: #0a0a18;
+    --bg-2: #10102a;
+    --bg-3: #16163a;
+    --border: #2a2a52;
+    --border-bright: #4a4aa0;
+    --fg: #e6e6ff;
+    --fg-dim: #7a7ab8;
+    --fg-mute: #4a4a78;
+    --cyan: #00f0ff;
+    --magenta: #ff36d4;
+    --green: #39ff88;
+    --yellow: #ffce39;
+    --orange: #ff8a3c;
+    --red: #ff3c5f;
+    --violet: #a070ff;
+    /* Faint(true) = ce que lipgloss applique au scrim. ~50% du fg. */
+    --faint-mask: rgba(10, 10, 24, 0.55);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    /* terminal: pas de ligatures, monospace strict */
+    font-feature-settings: "calt" 0, "liga" 0;
+    font-variant-ligatures: none;
+  }
+  body {
+    min-height: 100vh;
+    /* terminal: couleur unie. Pas de radial/gradient. */
+    background: var(--bg);
+  }
+  #root { min-height: 100vh; }
+
+  /* color helpers — bold + couleur saturée, PAS de text-shadow (n'existe pas en terminal) */
+  .c-cyan    { color: var(--cyan); }
+  .c-magenta { color: var(--magenta); }
+  .c-green   { color: var(--green); }
+  .c-red     { color: var(--red); }
+  .c-yellow  { color: var(--yellow); }
+  .c-violet  { color: var(--violet); }
+  .b-cyan    { color: var(--cyan); font-weight: 700; }
+  .b-magenta { color: var(--magenta); font-weight: 700; }
+  .b-green   { color: var(--green); font-weight: 700; }
+  .b-red     { color: var(--red); font-weight: 700; }
+  .b-yellow  { color: var(--yellow); font-weight: 700; }
+  .b-violet  { color: var(--violet); font-weight: 700; }
+
+  /* aliases vers ancienne classes pour minimiser le code patché */
+  .glow-cyan    { color: var(--cyan); font-weight: 700; }
+  .glow-magenta { color: var(--magenta); font-weight: 700; }
+  .glow-green   { color: var(--green); font-weight: 700; }
+  .glow-red     { color: var(--red); font-weight: 700; }
+  .glow-yellow  { color: var(--yellow); font-weight: 700; }
+  .glow-violet  { color: var(--violet); font-weight: 700; }
+
+  .dim  { color: var(--fg-dim); }
+  .mute { color: var(--fg-mute); }
+  .faint { opacity: 0.5; }   /* lipgloss.Faint(true) */
+
+  /* caret — bubbles/cursor blinking, garde l'animation (existe dans bubbletea) */
+  @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+  .caret { display: inline-block; width: 0.6ch; background: var(--magenta); color: var(--bg); animation: blink 1s steps(1) infinite; }
+  .caret::before { content: " "; }
+
+  /* spinner — bubbles/spinner, garde aussi (existe en TUI) */
+  @keyframes spin-frames { 0% { content: "⠋"; } 12% { content: "⠙"; } 25% { content: "⠹"; } 37% { content: "⠸"; } 50% { content: "⠼"; } 62% { content: "⠴"; } 75% { content: "⠦"; } 87% { content: "⠧"; } 100% { content: "⠇"; } }
+  .spinner::before { content: "⠋"; animation: spin-frames 1s steps(8) infinite; color: var(--cyan); }
+
+  .scroll { overflow: hidden; }
+
+  /* row de table + sélection avec border-left magenta (équiv lipgloss.ThickBorder gauche uniquement) */
+  .row { padding: 2px 12px; display: flex; gap: 16px; }
+  .row.selected {
+    background: rgba(255, 54, 212, 0.10);
+    box-shadow: inset 2px 0 0 var(--magenta);
+  }
+
+  /* tab strip — fond uni + bordure basse colorée (équiv lipgloss.Border bottom only) */
+  .tab {
+    padding: 6px 14px;
+    border-right: 1px solid var(--border);
+    color: var(--fg-dim);
+    white-space: nowrap;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tab .num {
+    color: var(--fg-mute);
+    font-weight: 700;
+  }
+  .tab.active {
+    background: var(--bg-2);
+    color: var(--fg);
+    box-shadow: inset 0 -2px 0 var(--magenta);
+  }
+  .tab.active .num { color: var(--magenta); font-weight: 700; }
+
+  /* box — bordure NormalBorder + header avec bordure basse + bg légèrement plus clair */
+  .box {
+    border: 1px solid var(--border);
+    background: var(--bg-1);
+  }
+  .box-title {
+    padding: 3px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--cyan);
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .box-title.focused {
+    border-bottom-color: var(--magenta);
+    color: var(--magenta);
+  }
+  /* version focusée du conteneur — équiv lipgloss BoxFocused */
+  .box.focused-box { border-color: var(--magenta); }
+
+  /* chips — bordure simple */
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    color: var(--fg-dim);
+  }
+  .chip .k {
+    background: var(--bg-3);
+    padding: 0 4px;
+    color: var(--cyan);
+    border-right: 1px solid var(--border);
+    margin: 0 4px 0 -8px;
+    font-weight: 700;
+  }
+  .chip.active { border-color: var(--magenta); color: var(--magenta); }
+  .chip.active .k { color: var(--magenta); }
+
+  /* status dot — caractère ● en couleur saturée (pas de glow) */
+  .dot { display: inline-block; width: 1ch; text-align: center; }
+  .dot::before { content: "●"; }
+  .dot.green::before  { color: var(--green); }
+  .dot.red::before    { color: var(--red); }
+  .dot.yellow::before { color: var(--yellow); }
+  .dot.dim::before    { color: var(--fg-mute); content: "○"; }
+
+  /* status bar hotkey hint */
+  .hk { color: var(--fg); margin-right: 14px; }
+  .hk .k {
+    color: var(--magenta);
+    padding: 0 4px;
+    font-weight: 700;
+  }
+
+  /* scrim — pas de blur (n'existe pas en terminal) ; on superpose un mask Faint */
+  .scrim {
+    position: absolute; inset: 0;
+    background: var(--faint-mask);
+    z-index: 50;
+    display: flex; align-items: center; justify-content: center;
+  }
+  /* modal — bordure colorée vive, sans shadow (n'existe pas en terminal) */
+  .modal {
+    border: 1px solid var(--magenta);
+    background: var(--bg-1);
+    min-width: 56ch;
+    max-width: 80ch;
+  }
+  .modal.danger { border-color: var(--red); }
+  .modal.ok     { border-color: var(--green); }
+
+  /* drawer — bordure gauche, pas de shadow */
+  .drawer-wrap { position: absolute; inset: 0; display: flex; z-index: 40; pointer-events: none; }
+  .drawer-wrap > .scrim-mute {
+    flex: 1;
+    background: var(--faint-mask);
+    pointer-events: auto;
+  }
+  .drawer {
+    width: 62%;
+    background: var(--bg-1);
+    border-left: 1px solid var(--cyan);
+    pointer-events: auto;
+  }
+
+  /* underlined hint key (style help) */
+  .key-hint { color: var(--magenta); font-weight: 700; }
+
+  /* progress bar — bubbles/progress avec WithGradient(cyan,magenta) */
+  .progress-track {
+    height: 1em;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+    line-height: 1;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--cyan), var(--magenta));
+  }
+
+  /* ASCII art container */
+  .ascii { white-space: pre; line-height: 1.05; font-size: 11px; }
+  .ascii.qr { font-size: 9px; line-height: 0.95; }
+
+  /* breadcrumb */
+  .crumb { color: var(--fg-dim); }
+  .crumb .here { color: var(--cyan); font-weight: 700; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script src="data.js"></script>
+  <script type="text/babel" src="primitives.jsx"></script>
+  <script type="text/babel" src="chrome.jsx"></script>
+  <script type="text/babel" src="overlays.jsx"></script>
+  <script type="text/babel" src="screens/dashboard.jsx"></script>
+  <script type="text/babel" src="screens/licenses.jsx"></script>
+  <script type="text/babel" src="screens/wizard.jsx"></script>
+  <script type="text/babel" src="screens/issuers.jsx"></script>
+  <script type="text/babel" src="screens/recipients.jsx"></script>
+  <script type="text/babel" src="screens/identities.jsx"></script>
+  <script type="text/babel" src="screens/revocation.jsx"></script>
+  <script type="text/babel" src="screens/servers.jsx"></script>
+  <script type="text/babel" src="screens/audit.jsx"></script>
+  <script type="text/babel" src="screens/settings.jsx"></script>
+  <script type="text/babel" src="screens/onboarding.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>
