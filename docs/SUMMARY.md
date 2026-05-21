@@ -147,6 +147,12 @@
   - [FAQ](license/faq.md)
   - [Threat model](license/threat-model.md)
 
+# License manager
+
+- [Concepts](license-manager/concepts.md)
+- [Cookbook](license-manager/workflow.md)
+- [Configuration](license-manager/configuration.md)
+
 # Cookbook
 
 > Task-oriented recipes. Each page chains a few `maldev` packages

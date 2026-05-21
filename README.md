@@ -101,6 +101,12 @@ Six operator binaries under [`cmd/`](cmd/) — `packer`, `bundle-launcher`,
 `go build ./cmd/<name>`, pass `-h` for flags. See
 [Tooling ▸ CLI tools](https://oioio-space.github.io/maldev/tools/index.html).
 
+A seventh tool, [`cmd/license-manager`](cmd/license-manager), manages the full
+lifecycle of maldev research licences (issue, revoke, rotate keys, fingerprint
+probe, three HTTP servers). See
+[docs/license-manager/](docs/license-manager/concepts.md) for the operator
+guide.
+
 ## Examples
 
 End-to-end chains live under [`examples/`](examples/) — runnable Go programs,
