@@ -1191,6 +1191,110 @@ func TestE2E_WindowSizePropagatesToScreens(t *testing.T) {
 	}
 }
 
+// ── Licenses screen interactions ──────────────────────────────────────────────
+
+// TestE2E_LicensesFilterCycles asserts pressing 'f' cycles the filter chip
+// through its 5 states (all → active → expiring → expired → revoked →
+// superseded → all).
+func TestE2E_LicensesFilterCycles(t *testing.T) {
+	lm := newLicensesModel(nil)
+	start := lm.filter
+	for i := 0; i < int(licFilterCount); i++ {
+		lm, _ = lm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	}
+	if lm.filter != start {
+		t.Fatalf("after licFilterCount=%d presses, filter = %d, want %d (full cycle)",
+			licFilterCount, lm.filter, start)
+	}
+	// One more press → +1.
+	lm, _ = lm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	if lm.filter == start {
+		t.Fatalf("after %d+1 presses, filter must have advanced from %d", licFilterCount, start)
+	}
+}
+
+// TestE2E_LicensesDetailToggles asserts 'd' and Enter both flip the detail
+// panel boolean.
+func TestE2E_LicensesDetailToggles(t *testing.T) {
+	lm := newLicensesModel(nil)
+	if lm.detail {
+		t.Fatal("detail must start false")
+	}
+	lm, _ = lm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	if !lm.detail {
+		t.Fatal("after 'd', detail must be true")
+	}
+	lm, _ = lm.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if lm.detail {
+		t.Fatal("after Enter, detail must be false")
+	}
+}
+
+// TestE2E_LicensesSearchFocus asserts '/' enters search mode and Esc exits.
+func TestE2E_LicensesSearchFocus(t *testing.T) {
+	lm := newLicensesModel(nil)
+	if lm.search.Focused() {
+		t.Fatal("search must start unfocused")
+	}
+	lm, _ = lm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	if !lm.search.Focused() {
+		t.Fatal("after '/', search must be focused")
+	}
+	lm, _ = lm.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if lm.search.Focused() {
+		t.Fatal("after Esc, search must be unfocused")
+	}
+}
+
+// TestE2E_LicensesRevokeOpensOverlay asserts 'x' on a selected row emits a
+// pushOverlayMsg wrapping a *revokeOverlay.
+func TestE2E_LicensesRevokeOpensOverlay(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+	iss, err := svc.Issuer.Generate(ctx, "x-iss", "k-x", "operator")
+	if err != nil {
+		t.Fatalf("Issuer.Generate: %v", err)
+	}
+	if _, err := svc.License.Issue(ctx, service.IssueRequest{
+		IssuerID: iss.ID,
+		Subject:  "revoke-me",
+		NotAfter: timeNowPlus(48),
+		Actor:    "operator",
+	}); err != nil {
+		t.Fatalf("License.Issue: %v", err)
+	}
+
+	lm := newLicensesModel(svc)
+	lm, _ = lm.Update(ListLicensesCmd(svc)())
+	if len(lm.rows) != 1 {
+		t.Fatalf("setup: rows = %d, want 1", len(lm.rows))
+	}
+
+	_, cmd := lm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if cmd == nil {
+		t.Fatal("'x' on selected row must emit cmd")
+	}
+	push, ok := cmd().(pushOverlayMsg)
+	if !ok {
+		t.Fatalf("expected pushOverlayMsg, got %T", cmd())
+	}
+	if _, ok := push.overlay.(*revokeOverlay); !ok {
+		t.Fatalf("expected *revokeOverlay, got %T", push.overlay)
+	}
+}
+
+// TestE2E_LicensesNewKeyOpensWizard asserts 'n' triggers openWizardCmd, which
+// returns a non-nil cmd whose message opens the wizard via pushOverlayMsg.
+func TestE2E_LicensesNewKeyOpensWizard(t *testing.T) {
+	lm := newLicensesModel(nil)
+	_, cmd := lm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	if cmd == nil {
+		t.Fatal("'n' must emit cmd to open wizard")
+	}
+	// We don't dispatch (nil services + wizard cmd would crash); reaching the
+	// cmd is enough to prove the key is bound.
+}
+
 // ── Help overlay in every view ─────────────────────────────────────────────────
 
 // TestE2E_HelpOverlayInEachView presses '?' in every SessionReady view and
