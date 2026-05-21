@@ -128,11 +128,8 @@ func (m *revocationModel) rebuildTable() {
 }
 
 func (m revocationModel) View() string {
-	// Three uniform info boxes in the header row — all use revocInfoTile so
-	// they have identical structure and align cleanly with JoinHorizontal.
-	// Each tile renders as a box that is tileW+2 cells wide (lipgloss adds 1
-	// border on each side outside the style Width). With 2 separator spaces
-	// between 3 tiles, the total row needs 3*(tileW+2)+2 ≤ m.width.
+	// 3*(tileW+2)+2 ≤ m.width: lipgloss adds 1 border per side outside Width,
+	// and 2 separator spaces sit between the 3 tiles.
 	tileW := (m.width-2)/3 - 2
 	if tileW < 14 {
 		tileW = 14

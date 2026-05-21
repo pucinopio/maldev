@@ -231,7 +231,6 @@ func (m settingsModel) boxCascadePassphrase(w int, _ *ent.Setting) string {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-// settingsBox wraps body in a titled bordered box, matching settings.jsx Box usage.
 func settingsBox(w int, title, body string) string {
 	return BoxStyle.Width(w).Render(GlowCyan.Render(title) + "\n\n" + body)
 }

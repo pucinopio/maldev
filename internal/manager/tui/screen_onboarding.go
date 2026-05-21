@@ -250,13 +250,11 @@ func (m onboardingModel) View() string {
 		h = 24
 	}
 
-	// stepWelcome has no progress strip — it's a full-screen welcome banner.
 	if m.step == stepWelcome {
 		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, m.viewWelcome())
 	}
 
-	// Steps 1-3 map to overall wizard positions 2-4 (welcome = step 1).
-	// Prototype shows "étape N/4" throughout the 4-step wizard.
+	// Steps 1-3 map to positions 2-4 in the 4-step wizard (welcome = step 1).
 	type stepInfo struct {
 		n     int // 1-based display index (2..4)
 		label string
@@ -267,7 +265,6 @@ func (m onboardingModel) View() string {
 		{4, "Première licence"},
 	}[int(m.step)-1]
 
-	// Progress strip.
 	total := 4
 	cur := info.n
 	stripLeft := lipgloss.JoinHorizontal(lipgloss.Top,
@@ -330,11 +327,9 @@ func (m onboardingModel) viewWelcome() string {
 		if !c.cyan {
 			color = Palette.Magenta
 		}
-		// Badge: " N " with colored bracket — no Border() to avoid multi-line layout.
 		badge := lipgloss.NewStyle().
 			Foreground(color).Bold(true).
 			Render(fmt.Sprintf("[%d]", c.n))
-		// Wrap text at textW so it doesn't push the card wider.
 		wrapped := lipgloss.NewStyle().
 			Foreground(Palette.FgDim).
 			Width(textW).

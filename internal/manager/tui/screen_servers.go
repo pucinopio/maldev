@@ -58,13 +58,11 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 		return m, cmd
 
 	case serverStartMsg:
-		// Fired by the card button — issue the actual controller call.
 		if m.ctrl != nil {
 			return m, startServerCmd(m.ctrl, msg.name)
 		}
 
 	case serverStopMsg:
-		// Fired by the card button — issue the actual controller call.
 		if m.ctrl != nil {
 			return m, stopServerCmd(m.ctrl, msg.name)
 		}
@@ -127,7 +125,6 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 		}
 	}
 
-	// Forward remaining messages to cards and log.
 	var cmds []tea.Cmd
 	for i := range m.cards {
 		w, cmd := m.cards[i].Update(msg)
