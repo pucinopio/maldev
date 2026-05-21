@@ -56,15 +56,35 @@ else
 fi
 
 # SVG output — freeze's PNG path crashes on Windows (v0.2.2 GC bug).
-# SVG renders identically in any browser, scales perfectly, faster to generate.
+# Use Cascadia Code: shipped with Windows, has all box-drawing glyphs.
 "${freeze_cmd}" "${tmp_ansi}" -l ansi \
     --output "${out}" \
     --window \
     --margin 10 \
     --padding 20 \
-    --font.family "JetBrains Mono" \
+    --font.family "Cascadia Code" \
     --font.size 14 \
     --theme "dracula"
 
+# Optional PNG conversion via headless Chrome (auto-detected).
+chrome=""
+for c in "/c/Program Files/Google/Chrome/Application/chrome.exe" \
+         "/c/Program Files (x86)/Google/Chrome/Application/chrome.exe" \
+         "/c/Program Files/Microsoft/Edge/Application/msedge.exe" \
+         "chrome" "google-chrome" "chromium"; do
+    if command -v "$c" &>/dev/null || [ -x "$c" ]; then chrome="$c"; break; fi
+done
+if [ -n "${chrome}" ]; then
+    png="${out%.svg}.png"
+    pwd_w=$(pwd -W 2>/dev/null || pwd)
+    abs_svg="$(realpath "${out}" | sed 's|^/c/|C:/|; s|/mnt/c/|C:/|')"
+    abs_png="$(echo "${pwd_w}/${png}" | sed 's|\\|/|g')"
+    "${chrome}" --headless --disable-gpu --no-sandbox --hide-scrollbars \
+      --screenshot="${abs_png}" \
+      --window-size=1600,1400 \
+      "file:///${abs_svg}" >/dev/null 2>&1 || true
+fi
+
 rm -f "${tmp_ansi}"
 echo "wrote ${out}"
+[ -f "${png:-}" ] && echo "wrote ${png}"

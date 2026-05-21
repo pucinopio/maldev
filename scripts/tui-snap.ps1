@@ -63,7 +63,7 @@ function Render-One {
         --window `
         --margin 10 `
         --padding 20 `
-        --font.family "JetBrains Mono" `
+        --font.family "Cascadia Code" `
         --font.size 14 `
         --theme "dracula" 2>&1 | Out-Null
     Remove-Item $tmpAnsi -ErrorAction SilentlyContinue
@@ -72,6 +72,29 @@ function Render-One {
         Write-Host "wrote $svgOut  ($([int]((Get-Item $svgOut).Length/1024)) KB)"
     } else {
         Write-Host "FAILED: $v" -ForegroundColor Red
+        return
+    }
+
+    # Optional PNG conversion via headless Chrome (auto-detected).
+    $chrome = $null
+    foreach ($c in @(
+        "C:\Program Files\Google\Chrome\Application\chrome.exe",
+        "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        "C:\Program Files\Microsoft\Edge\Application\msedge.exe"
+    )) {
+        if (Test-Path $c) { $chrome = $c; break }
+    }
+    if ($chrome) {
+        $pngOut  = $svgOut -replace '\.svg$','.png'
+        $absSvg  = (Resolve-Path $svgOut).Path -replace '\\','/'
+        $absPng  = (Join-Path (Get-Location) $pngOut) -replace '\\','/'
+        & $chrome --headless --disable-gpu --no-sandbox --hide-scrollbars `
+            "--screenshot=$absPng" `
+            "--window-size=1600,1400" `
+            "file:///$absSvg" 2>&1 | Out-Null
+        if (Test-Path $pngOut) {
+            Write-Host "wrote $pngOut  ($([int]((Get-Item $pngOut).Length/1024)) KB)"
+        }
     }
 }
 
