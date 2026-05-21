@@ -155,7 +155,7 @@ func (m dashboardModel) buildWidgetTree() Widget {
 	auditContent := widgets.NewText(m.auditCardContent(), lipgloss.NewStyle())
 	auditBox := NewBoxWithHintClick(auditContent, "5 dernières actions", "[8] tout l'audit", false,
 		func() tea.Cmd { return func() tea.Msg { return widgets.SwitchViewMsg{ID: string(ViewAudit)} } })
-	shortcutsContent := widgets.NewText(m.shortcutsCardContent(), lipgloss.NewStyle())
+	shortcutsContent := &shortcutsWidget{content: m.shortcutsCardContent()}
 	shortcutsBox := NewBoxWithHint(shortcutsContent, "Raccourcis", "touche → écran", false)
 	rightCol := NewFlex(Vertical, 1,
 		FlexChild{W: auditBox, Min: 6, Flex: 2},
@@ -380,6 +380,64 @@ func (m dashboardModel) auditCardContent() string {
 		lines = append(lines, line)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+// shortcutsWidget is a Text + Clickable hybrid: it renders pre-formatted
+// content (the 3×2 raccourcis grid) and dispatches clicks to one of six
+// hard-coded actions matching the prototype shortcut cells.
+//
+// Row 0 of the inner area is cell row 0 (n / / / x).
+// Row 1 is the divider (───┼───┼───), not clickable.
+// Row 2 is cell row 1 (k / i / ?).
+// Columns split evenly across the inner width.
+type shortcutsWidget struct {
+	content string
+	bounds  Rect
+}
+
+func (s *shortcutsWidget) Layout(b Rect)            { s.bounds = b }
+func (s *shortcutsWidget) Bounds() Rect             { return s.bounds }
+func (s *shortcutsWidget) Update(tea.Msg) (Widget, tea.Cmd) { return s, nil }
+func (s *shortcutsWidget) View() string             { return s.content }
+
+func (s *shortcutsWidget) OnClick(x, y int, _ tea.MouseButton) tea.Cmd {
+	if s.bounds.W <= 0 {
+		return nil
+	}
+	// Three cells per row; divider on the middle row is non-clickable.
+	colW := s.bounds.W / 3
+	if colW < 1 {
+		colW = 1
+	}
+	var row int
+	switch y {
+	case 0:
+		row = 0
+	case 2:
+		row = 1
+	default:
+		return nil
+	}
+	col := x / colW
+	if col > 2 {
+		col = 2
+	}
+	idx := row*3 + col
+	switch idx {
+	case 0: // [n] nouvelle licence → switch to Licenses (new)
+		return func() tea.Msg { return widgets.SwitchViewMsg{ID: string(ViewLicenses)} }
+	case 1: // [/] rechercher → Licenses
+		return func() tea.Msg { return widgets.SwitchViewMsg{ID: string(ViewLicenses)} }
+	case 2: // [x] révoquer → Revocation
+		return func() tea.Msg { return widgets.SwitchViewMsg{ID: string(ViewRevocation)} }
+	case 3: // [k] clés d'émission → Issuers
+		return func() tea.Msg { return widgets.SwitchViewMsg{ID: string(ViewIssuers)} }
+	case 4: // [i] identity.bin → Identities
+		return func() tea.Msg { return widgets.SwitchViewMsg{ID: string(ViewIdentities)} }
+	case 5: // [?] aide → push help overlay
+		return func() tea.Msg { return pushOverlayMsg{overlay: NewHelpOverlay()} }
+	}
+	return nil
 }
 
 // shortcutsCardContent builds the 6-hint shortcuts grid matching dashboard.jsx:

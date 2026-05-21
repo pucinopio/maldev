@@ -29,12 +29,12 @@
 │ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌   │ │ Raccourcis                                   touche → écran  │ 
 │ ○ Heartbeat                                  OFF   │ │  [n]  nouvelle                                               │ 
 │   arrêté · démarrer via onglet [7]                 │ │ licence            │ [/]  rechercher   │ [x]  révoquer       │ 
-│ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌   │ │ ───────────────────┼───────────────────┼──────────────────   │ 
-│ ○ Probe                                      OFF   │ │ ─                                                            │ 
-│   arrêté · démarrer via onglet [7]                 │ │  [k]  clés                                                   │ 
-└────────────────────────────────────────────────────┘ │ d'émission         │ [i]  identity.bin │ [?]  aide           │ 
-                                                       │ contextuelle                                                 │ 
+│ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌   │ │ ───────────────────┼───────────────────┼───────────────────  │ 
+│ ○ Probe                                      OFF   │ │  [k]  clés                                                   │ 
+│   arrêté · démarrer via onglet [7]                 │ │ d'émission         │ [i]  identity.bin │ [?]  aide           │ 
+└────────────────────────────────────────────────────┘ │ contextuelle                                                 │ 
                                                        └──────────────────────────────────────────────────────────────┘ 
+                                                                                                                        
                                                                                                                         
                                                                                                                         
 1-9 onglets  n nouvelle licence  / rechercher  k clés actives  ? aide  q quitter                                 ~ tour 

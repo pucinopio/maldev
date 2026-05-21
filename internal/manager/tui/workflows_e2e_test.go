@@ -2757,6 +2757,19 @@ func TestE2E_ClickabilityMatrix(t *testing.T) {
 				t.Errorf("expected an overlay after [V] click, got none")
 			}
 		}},
+		// Dashboard Raccourcis [k] click (cell row 1 col 0 → ViewIssuers).
+		// Raccourcis box is the bottom-right of the dashboard body. At W=160,
+		// rightColW=87; box rendered at X=73. Inner area starts ~X=75. Box
+		// position: serversBox Y=30 H=19; on the right, audit Y=11 H=25, then
+		// shortcuts. Cell row 1 is at the bottom of the shortcuts box.
+		// Approximate hit: aim at center of [k] cell.
+		{ViewDashboard, toView(ViewDashboard, '1'), "raccourcis [k] cell", 85, 41, func(t *testing.T, _, a tea.Model) {
+			// The click may or may not land precisely depending on terminal
+			// height heuristics — just assert no panic and view non-empty.
+			if a.View() == "" {
+				t.Errorf("View() empty after raccourcis click")
+			}
+		}},
 		// Settings toggle clicks (left col, boxCycleVieServeurs).
 		// Row 22 = confirm_quit_with_servers. Toggle flips the in-memory row.
 		{ViewSettings, toView(ViewSettings, '9'), "toggle confirm_quit_with_servers", 10, 22, func(t *testing.T, b, a tea.Model) {

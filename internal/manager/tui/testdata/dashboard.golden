@@ -29,12 +29,12 @@
 │ https://manager.localhttps://revoke.example.com:   │ │ Raccourcis                                   touche → écran  │ 
 │ 8443                                               │ │  [n]  nouvelle                                               │ 
 │ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌   │ │ licence            │ [/]  rechercher   │ [x]  révoquer       │ 
-│ ● Heartbeat  https://heartbeat.example.com:8444    │ │ ───────────────────┼───────────────────┼──────────────────   │ 
-│ ON                                                 │ │ ─                                                            │ 
-│                                                    │ │  [k]  clés                                                   │ 
-│ https://manager.localhttps://heartbeat.example.c   │ │ d'émission         │ [i]  identity.bin │ [?]  aide           │ 
-│ om:8444                                            │ │ contextuelle                                                 │ 
-│ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌   │ └──────────────────────────────────────────────────────────────┘ 
+│ ● Heartbeat  https://heartbeat.example.com:8444    │ │ ───────────────────┼───────────────────┼───────────────────  │ 
+│ ON                                                 │ │  [k]  clés                                                   │ 
+│                                                    │ │ d'émission         │ [i]  identity.bin │ [?]  aide           │ 
+│ https://manager.localhttps://heartbeat.example.c   │ │ contextuelle                                                 │ 
+│ om:8444                                            │ └──────────────────────────────────────────────────────────────┘ 
+│ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌   │                                                                  
 │ ○ Probe  —                                   OFF   │                                                                  
 │   arrêté · démarrer via onglet [7]                 │                                                                  
 1-9 onglets  n nouvelle licence  / rechercher  k clés actives  ? aide  q quitter                                 ~ tour 
