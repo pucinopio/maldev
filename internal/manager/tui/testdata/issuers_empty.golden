@@ -2,6 +2,7 @@
   1 Dashboard    2 Licenses    3 Issuer keys    4 Recipients    5 Identities    6 Revocation    7 Servers    8 Audit    
 9 Settings                                                                                                              
                              ─────────────────                                                                          
+ issuers                                                                                                                
  KEYID                 NAME                      STATUS      CREATED       #SIGNED                                      
                                                                                                                         
                                                                                                                         
@@ -39,4 +40,3 @@
  a set active   n new   E export pub   K export priv   x retire   d detail   r refresh                        ┌────────┐
 │ ~ tour │                                                                                                              
 └────────┘                                                                                                              
-                                                                                                                        

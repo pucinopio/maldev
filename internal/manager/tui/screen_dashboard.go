@@ -151,8 +151,8 @@ func (m dashboardModel) buildWidgetTree() Widget {
 		FlexChild{W: tilesRow, Min: 5, Max: 7},
 		FlexChild{W: body, Flex: 1},
 	)
-	// Reserve 2 rows for chrome (title + tabs).
-	root.Layout(Rect{X: 0, Y: 2, W: w, H: h - 2})
+	// Reserve 3 rows for chrome (title + tabs + breadcrumb).
+	root.Layout(Rect{X: 0, Y: 3, W: w, H: h - 3})
 	return root
 }
 

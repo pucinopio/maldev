@@ -602,6 +602,7 @@ func dispatchClick(w Widget, x, y int) tea.Cmd {
 func (m rootModel) viewReady() string {
 	title := renderTitleBar(m.width)
 	tabs := renderTabStrip(m.active, m.width)
+	crumb := renderBreadcrumb(m.active, m.licenses.filter, m.width)
 
 	var content string
 	switch m.active {
@@ -625,8 +626,8 @@ func (m rootModel) viewReady() string {
 		content = m.settings.View()
 	}
 
-	// Reserve 2 rows for chrome (title + tabs); status bar is rendered by each screen.
-	contentH := m.hgt - 2
+	// Reserve 3 rows for chrome (title + tabs + breadcrumb); status bar is rendered by each screen.
+	contentH := m.hgt - 3
 	if contentH < 0 {
 		contentH = 0
 	}
@@ -638,6 +639,7 @@ func (m rootModel) viewReady() string {
 	return lipgloss.JoinVertical(lipgloss.Left,
 		title,
 		tabs,
+		crumb,
 		contentArea,
 	)
 }

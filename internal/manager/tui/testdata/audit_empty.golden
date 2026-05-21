@@ -2,6 +2,7 @@
   1 Dashboard    2 Licenses    3 Issuer keys    4 Recipients    5 Identities    6 Revocation    7 Servers    8 Audit    
 9 Settings                                                                                                              
                                                                                                            ───────────  
+ audit                                                                                                                  
  ┌─────┐                                                                                                                
 │ all │                                                                                                                 
 └─────┘ ┌───────────┐                                                                                                   

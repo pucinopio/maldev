@@ -1932,6 +1932,46 @@ func TestE2E_SettingsMouseRefreshCycle(t *testing.T) {
 	}
 }
 
+// TestE2E_BreadcrumbRendersPerView verifies that the breadcrumb row shows the
+// active view name, and the licenses breadcrumb includes the filter when active.
+func TestE2E_BreadcrumbRendersPerView(t *testing.T) {
+	cases := []struct {
+		key    rune
+		viewID string
+		crumb  string
+	}{
+		{'1', "dashboard", "dashboard"},
+		{'2', "licenses", "licenses"},
+		{'3', "issuers", "issuers"},
+		{'9', "settings", "settings"},
+	}
+	for _, c := range cases {
+		t.Run(c.viewID, func(t *testing.T) {
+			var m tea.Model = New(nil, nil, SessionReady)
+			m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+			m = driveRune(m, c.key)
+			got := m.View()
+			if !strings.Contains(got, c.crumb) {
+				t.Errorf("BreadcrumbRendersPerView/%s: %q not found in view", c.viewID, c.crumb)
+			}
+		})
+	}
+}
+
+// TestE2E_BreadcrumbLicensesFilter verifies that the breadcrumb appends
+// "filter:<name>" when a non-all filter is active on the Licenses screen.
+func TestE2E_BreadcrumbLicensesFilter(t *testing.T) {
+	var m tea.Model = New(nil, nil, SessionReady)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = driveRune(m, '2') // go to licenses
+	m = driveRune(m, 'f') // cycle to active filter
+	got := m.View()
+	if !strings.Contains(got, "filter:active") {
+		t.Errorf("BreadcrumbLicensesFilter: 'filter:active' not found in view, got first 200 chars: %q",
+			got[:min(200, len(got))])
+	}
+}
+
 // TestE2E_DashboardShortcutsGrid verifies the redesigned shortcuts card renders
 // all 6 hints in a 3-column grid layout with row/column separators.
 // Intentionally red against the old vertical-list layout, green after the grid fix.

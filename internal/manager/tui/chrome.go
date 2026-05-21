@@ -92,6 +92,26 @@ func renderTabStrip(active ViewID, width int) string {
 	return buildTabBar(active, width).View()
 }
 
+// renderBreadcrumb returns a single-row breadcrumb matching chrome.jsx Crumb.
+//
+// Examples:  dashboard
+//
+//	licenses · filter:active
+//	issuers
+func renderBreadcrumb(active ViewID, licFilter licenseFilter, width int) string {
+	parts := []string{Dim.Render(string(active))}
+	if active == ViewLicenses && licFilter != licFilterAll {
+		parts = append(parts, Dim.Render("filter:"+licFilter.String()))
+	}
+	crumbText := strings.Join(parts, Mute.Render(" ▸ "))
+	return lipgloss.NewStyle().
+		Background(Palette.Bg1).
+		Foreground(Palette.FgDim).
+		Width(width).
+		Padding(0, 1).
+		Render(crumbText)
+}
+
 // renderStatusBar returns the bottom status/hint bar using a StatusBar widget.
 func renderStatusBar(hints []string, width int) string {
 	kh := make([]widgets.KeyHint, 0, len(hints)/2)
