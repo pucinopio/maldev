@@ -105,7 +105,7 @@ func TestTeatest_TabNavigation(t *testing.T) {
 		{'6', "LICENSE"},          // revocation: column header
 		{'7', "Fingerprint probe"}, // servers: sub-tab label unique to servers screen
 		{'8', "TIMESTAMP"},        // audit: column header
-		{'9', "Settings"},         // settings: screen title in body
+		{'9', "vacuum"},            // settings: status bar hint unique to settings screen
 		{'1', "Raccourcis"}, // dashboard: shortcuts box title re-rendered in diff
 	}
 

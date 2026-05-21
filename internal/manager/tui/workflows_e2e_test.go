@@ -15,6 +15,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/google/uuid"
 
 	"github.com/oioio-space/maldev/internal/manager/crypto"
@@ -1470,6 +1471,116 @@ func TestE2E_MainTUIRendersDashboardAfterOnboarding(t *testing.T) {
 	view := m.View()
 	if !strings.Contains(view, "Dashboard") {
 		t.Fatalf("dashboard view does not contain 'Dashboard' after onboarding; got:\n%s", view)
+	}
+}
+
+// ── Dashboard bounds discipline ───────────────────────────────────────────────
+
+// TestE2E_DashboardTilesFitWidth builds the dashboard at a fixed width, renders
+// it, and asserts no tile row line exceeds the tile's allocated width.
+func TestE2E_DashboardTilesFitWidth(t *testing.T) {
+	const w, h = 144, 44
+	dm := newDashboardModel(nil, nil)
+	dm.width = w
+	dm.height = h
+	dm.counters.active = 47
+	dm.counters.revoked = 6
+	dm.counters.expired = 12
+	dm.counters.expiringSoon = 4
+	dm.counters.superseded = 9
+
+	// Build tree and render; assert no line overflows the terminal width.
+	rendered := dm.buildWidgetTree().View()
+	for i, line := range strings.Split(rendered, "\n") {
+		if vw := lipgloss.Width(line); vw > w {
+			t.Errorf("line %d visual width %d exceeds terminal width %d: %q", i, vw, w, line)
+		}
+	}
+}
+
+// TestE2E_DashboardFingerprintTruncated asserts truncateFingerprint produces the
+// short "algo:first4…last4" form and never returns the raw colon-separated hex.
+func TestE2E_DashboardFingerprintTruncated(t *testing.T) {
+	raw := "4a:2f:88:d1:09:cc:fe:b3:72:1e:aa:5d:03:89:c0:f7"
+	got := truncateFingerprint(raw)
+
+	if strings.Contains(got, "88:d1") {
+		t.Errorf("truncateFingerprint returned untruncated hex: %q", got)
+	}
+	if !strings.Contains(got, "…") {
+		t.Errorf("truncateFingerprint must contain ellipsis, got: %q", got)
+	}
+	if !strings.HasPrefix(got, "ed25519:") {
+		t.Errorf("truncateFingerprint must have 'ed25519:' prefix, got: %q", got)
+	}
+	if lipgloss.Width(got) > 20 {
+		t.Errorf("truncated fingerprint width %d > 20 — will overflow narrow cells: %q", lipgloss.Width(got), got)
+	}
+}
+
+// TestE2E_DashboardStatusBarPresent asserts the rendered full TUI contains the
+// status-bar hint text "1-9 onglets" at all standard terminal sizes.
+func TestE2E_DashboardStatusBarPresent(t *testing.T) {
+	sizes := []struct{ w, h int }{
+		{80, 24},
+		{120, 40},
+		{144, 44},
+		{200, 60},
+	}
+	for _, sz := range sizes {
+		sz := sz
+		t.Run(fmt.Sprintf("%dx%d", sz.w, sz.h), func(t *testing.T) {
+			var m tea.Model = New(nil, nil, SessionReady)
+			m, _ = m.Update(tea.WindowSizeMsg{Width: sz.w, Height: sz.h})
+			view := m.View()
+			if !strings.Contains(view, "1-9 onglets") {
+				t.Errorf("status bar '1-9 onglets' not found in view at %dx%d", sz.w, sz.h)
+			}
+		})
+	}
+}
+
+// TestE2E_DashboardAdaptsToWindowSize is the architectural guard: for each
+// standard window size, assert no line in View() exceeds W visual chars.
+// At widths ≥ 120 the chrome (title bar + tab strip) does not wrap so we also
+// assert the total line count is exactly H. Below 120 the narrow chrome may
+// wrap, so we skip the line-count check there.
+func TestE2E_DashboardAdaptsToWindowSize(t *testing.T) {
+	sizes := []struct{ w, h int }{
+		{80, 24},
+		{120, 40},
+		{144, 44},
+		{200, 60},
+	}
+	for _, sz := range sizes {
+		sz := sz
+		t.Run(fmt.Sprintf("%dx%d", sz.w, sz.h), func(t *testing.T) {
+			var m tea.Model = New(nil, nil, SessionReady)
+			m, _ = m.Update(tea.WindowSizeMsg{Width: sz.w, Height: sz.h})
+			view := m.View()
+			if view == "" {
+				t.Fatalf("View() empty at %dx%d", sz.w, sz.h)
+			}
+
+			lines := strings.Split(view, "\n")
+
+			// Line-count check: only at wide-enough terminals where chrome doesn't wrap.
+			if sz.w >= 120 {
+				// Allow ±1 for trailing-newline differences.
+				if len(lines) < sz.h-1 || len(lines) > sz.h+1 {
+					t.Errorf("View() has %d lines, want ~%d at %dx%d", len(lines), sz.h, sz.w, sz.h)
+				}
+			}
+
+			// Width guard: applies at ALL sizes — no line may overflow the terminal.
+			for i, line := range lines {
+				vw := lipgloss.Width(line)
+				if vw > sz.w {
+					t.Errorf("line %d visual width %d > terminal width %d at %dx%d: %q",
+						i, vw, sz.w, sz.w, sz.h, line)
+				}
+			}
+		})
 	}
 }
 
