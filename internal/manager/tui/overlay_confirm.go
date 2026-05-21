@@ -21,6 +21,11 @@ type confirmOverlay struct {
 	danger       bool
 }
 
+// NewConfirmOverlay is exported for use by cmd/tui-snap.
+func NewConfirmOverlay(id, title, body, confirmLabel, cancelLabel string, danger bool) Overlay {
+	return newConfirmOverlay(id, title, body, confirmLabel, cancelLabel, danger)
+}
+
 func newConfirmOverlay(id, title, body, confirmLabel, cancelLabel string, danger bool) *confirmOverlay {
 	return &confirmOverlay{
 		id:           id,

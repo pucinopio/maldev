@@ -13,6 +13,9 @@ type errorOverlay struct {
 	details string // optional pre-formatted detail block (e.g. stack trace)
 }
 
+// NewErrorOverlay is exported for use by cmd/tui-snap.
+func NewErrorOverlay(title, msg string) Overlay { return newErrorOverlay(title, msg) }
+
 func newErrorOverlay(title, msg string) *errorOverlay {
 	return &errorOverlay{title: title, msg: msg}
 }

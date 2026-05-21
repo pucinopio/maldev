@@ -20,6 +20,11 @@ type revokeOverlay struct {
 	input     textinput.Model
 }
 
+// NewRevokeOverlay is exported for use by cmd/tui-snap.
+func NewRevokeOverlay(licenseID uuid.UUID, subject string) Overlay {
+	return newRevokeOverlay(licenseID, subject)
+}
+
 func newRevokeOverlay(licenseID uuid.UUID, subject string) *revokeOverlay {
 	ti := textinput.New()
 	ti.Placeholder = "reason for revocation…"

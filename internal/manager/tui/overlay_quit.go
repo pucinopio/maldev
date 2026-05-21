@@ -11,6 +11,9 @@ type quitOverlay struct {
 	serversRunning bool
 }
 
+// NewQuitOverlay is exported for use by cmd/tui-snap.
+func NewQuitOverlay(serversRunning bool) Overlay { return newQuitOverlay(serversRunning) }
+
 func newQuitOverlay(serversRunning bool) *quitOverlay {
 	return &quitOverlay{serversRunning: serversRunning}
 }

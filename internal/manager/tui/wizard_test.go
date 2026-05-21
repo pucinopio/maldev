@@ -1,6 +1,7 @@
 package tui_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -109,4 +110,136 @@ func TestFilePickerSnapshot(t *testing.T) {
 	// Binary step: trigger file picker.
 	m, _ = m.Update(wizard.OpenFilePickerMsg{Callback: "binary"})
 	compareOrUpdate(t, "file_picker", m.View())
+}
+
+// --- NewWizardSnap -------------------------------------------------------
+
+func TestNewWizardSnapStep1Renders(t *testing.T) {
+	m := tui.NewWizardSnap(120, 40)
+	m, _ = m.Update(wizard.IdentityLoadedMsg{})
+	out := m.View()
+	if !strings.Contains(out, "NOUVELLE LICENCE") {
+		t.Errorf("step 1 view missing progress strip: %q", out[:min(200, len(out))])
+	}
+	if !strings.Contains(out, "1/8") {
+		t.Errorf("step 1 view missing step counter: %q", out[:min(200, len(out))])
+	}
+}
+
+func TestNewWizardSnapStep5Renders(t *testing.T) {
+	m := tui.NewWizardSnap(120, 40)
+	m, _ = m.Update(wizard.IdentityLoadedMsg{})
+	m, _ = m.Update(wizard.IdentityChosenMsg{IssuerID: "00000000-0000-0000-0000-000000000001"})
+	m, _ = m.Update(wizard.RecipientLoadedMsg{})
+	m, _ = m.Update(wizard.RecipientChosenMsg{RecipientID: ""})
+	m, _ = m.Update(wizard.MachineBindingMsg{MachineID: ""})
+	m, _ = m.Update(wizard.BinaryBindingMsg{})
+	out := m.View()
+	if !strings.Contains(out, "5/8") {
+		t.Errorf("step 5 view missing step counter: %q", out[:min(200, len(out))])
+	}
+}
+
+func TestNewWizardSnapStep8Renders(t *testing.T) {
+	m := tui.NewWizardSnap(120, 40)
+	m, _ = m.Update(wizard.IdentityLoadedMsg{})
+	m, _ = m.Update(wizard.IdentityChosenMsg{IssuerID: "00000000-0000-0000-0000-000000000001"})
+	m, _ = m.Update(wizard.RecipientLoadedMsg{})
+	m, _ = m.Update(wizard.RecipientChosenMsg{})
+	m, _ = m.Update(wizard.MachineBindingMsg{MachineID: "deadbeef"})
+	m, _ = m.Update(wizard.BinaryBindingMsg{SHA256: "abc123", Size: 1024})
+	m, _ = m.Update(wizard.ValidityMsg{
+		NotBefore: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		NotAfter:  time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC),
+	})
+	m, _ = m.Update(wizard.FreeFieldsMsg{Fields: map[string]string{"env": "prod"}})
+	m, _ = m.Update(wizard.TOTPSecretsLoadedMsg{})
+	m, _ = m.Update(wizard.TOTPChoiceMsg{Require: false})
+	out := m.View()
+	if !strings.Contains(out, "8/8") {
+		t.Errorf("step 8 view missing step counter: %q", out[:min(200, len(out))])
+	}
+}
+
+// --- NewOnboardingSnap ---------------------------------------------------
+
+func TestNewOnboardingSnapWelcome(t *testing.T) {
+	m := tui.NewOnboardingSnap(120, 40, 0)
+	out := m.View()
+	if !strings.Contains(out, "PREMIÈRE UTILISATION") {
+		t.Errorf("welcome view missing header: %q", out[:min(200, len(out))])
+	}
+}
+
+func TestNewOnboardingSnapPassphrase(t *testing.T) {
+	m := tui.NewOnboardingSnap(120, 40, 1)
+	out := m.View()
+	if !strings.Contains(out, "Passphrase") {
+		t.Errorf("passphrase view missing label: %q", out[:min(200, len(out))])
+	}
+}
+
+func TestNewOnboardingSnapIssuer(t *testing.T) {
+	m := tui.NewOnboardingSnap(120, 40, 2)
+	out := m.View()
+	if !strings.Contains(out, "Issuer") {
+		t.Errorf("issuer view missing label: %q", out[:min(200, len(out))])
+	}
+}
+
+func TestNewOnboardingSnapLicense(t *testing.T) {
+	m := tui.NewOnboardingSnap(120, 40, 3)
+	out := m.View()
+	if !strings.Contains(out, "licence") {
+		t.Errorf("license view missing label: %q", out[:min(200, len(out))])
+	}
+}
+
+// --- Exported overlay constructors ---------------------------------------
+
+func TestNewConfirmOverlayRenders(t *testing.T) {
+	o := tui.NewConfirmOverlay("id", "Confirmer ?", "Corps du message.", "Oui", "Non", false)
+	out := o.View()
+	if !strings.Contains(out, "Confirmer") {
+		t.Errorf("confirm overlay missing title: %q", out[:min(200, len(out))])
+	}
+}
+
+func TestNewConfirmOverlayDangerRenders(t *testing.T) {
+	o := tui.NewConfirmOverlay("id", "Danger !", "Destruction irréversible.", "Détruire", "Annuler", true)
+	out := o.View()
+	if !strings.Contains(out, "Danger") {
+		t.Errorf("danger confirm overlay missing title: %q", out[:min(200, len(out))])
+	}
+}
+
+func TestNewErrorOverlayRenders(t *testing.T) {
+	o := tui.NewErrorOverlay("Erreur critique", "connection refused")
+	out := o.View()
+	if !strings.Contains(out, "Erreur") {
+		t.Errorf("error overlay missing title: %q", out[:min(200, len(out))])
+	}
+}
+
+func TestNewQuitOverlayRenders(t *testing.T) {
+	o := tui.NewQuitOverlay(true)
+	out := o.View()
+	if !strings.Contains(out, "Quitter") {
+		t.Errorf("quit overlay missing title: %q", out[:min(200, len(out))])
+	}
+}
+
+func TestNewInputOverlayRenders(t *testing.T) {
+	o := tui.NewInputOverlay("id", "Nommer la ressource", "e.g. prod-2026", 80)
+	out := o.View()
+	if !strings.Contains(out, "Nommer") {
+		t.Errorf("input overlay missing title: %q", out[:min(200, len(out))])
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

@@ -430,6 +430,26 @@ func (m wizardModel) View() string {
 	)
 }
 
+// NewWizardSnap constructs a standalone wizardModel (svc=nil) sized to the given
+// terminal dimensions. The returned model implements tea.Model so cmd/tui-snap
+// can drive it via Update and render individual steps for visual snapshots.
+func NewWizardSnap(width, height int) tea.Model {
+	m := newWizardModel(nil)
+	m.width = width
+	m.hgt = height
+	return wizardSnapModel{m}
+}
+
+// wizardSnapModel wraps wizardModel as a tea.Model for tui-snap use.
+type wizardSnapModel struct{ inner wizardModel }
+
+func (w wizardSnapModel) Init() tea.Cmd { return w.inner.Init() }
+func (w wizardSnapModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	updated, cmd := w.inner.Update(msg)
+	return wizardSnapModel{updated}, cmd
+}
+func (w wizardSnapModel) View() string { return w.inner.View() }
+
 // filePickedMsg is an internal message carrying a path chosen by the file picker.
 type filePickedMsg struct {
 	path     string

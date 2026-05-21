@@ -45,6 +45,33 @@ type onboardingModel struct {
 	hgt   int
 }
 
+// NewOnboardingSnap constructs a standalone onboardingModel sized to the given
+// terminal dimensions. The step index selects which sub-screen to show:
+//
+//	0 = welcome, 1 = passphrase, 2 = issuer, 3 = first-license
+//
+// The returned model implements tea.Model so cmd/tui-snap can render individual
+// onboarding steps for visual snapshots.
+func NewOnboardingSnap(width, height, step int) tea.Model {
+	m := newOnboardingModel()
+	m.width = width
+	m.hgt = height
+	if step >= 0 && step <= 3 {
+		m.step = onboardingStep(step)
+	}
+	return onboardingSnapModel{m}
+}
+
+// onboardingSnapModel wraps onboardingModel as a tea.Model for tui-snap use.
+type onboardingSnapModel struct{ inner onboardingModel }
+
+func (o onboardingSnapModel) Init() tea.Cmd { return o.inner.Init() }
+func (o onboardingSnapModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	updated, cmd := o.inner.update(msg)
+	return onboardingSnapModel{updated}, cmd
+}
+func (o onboardingSnapModel) View() string { return o.inner.View() }
+
 func newOnboardingModel() onboardingModel {
 	pass := textinput.New()
 	pass.Placeholder = "passphrase"

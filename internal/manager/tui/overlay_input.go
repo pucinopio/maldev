@@ -20,6 +20,11 @@ type inputOverlay struct {
 	input       textinput.Model
 }
 
+// NewInputOverlay is exported for use by cmd/tui-snap.
+func NewInputOverlay(id, title, placeholder string, charLimit int) Overlay {
+	return newInputOverlay(id, title, placeholder, charLimit)
+}
+
 func newInputOverlay(id, title, placeholder string, charLimit int) *inputOverlay {
 	ti := textinput.New()
 	ti.Placeholder = placeholder

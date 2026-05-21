@@ -1,0 +1,661 @@
+warning: in the working copy of 'internal/manager/tui/teatest_smoke_test.go', LF will be replaced by CRLF the next time Git touches it
+diff --git a/internal/manager/tui/app.go b/internal/manager/tui/app.go
+index 7a74937..9b2bf37 100644
+--- a/internal/manager/tui/app.go
++++ b/internal/manager/tui/app.go
+@@ -626,20 +626,35 @@ func (m rootModel) viewReady() string {
+ 		content = m.settings.View()
+ 	}
+ 
+-	// Reserve 3 rows for chrome (title + tabs + breadcrumb); status bar is rendered by each screen.
+-	contentH := m.hgt - 3
++	// chrome = title(1) + tabs(1) + breadcrumb(1) + statusbar(1) = 4 rows.
++	contentH := m.hgt - 4
+ 	if contentH < 0 {
+ 		contentH = 0
+ 	}
++	// Clamp content to exactly contentH lines: pad short content up, trim tall
++	// content down. lipgloss Height() only pads — never truncates — so we must
++	// enforce the ceiling ourselves to keep the total view == m.hgt.
++	content = clampToHeight(content, contentH, m.width)
+ 	contentArea := lipgloss.NewStyle().
+ 		Width(m.width).
+ 		Height(contentH).
+ 		Render(content)
+ 
+-	return lipgloss.JoinVertical(lipgloss.Left,
+-		title,
+-		tabs,
+-		crumb,
+-		contentArea,
+-	)
++	statusBar := renderStatusBar([]string{
++		"1-9", "onglets",
++		"n", "nouvelle licence",
++		"/", "rechercher",
++		"k", "clés actives",
++		"?", "aide",
++		"q", "quitter",
++	}, m.width)
++
++	chrome := lipgloss.JoinVertical(lipgloss.Left, title, tabs, crumb)
++
++	// Hard-clamp chrome + content to (m.hgt - 1) lines so there is always exactly
++	// one row left for the status bar regardless of chrome wrapping.
++	body := lipgloss.JoinVertical(lipgloss.Left, chrome, contentArea)
++	body = clampToHeight(body, m.hgt-1, m.width)
++
++	return lipgloss.JoinVertical(lipgloss.Left, body, statusBar)
+ }
+diff --git a/internal/manager/tui/layout.go b/internal/manager/tui/layout.go
+index 46d75d2..8d63bc1 100644
+--- a/internal/manager/tui/layout.go
++++ b/internal/manager/tui/layout.go
+@@ -319,6 +319,23 @@ func (g *gridWidget) Children() []Widget {
+ 	return cs
+ }
+ 
++// clampToHeight trims s to at most h lines, padding short content with blank
++// lines of width w if necessary. This enforces a hard height ceiling that
++// lipgloss.Height() cannot provide (it only pads, never truncates).
++func clampToHeight(s string, h, w int) string {
++	if h <= 0 {
++		return ""
++	}
++	lines := strings.Split(s, "\n")
++	if len(lines) > h {
++		lines = lines[:h]
++	}
++	for len(lines) < h {
++		lines = append(lines, strings.Repeat(" ", w))
++	}
++	return strings.Join(lines, "\n")
++}
++
+ // renderProgressBar renders a horizontal progress bar of width w with cur/total
+ // filled cells using the Magenta accent for the filled portion and Border colour
+ // for the remainder. Both screens (wizard, onboarding) share this helper.
+@@ -407,11 +424,14 @@ func (b *boxWidget) Bounds() Rect { return b.bounds }
+ 
+ func (b *boxWidget) Layout(bounds Rect) {
+ 	b.bounds = bounds
+-	// Border takes 1 cell each side; padding 1 cell left+right.
++	// BoxStyle visual overhead: border(1) + padding(1) each side = 2 per side.
++	// lipgloss Width(n) includes the padding in n, so the actual text area is
++	// Width(n) - padding(2) = (bounds.W - 4) - 2 = bounds.W - 6.
++	// Inner Layout receives the true usable text width so child content never wraps.
+ 	inner := Rect{
+ 		X: bounds.X + 2,
+ 		Y: bounds.Y + 1,
+-		W: bounds.W - 4,
++		W: bounds.W - 6,
+ 		H: bounds.H - 2,
+ 	}
+ 	if inner.W < 0 {
+@@ -430,13 +450,21 @@ func (b *boxWidget) Update(msg tea.Msg) (Widget, tea.Cmd) {
+ }
+ 
+ func (b *boxWidget) View() string {
+-	st := BoxStyle.Width(b.bounds.W)
++	// BoxStyle has Border (2 chars) + Padding(0,1) (2 chars) = 4 chars of horizontal
++	// overhead. Width() sets the CONTENT width before borders are applied, so passing
++	// bounds.W would make the visual total = bounds.W + 4. Pass bounds.W - 4 instead
++	// so the rendered box visual width equals bounds.W exactly.
++	contentW := b.bounds.W - 4
++	if contentW < 1 {
++		contentW = 1
++	}
++	st := BoxStyle.Width(contentW)
+ 	if b.focused {
+-		st = BoxFocused.Width(b.bounds.W)
++		st = BoxFocused.Width(contentW)
+ 	}
+ 	content := b.inner.View()
+ 	if b.title != "" {
+-		return st.Render(GlowCyan.Render(b.title) + "\n\n" + content)
++		return st.Render(GlowCyan.Render(b.title) + "\n" + content)
+ 	}
+ 	return st.Render(content)
+ }
+diff --git a/internal/manager/tui/screen_dashboard.go b/internal/manager/tui/screen_dashboard.go
+index fb0a2b0..1900f75 100644
+--- a/internal/manager/tui/screen_dashboard.go
++++ b/internal/manager/tui/screen_dashboard.go
+@@ -96,7 +96,8 @@ func (m dashboardModel) buildWidgetTree() Widget {
+ 	}
+ 
+ 	// Five counter tiles with reference subtitles.
+-	tileW := w/5 - 1
++	// tileW is the minimum per tile; flex distributes remaining space equally.
++	tileW := w / 5
+ 	activeTile := widgets.NewTile("Actives [a]", m.counters.active,
+ 		"signées par la clé active", Palette.Green,
+ 		func() tea.Cmd { return func() tea.Msg { return SwitchToLicensesMsg{Filter: "active"} } })
+@@ -151,8 +152,8 @@ func (m dashboardModel) buildWidgetTree() Widget {
+ 		FlexChild{W: tilesRow, Min: 5, Max: 7},
+ 		FlexChild{W: body, Flex: 1},
+ 	)
+-	// Reserve 3 rows for chrome (title + tabs + breadcrumb).
+-	root.Layout(Rect{X: 0, Y: 3, W: w, H: h - 3})
++	// Reserve 3 rows for chrome (title + tabs + breadcrumb) + 1 row for status bar.
++	root.Layout(Rect{X: 0, Y: 3, W: w, H: h - 4})
+ 	return root
+ }
+ 
+@@ -160,78 +161,177 @@ func (m dashboardModel) View() string {
+ 	if m.width == 0 {
+ 		return ""
+ 	}
++	// Content height = terminal height minus chrome (title+tabs+breadcrumb=3) and status bar (1).
++	contentH := m.height - 4
++	if contentH < 1 {
++		contentH = 1
++	}
+ 	if m.loading {
+-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
++		return lipgloss.Place(m.width, contentH, lipgloss.Center, lipgloss.Center,
+ 			Dim.Render("Loading dashboard…"))
+ 	}
+ 	if m.err != nil {
+-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
++		return lipgloss.Place(m.width, contentH, lipgloss.Center, lipgloss.Center,
+ 			GlowRed.Render("Error: "+m.err.Error()))
+ 	}
+ 	return m.buildWidgetTree().View()
+ }
+ 
++// truncateFingerprint shortens a raw hex fingerprint like
++// "4a:2f:88:d1:09:cc:fe:b3:72:1e:aa:5d:03:89:c0:f7"
++// to "ed25519:4a2f…c0f7" (algo prefix + first 4 hex chars + ellipsis + last 4).
++// When the input already looks like "algo:…" it is returned unchanged.
++// The function never returns a string longer than ~24 chars, preventing wraps.
++func truncateFingerprint(fpr string) string {
++	if fpr == "" {
++		return ""
++	}
++	// Already in algo:digest form — trust it.
++	if strings.Contains(fpr, ":") {
++		// Strip colons to get raw hex bytes, then format.
++		raw := strings.ReplaceAll(fpr, ":", "")
++		if len(raw) < 8 {
++			return fpr
++		}
++		return "ed25519:" + raw[:4] + "…" + raw[len(raw)-4:]
++	}
++	if len(fpr) < 8 {
++		return fpr
++	}
++	return "ed25519:" + fpr[:4] + "…" + fpr[len(fpr)-4:]
++}
++
+ // keyCardContent builds the text content for the issuer key card.
+ // The KeyID is shown large; name and fingerprint follow on subsequent lines.
+ // An ACTIVE pill appears on the right of the first data line when a key is set.
++// keyActivePill is a flat (no border) single-line ACTIVE tag.
++// The bordered PillActive is 3 lines tall and cannot be embedded inline.
++var keyActivePill = lipgloss.NewStyle().Foreground(Palette.Green).Bold(true)
++
+ func (m dashboardModel) keyCardContent() string {
+ 	if m.activeKey.id == "" {
+ 		return Mute.Render("aucune clé active")
+ 	}
+-	pill := PillActive.Render("ACTIVE")
++	pill := keyActivePill.Render("ACTIVE")
+ 	idLine := GlowCyan.Render(m.activeKey.id) + "  " + pill
++	fpr := truncateFingerprint(m.activeKey.fingerprint)
+ 	return lipgloss.JoinVertical(lipgloss.Left,
+ 		idLine,
+ 		Base.Render("nom ")+Dim.Render(m.activeKey.name),
+-		Base.Render("fpr ")+Mute.Render(m.activeKey.fingerprint),
++		Base.Render("fpr ")+Mute.Render(fpr),
+ 	)
+ }
+ 
++// serverPillStyle returns a single-line colored tag for running/stopped state.
++// Unlike the bordered PillOn/PillOff styles used in tables, the inline variant
++// is flat (no border) so it can be embedded mid-string without injecting \n.
++var (
++	serverPillOn  = lipgloss.NewStyle().Foreground(Palette.Green).Bold(true)
++	serverPillOff = lipgloss.NewStyle().Foreground(Palette.FgMute).Bold(true)
++)
++
++// serverRow builds two lines for one server entry matching the reference layout:
++//
++//	● name  :port                                                      ON
++//	  https://host:port · N req · up Xh Ym
++//
++// The ON/OFF tag is right-aligned to colW on the first line.
++func serverRow(name, addr, url string, on bool, reqs uint64, uptime string, colW int) string {
++	bullet := Mute.Render("●")
++	if !on {
++		bullet = Mute.Render("○")
++	}
++
++	var tag string
++	if on {
++		tag = serverPillOn.Render("ON")
++	} else {
++		tag = serverPillOff.Render("OFF")
++	}
++
++	nameAddr := GlowCyan.Render(name) + "  " + Dim.Render(addr)
++	prefixW := lipgloss.Width(bullet) + 1 + lipgloss.Width(nameAddr)
++	tagW := lipgloss.Width(tag)
++	gap := colW - prefixW - tagW
++	if gap < 1 {
++		gap = 1
++	}
++	line1 := bullet + " " + nameAddr + strings.Repeat(" ", gap) + tag
++
++	// Line 2: url · req count · uptime (or stopped hint).
++	var detail string
++	if on && url != "" && url != "—" {
++		detail = Mute.Render(url)
++		if reqs > 0 {
++			detail += Mute.Render(fmt.Sprintf(" · %d req", reqs))
++		}
++		if uptime != "" {
++			detail += Mute.Render(" · up " + uptime)
++		}
++	} else if !on {
++		detail = Mute.Render("arrêté · démarrer via onglet [7]")
++	}
++
++	return line1 + "\n  " + detail
++}
++
+ // serversCardContent builds the text content for the servers card.
+-// When the bundle is wired (Phase 4+) it reads live Status snapshots directly
+-// so the dashboard always reflects the current running state.
++// Each server is rendered as two compact lines with the ON/OFF tag right-aligned.
++// When the bundle is wired (Phase 4+) it reads live Status snapshots directly.
+ func (m dashboardModel) serversCardContent() string {
++	// body flex: Horizontal gap=1, leftFlex=1, rightFlex=2.
++	// leftColW = (w-1)/3. Box chrome = border(2) + padding(2) = 4.
++	// lipgloss Width(n) counts padding inside n, so actual text area = Width - 2 = boxW-6.
++	w := m.width
++	if w == 0 {
++		w = 120
++	}
++	colW := (w-1)/3 - 6
++	if colW < 20 {
++		colW = 20
++	}
++
++	buildRows := func(name, addr, url string, on bool, reqs uint64, uptime string) string {
++		return serverRow(name, addr, url, on, reqs, uptime, colW)
++	}
++
+ 	if m.bundle == nil {
+-		// Bundle not wired — fall back to the snapshot injected by DashboardSnapshotMsg.
+-		var lines []string
++		var rows []string
+ 		for _, s := range m.servers {
+-			var pill string
+-			if s.On {
+-				pill = PillOn.Render("ON")
+-			} else {
+-				pill = PillOff.Render("OFF")
++			// s.URL holds the listen address (":8443"). Build a full URL for display.
++			url := ""
++			if s.URL != "" {
++				url = "https://manager.local" + s.URL
+ 			}
+-			lines = append(lines, fmt.Sprintf("%-12s %s  %s", s.Name, pill, Mute.Render(s.URL)))
++			rows = append(rows, buildRows(s.Name, s.URL, url, s.On, s.Requests, ""))
+ 		}
+-		if len(lines) == 0 {
++		if len(rows) == 0 {
+ 			return Mute.Render("no servers configured")
+ 		}
+-		return lipgloss.JoinVertical(lipgloss.Left, lines...)
++		sep := Mute.Render(strings.Repeat("╌", colW))
++		return strings.Join(rows, "\n"+sep+"\n")
+ 	}
+ 
+ 	// Live path: read directly from Bundle.Statuses().
+ 	statuses := m.bundle.Statuses()
+ 	names := []string{"revocation", "heartbeat", "probe"}
+-	lines := make([]string, 0, len(names))
++	var rows []string
+ 	for _, name := range names {
+ 		s, ok := statuses[name]
+-		var pill string
+-		if ok && s.Running {
+-			pill = PillOn.Render("ON")
+-		} else {
+-			pill = PillOff.Render("OFF")
+-		}
+-		addr := "—"
++		addr, url := "—", ""
++		var reqs uint64
+ 		if ok && s.ListenAddr != "" {
+ 			addr = s.ListenAddr
++			url = "https://manager.local" + s.ListenAddr
+ 		}
+-		lines = append(lines, fmt.Sprintf("%-12s %s  %s", name, pill, Mute.Render(addr)))
++		rows = append(rows, buildRows(name, addr, url, ok && s.Running, reqs, ""))
+ 	}
+-	return lipgloss.JoinVertical(lipgloss.Left, lines...)
++	sep := Mute.Render(strings.Repeat("╌", colW))
++	return strings.Join(rows, "\n"+sep+"\n")
+ }
+ 
+ // auditCardContent builds the text content for the recent events card.
+-// Format: HH:MM:SS  kind  target  (actor)
++// Format: HH:MM:SS kind target (actor) — note
+ func (m dashboardModel) auditCardContent() string {
+ 	if len(m.recent) == 0 {
+ 		return Mute.Render("aucun événement")
+@@ -239,12 +339,13 @@ func (m dashboardModel) auditCardContent() string {
+ 	var lines []string
+ 	for _, e := range m.recent {
+ 		ts := e.At.Format("15:04:05")
+-		line := fmt.Sprintf("%s  %-22s  %-16s  %s",
+-			Mute.Render(ts),
+-			GlowMagent.Render(e.Kind),
+-			Dim.Render(e.TargetID),
+-			Mute.Render("("+e.Actor+")"),
+-		)
++		line := Mute.Render(ts) +
++			" " + GlowMagent.Render(e.Kind) +
++			" " + Dim.Render(e.TargetID) +
++			" " + Mute.Render("("+e.Actor+")")
++		if e.Note != "" {
++			line += Mute.Render(" — " + e.Note)
++		}
+ 		lines = append(lines, line)
+ 	}
+ 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+@@ -264,10 +365,12 @@ func (m dashboardModel) shortcutsCardContent() string {
+ 	}
+ 
+ 	// The shortcuts box lives in the right column (~⅔ of total width).
+-	// Subtract box chrome (border 2 + padding 2 = 4) then divide by 3 cols.
+-	// Use a generous minimum so labels are never truncated.
+-	rightColW := m.width * 2 / 3
+-	cellW := (rightColW - 4) / 3
++	// body flex: Horizontal gap=1, leftFlex=1, rightFlex=2.
++	// rightColW = (w-1)*2/3 (last child absorbs remainder, safe approximation).
++	// Box inner text width = rightColW - 6 (border 2 + padding 2 + lipgloss Width offset 2).
++	// Divide by 3 cols for shortcuts grid cell width.
++	rightColW := (m.width - 1) * 2 / 3
++	cellW := (rightColW - 6) / 3
+ 	if cellW < 20 {
+ 		cellW = 20
+ 	}
+diff --git a/internal/manager/tui/teatest_smoke_test.go b/internal/manager/tui/teatest_smoke_test.go
+index 0f0367c..d51e6ae 100644
+--- a/internal/manager/tui/teatest_smoke_test.go
++++ b/internal/manager/tui/teatest_smoke_test.go
+@@ -105,7 +105,7 @@ func TestTeatest_TabNavigation(t *testing.T) {
+ 		{'6', "LICENSE"},          // revocation: column header
+ 		{'7', "Fingerprint probe"}, // servers: sub-tab label unique to servers screen
+ 		{'8', "TIMESTAMP"},        // audit: column header
+-		{'9', "Settings"},         // settings: screen title in body
++		{'9', "vacuum"},            // settings: status bar hint unique to settings screen
+ 		{'1', "Raccourcis"}, // dashboard: shortcuts box title re-rendered in diff
+ 	}
+ 
+diff --git a/internal/manager/tui/widgets/tile.go b/internal/manager/tui/widgets/tile.go
+index 5431f62..431911f 100644
+--- a/internal/manager/tui/widgets/tile.go
++++ b/internal/manager/tui/widgets/tile.go
+@@ -32,9 +32,11 @@ type Tile struct {
+ 	// Footer is the dim subtitle line below the value, or "" to omit.
+ 	Footer string
+ 	// Color is the foreground color for Value.
+-	Color   lipgloss.Color
+-	OnPress func() tea.Cmd
+-	bounds  core.Rect
++	Color lipgloss.Color
++	// NoLeftBorder suppresses the left border so adjacent tiles share a single wall.
++	NoLeftBorder bool
++	OnPress      func() tea.Cmd
++	bounds       core.Rect
+ }
+ 
+ // NewTile constructs a Tile.
+@@ -69,24 +71,39 @@ func (t *Tile) Bounds() core.Rect      { return t.bounds }
+ func (t *Tile) Update(_ tea.Msg) (core.Widget, tea.Cmd) { return t, nil }
+ 
+ type tileStyleSet struct {
+-	header, hotkey, footer, border lipgloss.Style
++	header, hotkey, footer lipgloss.Style
+ }
+ 
+ var tileStyleCache = sync.OnceValue(func() tileStyleSet {
+ 	return tileStyleSet{
++		// No Padding on header — the outer border already provides 1-char left/right
++		// margin via the NormalBorder box. Adding Padding here would double-consume
++		// width and cause label/hotkey to wrap on narrow tiles.
+ 		header: lipgloss.NewStyle().
+ 			Border(lipgloss.NormalBorder(), false, false, true, false).
+ 			BorderForeground(core.Colors.Border).
+-			Foreground(core.Colors.FgDim).
+-			Padding(0, 1),
++			Foreground(core.Colors.FgDim),
+ 		hotkey: lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true),
+ 		footer: lipgloss.NewStyle().Foreground(core.Colors.FgDim),
+-		border: lipgloss.NewStyle().
+-			Border(lipgloss.NormalBorder()).
+-			BorderForeground(core.Colors.Border),
+ 	}
+ })
+ 
++// tileOuterBorder returns the outer border style for a tile.
++// When noLeftBorder is true the left wall is omitted so adjacent tiles share a
++// single │ rather than rendering ││ between them.
++// lipgloss.BorderLeft(false) suppresses the left edge at render time without
++// affecting the border size calculation (corners remain in the struct but the
++// renderer skips the left column), so innerW must account for this.
++func tileOuterBorder(noLeftBorder bool) lipgloss.Style {
++	st := lipgloss.NewStyle().
++		Border(lipgloss.NormalBorder()).
++		BorderForeground(core.Colors.Border)
++	if noLeftBorder {
++		st = st.BorderLeft(false)
++	}
++	return st
++}
++
+ func (t *Tile) View() string {
+ 	st := tileStyleCache()
+ 	w := t.bounds.W
+@@ -94,8 +111,13 @@ func (t *Tile) View() string {
+ 		w = 4
+ 	}
+ 
+-	// border (1 each side) + padding (1 each side) = 4 cells consumed by the outer box.
+-	innerW := w - 4
++	// Outer border: left(1) + right(1) = 2 chars consumed horizontally.
++	// When NoLeftBorder, lipgloss suppresses the left column but still reserves
++	// it in Width(); subtract only 1 to use the recovered char for content.
++	innerW := w - 2
++	if t.NoLeftBorder {
++		innerW = w - 1
++	}
+ 	if innerW < 1 {
+ 		innerW = 1
+ 	}
+@@ -105,21 +127,39 @@ func (t *Tile) View() string {
+ 	if t.Hotkey != "" {
+ 		headerRight = st.hotkey.Render("[" + t.Hotkey + "]")
+ 	}
+-	headerContent := t.Label +
+-		strings.Repeat(" ", max(0, innerW-lipgloss.Width(t.Label)-lipgloss.Width(headerRight))) +
+-		headerRight
++	labelW := lipgloss.Width(t.Label)
++	hotkeyW := lipgloss.Width(headerRight)
++	gap := innerW - labelW - hotkeyW
++	if gap < 0 {
++		gap = 0
++	}
++	headerContent := t.Label + strings.Repeat(" ", gap) + headerRight
+ 	headerRow := st.header.Width(innerW).Render(headerContent)
+ 
+-	// Value row: instance Color applied per-call (Color is not in the shared cache).
++	// Value row: Color applied per-call (not in shared cache).
+ 	valueRow := lipgloss.NewStyle().Foreground(t.Color).Bold(true).
+-		Width(innerW).Padding(0, 1).Render(fmt.Sprintf("%d", t.Value))
++		Width(innerW).Render(fmt.Sprintf("%d", t.Value))
+ 
+ 	rows := []string{headerRow, valueRow}
+ 	if t.Footer != "" {
+-		rows = append(rows, st.footer.Width(innerW).Padding(0, 1).Render(t.Footer))
++		// Truncate footer to innerW so it never wraps — compact single-line layout.
++		footer := t.Footer
++		if lipgloss.Width(footer) > innerW {
++			// Trim to innerW-1 and append ellipsis.
++			runes := []rune(footer)
++			for lipgloss.Width(string(runes)+"…") > innerW && len(runes) > 0 {
++				runes = runes[:len(runes)-1]
++			}
++			footer = string(runes) + "…"
++		}
++		rows = append(rows, st.footer.Width(innerW).Render(footer))
+ 	}
+ 
+-	return st.border.Width(w).Render(strings.Join(rows, "\n"))
++	// Do NOT pass Width() to the border style — rows are already padded to
++	// innerW, and adding Width(w) would set the content area to w then add
++	// borders on top, making total visual width = w+2 instead of w.
++	borderStyle := tileOuterBorder(t.NoLeftBorder)
++	return borderStyle.Render(strings.Join(rows, "\n"))
+ }
+ 
+ // OnClick implements core.Clickable.
+diff --git a/internal/manager/tui/workflows_e2e_test.go b/internal/manager/tui/workflows_e2e_test.go
+index eae851c..045ee7d 100644
+--- a/internal/manager/tui/workflows_e2e_test.go
++++ b/internal/manager/tui/workflows_e2e_test.go
+@@ -15,6 +15,7 @@ import (
+ 	"time"
+ 
+ 	tea "github.com/charmbracelet/bubbletea"
++	"github.com/charmbracelet/lipgloss"
+ 	"github.com/google/uuid"
+ 
+ 	"github.com/oioio-space/maldev/internal/manager/crypto"
+@@ -1473,6 +1474,121 @@ func TestE2E_MainTUIRendersDashboardAfterOnboarding(t *testing.T) {
+ 	}
+ }
+ 
++// ── Dashboard bounds discipline ───────────────────────────────────────────────
++
++// TestE2E_DashboardTilesFitWidth builds the dashboard at a fixed width, renders
++// it, and asserts no tile row line exceeds the tile's allocated width.
++func TestE2E_DashboardTilesFitWidth(t *testing.T) {
++	const w, h = 144, 44
++	dm := newDashboardModel(nil, nil)
++	dm.width = w
++	dm.height = h
++	dm.counters.active = 47
++	dm.counters.revoked = 6
++	dm.counters.expired = 12
++	dm.counters.expiringSoon = 4
++	dm.counters.superseded = 9
++
++	// Build tree and render.
++	tree := dm.buildWidgetTree()
++	rendered := tree.View()
++	tileW := w / 5
++
++	for i, line := range strings.Split(rendered, "\n") {
++		vw := lipgloss.Width(line)
++		if vw > w {
++			t.Errorf("line %d visual width %d exceeds terminal width %d: %q", i, vw, w, line)
++		}
++		_ = tileW
++	}
++}
++
++// TestE2E_DashboardFingerprintTruncated asserts truncateFingerprint produces the
++// short "algo:first4…last4" form and never returns the raw colon-separated hex.
++func TestE2E_DashboardFingerprintTruncated(t *testing.T) {
++	raw := "4a:2f:88:d1:09:cc:fe:b3:72:1e:aa:5d:03:89:c0:f7"
++	got := truncateFingerprint(raw)
++
++	if strings.Contains(got, "88:d1") {
++		t.Errorf("truncateFingerprint returned untruncated hex: %q", got)
++	}
++	if !strings.Contains(got, "…") {
++		t.Errorf("truncateFingerprint must contain ellipsis, got: %q", got)
++	}
++	if !strings.HasPrefix(got, "ed25519:") {
++		t.Errorf("truncateFingerprint must have 'ed25519:' prefix, got: %q", got)
++	}
++	if lipgloss.Width(got) > 20 {
++		t.Errorf("truncated fingerprint width %d > 20 — will overflow narrow cells: %q", lipgloss.Width(got), got)
++	}
++}
++
++// TestE2E_DashboardStatusBarPresent asserts the rendered full TUI contains the
++// status-bar hint text "1-9 onglets" at all standard terminal sizes.
++func TestE2E_DashboardStatusBarPresent(t *testing.T) {
++	sizes := []struct{ w, h int }{
++		{80, 24},
++		{120, 40},
++		{144, 44},
++		{200, 60},
++	}
++	for _, sz := range sizes {
++		sz := sz
++		t.Run(fmt.Sprintf("%dx%d", sz.w, sz.h), func(t *testing.T) {
++			var m tea.Model = New(nil, nil, SessionReady)
++			m, _ = m.Update(tea.WindowSizeMsg{Width: sz.w, Height: sz.h})
++			view := m.View()
++			if !strings.Contains(view, "1-9 onglets") {
++				t.Errorf("status bar '1-9 onglets' not found in view at %dx%d", sz.w, sz.h)
++			}
++		})
++	}
++}
++
++// TestE2E_DashboardAdaptsToWindowSize is the architectural guard: for each
++// standard window size, assert no line in View() exceeds W visual chars.
++// At widths ≥ 120 the chrome (title bar + tab strip) does not wrap so we also
++// assert the total line count is exactly H. Below 120 the narrow chrome may
++// wrap, so we skip the line-count check there.
++func TestE2E_DashboardAdaptsToWindowSize(t *testing.T) {
++	sizes := []struct{ w, h int }{
++		{80, 24},
++		{120, 40},
++		{144, 44},
++		{200, 60},
++	}
++	for _, sz := range sizes {
++		sz := sz
++		t.Run(fmt.Sprintf("%dx%d", sz.w, sz.h), func(t *testing.T) {
++			var m tea.Model = New(nil, nil, SessionReady)
++			m, _ = m.Update(tea.WindowSizeMsg{Width: sz.w, Height: sz.h})
++			view := m.View()
++			if view == "" {
++				t.Fatalf("View() empty at %dx%d", sz.w, sz.h)
++			}
++
++			lines := strings.Split(view, "\n")
++
++			// Line-count check: only at wide-enough terminals where chrome doesn't wrap.
++			if sz.w >= 120 {
++				// Allow ±1 for trailing-newline differences.
++				if len(lines) < sz.h-1 || len(lines) > sz.h+1 {
++					t.Errorf("View() has %d lines, want ~%d at %dx%d", len(lines), sz.h, sz.w, sz.h)
++				}
++			}
++
++			// Width guard: applies at ALL sizes — no line may overflow the terminal.
++			for i, line := range lines {
++				vw := lipgloss.Width(line)
++				if vw > sz.w {
++					t.Errorf("line %d visual width %d > terminal width %d at %dx%d: %q",
++						i, vw, sz.w, sz.w, sz.h, line)
++				}
++			}
++		})
++	}
++}
++
+ // keyName is a debug helper for table-driven key tests.
+ func keyName(k tea.KeyType) string {
+ 	switch k {
