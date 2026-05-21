@@ -74,11 +74,10 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 		return m, nil
 
 	case settingsSetArgonMsg:
-		if m.svc != nil && m.row != nil {
+		// Mutate the in-memory row so the click reflects in the UI immediately.
+		// Persistence (svc.Settings.SetArgonPreset) is a follow-up.
+		if m.row != nil {
 			m.row.DefaultArgonPreset = msg.preset
-			// Persistence hook: a follow-up will replace this with
-			// svc.Settings.SetArgonPreset(ctx, preset). For now we mutate the
-			// in-memory row so the user sees the click reflected immediately.
 		}
 		return m, nil
 

@@ -2570,6 +2570,83 @@ func TestE2E_TabCyclesViews(t *testing.T) {
 	}
 }
 
+// TestE2E_SettingsAllInteractiveClicks pings every settings click region the
+// hit-map registers and asserts each one produces its expected state change.
+// Catches regressions where Y offsets drift or message routing breaks.
+func TestE2E_SettingsAllInteractiveClicks(t *testing.T) {
+	const W, H = 160, 50
+	mk := func() tea.Model {
+		var m tea.Model = New(nil, nil, SessionReady)
+		m, _ = m.Update(tea.WindowSizeMsg{Width: W, Height: H})
+		// Switch to Settings FIRST so SettingsLoadedMsg gets routed to the
+		// settings model (rootModel routes msgs to the *active* screen only).
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'9'}})
+		row := &ent.Setting{}
+		m, _ = m.Update(SettingsLoadedMsg{Row: row})
+		return m
+	}
+	click := func(m tea.Model, x, y int) tea.Model {
+		updated, cmd := m.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+		// Cap iterations: textinput.Blink and similar produce a cyclic cmd
+		// chain (blink → tick → blink); 4 hops are enough for every real action.
+		for i := 0; i < 4 && cmd != nil; i++ {
+			msg := cmd()
+			if msg == nil {
+				break
+			}
+			updated, cmd = updated.Update(msg)
+		}
+		return updated
+	}
+
+	t.Run("argon-preset-fast", func(t *testing.T) {
+		m := mk()
+		m = click(m, 88, 7) // row [1] fast
+		if r := rootOf(t, m); r.settings.row != nil && string(r.settings.row.DefaultArgonPreset) != "fast" {
+			t.Errorf("expected DefaultArgonPreset=fast after click, got %q", r.settings.row.DefaultArgonPreset)
+		}
+	})
+	t.Run("DB-action-V-vacuum-opens-overlay", func(t *testing.T) {
+		m := mk()
+		m = click(m, 88, 19)
+		if r := rootOf(t, m); len(r.overlays) == 0 {
+			t.Errorf("expected confirm overlay after [V] click")
+		}
+	})
+	t.Run("DB-action-P-rekey-opens-overlay", func(t *testing.T) {
+		m := mk()
+		m = click(m, 88, 18)
+		if r := rootOf(t, m); len(r.overlays) == 0 {
+			t.Errorf("expected input overlay after [P] click")
+		}
+	})
+	t.Run("DB-action-B-backup-opens-overlay", func(t *testing.T) {
+		m := mk()
+		m = click(m, 88, 20)
+		if r := rootOf(t, m); len(r.overlays) == 0 {
+			t.Errorf("expected input overlay after [B] click")
+		}
+	})
+	t.Run("toggle-confirm_quit_with_servers", func(t *testing.T) {
+		m := mk()
+		before := rootOf(t, m).settings.row.ConfirmQuitWithServers
+		m = click(m, 5, 22)
+		after := rootOf(t, m).settings.row.ConfirmQuitWithServers
+		if before == after {
+			t.Errorf("expected confirm_quit toggle to flip, stayed %v", after)
+		}
+	})
+	t.Run("toggle-auto_start_servers", func(t *testing.T) {
+		m := mk()
+		before := rootOf(t, m).settings.row.AutoStartServers
+		m = click(m, 5, 26)
+		after := rootOf(t, m).settings.row.AutoStartServers
+		if before == after {
+			t.Errorf("expected auto_start toggle to flip, stayed %v", after)
+		}
+	})
+}
+
 // TestE2E_ConfirmOverlayClickDispatch drives the full root model: open a
 // confirm overlay, click on the right half of the button row, assert the
 // overlay dismissed (it produced ConfirmResultMsg).
