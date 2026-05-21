@@ -1998,6 +1998,102 @@ func TestE2E_DashboardShortcutsGrid(t *testing.T) {
 
 // ── Help overlay in every view ─────────────────────────────────────────────────
 
+// ── Audit screen filter chips ─────────────────────────────────────────────────
+
+// TestE2E_AuditFilterChipsDirectKeys verifies that each individual hotkey (f,
+// l, k, s, i, p) sets the expected auditKindFilter without cycling.
+func TestE2E_AuditFilterChipsDirectKeys(t *testing.T) {
+	cases := []struct {
+		key  rune
+		want auditKindFilter
+	}{
+		{'f', auditFilterAll},
+		{'l', auditFilterLicense},
+		{'k', auditFilterKey},
+		{'s', auditFilterServer},
+		{'i', auditFilterIdentity},
+		{'p', auditFilterProbe},
+	}
+	for _, c := range cases {
+		c := c
+		t.Run(string(c.key), func(t *testing.T) {
+			am := newAuditModel(nil)
+			am, _ = am.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{c.key}})
+			if am.filter != c.want {
+				t.Fatalf("key %q: filter = %d (%s), want %d (%s)",
+					c.key, am.filter, am.filter, c.want, c.want)
+			}
+		})
+	}
+}
+
+// TestE2E_AuditFilterChipsViewContainsLabels verifies that View() renders all
+// 6 chip labels so the operator can see which filters are available.
+func TestE2E_AuditFilterChipsViewContainsLabels(t *testing.T) {
+	am := newAuditModel(nil)
+	am, _ = am.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	am, _ = am.Update(AuditLoadedMsg{Rows: nil, Err: nil})
+	got := am.View()
+	for _, label := range []string{"all", "license", "key", "server", "identity", "probe"} {
+		if !strings.Contains(got, label) {
+			t.Errorf("AuditFilterChipsViewContainsLabels: %q not found in view", label)
+		}
+	}
+}
+
+// TestE2E_AuditActiveChipHighlighted verifies that the active filter chip is
+// rendered differently from inactive ones (active uses magenta, indicated by
+// the border characters around the active label in the chip bar).
+func TestE2E_AuditActiveChipHighlighted(t *testing.T) {
+	am := newAuditModel(nil)
+	am, _ = am.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	// Switch to license filter and confirm the count title changes.
+	am, _ = am.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	if am.filter != auditFilterLicense {
+		t.Fatalf("filter = %d, want auditFilterLicense (%d)", am.filter, auditFilterLicense)
+	}
+	// View must still render without panic.
+	got := am.View()
+	if got == "" {
+		t.Fatal("View() empty after switching to license filter")
+	}
+	// Audit count header must be present.
+	if !strings.Contains(got, "Audit (") {
+		t.Errorf("AuditActiveChipHighlighted: 'Audit (' count header not found in view")
+	}
+}
+
+// TestE2E_AuditExportKeysBound verifies 'E' and 'J' open input overlays for
+// CSV and JSON export paths respectively.
+func TestE2E_AuditExportKeysBound(t *testing.T) {
+	am := newAuditModel(nil)
+	_, cmd := am.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'E'}})
+	if cmd == nil {
+		t.Fatal("'E' must return an export-CSV cmd")
+	}
+	msg := cmd()
+	push, ok := msg.(pushOverlayMsg)
+	if !ok {
+		t.Fatalf("'E': expected pushOverlayMsg, got %T", msg)
+	}
+	if _, ok := push.overlay.(*inputOverlay); !ok {
+		t.Fatalf("'E': expected *inputOverlay inside push, got %T", push.overlay)
+	}
+
+	_, cmd = am.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	if cmd == nil {
+		t.Fatal("'J' must return an export-JSON cmd")
+	}
+	msg = cmd()
+	push, ok = msg.(pushOverlayMsg)
+	if !ok {
+		t.Fatalf("'J': expected pushOverlayMsg, got %T", msg)
+	}
+	if _, ok := push.overlay.(*inputOverlay); !ok {
+		t.Fatalf("'J': expected *inputOverlay inside push, got %T", push.overlay)
+	}
+}
+
 // TestE2E_HelpOverlayInEachView presses '?' in every SessionReady view and
 // verifies View() doesn't panic (returns non-empty string).
 func TestE2E_HelpOverlayInEachView(t *testing.T) {

@@ -30,23 +30,51 @@ const (
 	auditFilterAll auditKindFilter = iota
 	auditFilterLicense
 	auditFilterKey
+	auditFilterServer
+	auditFilterIdentity
 	auditFilterProbe
 	auditFilterCount
 )
 
-func (f auditKindFilter) String() string {
+// label returns the display label for the chip.
+func (f auditKindFilter) label() string {
 	switch f {
 	case auditFilterAll:
 		return "all"
 	case auditFilterLicense:
-		return "license.*"
+		return "license"
 	case auditFilterKey:
-		return "key.*"
+		return "key"
+	case auditFilterServer:
+		return "server"
+	case auditFilterIdentity:
+		return "identity"
 	case auditFilterProbe:
-		return "probe.*"
+		return "probe"
 	}
 	return "all"
 }
+
+// hotkey returns the single character shortcut shown on the chip.
+func (f auditKindFilter) hotkey() string {
+	switch f {
+	case auditFilterAll:
+		return "f"
+	case auditFilterLicense:
+		return "l"
+	case auditFilterKey:
+		return "k"
+	case auditFilterServer:
+		return "s"
+	case auditFilterIdentity:
+		return "i"
+	case auditFilterProbe:
+		return "p"
+	}
+	return "f"
+}
+
+func (f auditKindFilter) String() string { return f.label() }
 
 type auditModel struct {
 	svc    *service.Services
@@ -127,7 +155,27 @@ func (m auditModel) Update(msg tea.Msg) (auditModel, tea.Cmd) {
 			return m, nil
 
 		case "f":
-			m.filter = (m.filter + 1) % auditFilterCount
+			m.filter = auditFilterAll
+			m.rebuildTable()
+			return m, nil
+		case "l":
+			m.filter = auditFilterLicense
+			m.rebuildTable()
+			return m, nil
+		case "k":
+			m.filter = auditFilterKey
+			m.rebuildTable()
+			return m, nil
+		case "s":
+			m.filter = auditFilterServer
+			m.rebuildTable()
+			return m, nil
+		case "i":
+			m.filter = auditFilterIdentity
+			m.rebuildTable()
+			return m, nil
+		case "p":
+			m.filter = auditFilterProbe
 			m.rebuildTable()
 			return m, nil
 
@@ -170,6 +218,14 @@ func (m *auditModel) visibleRows() []*ent.AuditEvent {
 			}
 		case auditFilterKey:
 			if !strings.HasPrefix(r.Kind, "issuer.") && !strings.HasPrefix(r.Kind, "recipient.") {
+				continue
+			}
+		case auditFilterServer:
+			if !strings.HasPrefix(r.Kind, "server.") {
+				continue
+			}
+		case auditFilterIdentity:
+			if !strings.HasPrefix(r.Kind, "identity.") {
 				continue
 			}
 		case auditFilterProbe:
@@ -236,30 +292,57 @@ func (m auditModel) renderPayload(row *ent.AuditEvent) string {
 }
 
 func (m auditModel) View() string {
-	// Filter chips.
-	filters := []auditKindFilter{auditFilterAll, auditFilterLicense, auditFilterKey, auditFilterProbe}
+	// ── Filter chip bar ───────────────────────────────────────────────────
+	// Each chip shows its hotkey and label; active chip uses magenta border.
+	allFilters := []auditKindFilter{
+		auditFilterAll, auditFilterLicense, auditFilterKey,
+		auditFilterServer, auditFilterIdentity, auditFilterProbe,
+	}
+	filterLabel := Dim.Render("filtres :")
 	var chips []string
-	for _, f := range filters {
+	for _, f := range allFilters {
+		label := HintKey.Render(f.hotkey()) + Dim.Render(f.label())
 		if f == m.filter {
-			chips = append(chips, PillActive.Render(f.String()))
+			chips = append(chips, lipgloss.NewStyle().
+				Foreground(Palette.Magenta).
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(Palette.Magenta).
+				Padding(0, 1).
+				Render(HintKey.Render(f.hotkey())+Base.Render(f.label())))
 		} else {
-			chips = append(chips, PillOff.Render(f.String()))
+			chips = append(chips, lipgloss.NewStyle().
+				Foreground(Palette.FgDim).
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(Palette.Border).
+				Padding(0, 1).
+				Render(label))
 		}
 	}
-	chipBar := " " + strings.Join(chips, " ")
+	exportHints := Dim.Render("E export CSV  J export JSON")
+	chipBar := lipgloss.JoinHorizontal(lipgloss.Top,
+		" ", filterLabel, "  ",
+		strings.Join(chips, " "),
+		"  ", exportHints,
+	)
 
-	body := lipgloss.JoinVertical(lipgloss.Left, chipBar, m.table.View())
+	// ── Table box with count in title ─────────────────────────────────────
+	count := len(m.visibleRows())
+	tableTitle := GlowCyan.Render(fmt.Sprintf("Audit (%d)", count)) +
+		"  " + Dim.Render("[d] detail · [r] refresh · [pgup/pgdn] page")
+	tableBox := lipgloss.JoinVertical(lipgloss.Left, tableTitle, m.table.View())
+
+	body := lipgloss.JoinVertical(lipgloss.Left, chipBar, "", tableBox)
 
 	if m.detail {
-		body = lipgloss.JoinVertical(lipgloss.Left, body,
-			BoxStyle.Width(m.width-2).Render(m.vp.View()))
+		detailBox := BoxFocused.Width(m.width - 4).Render(m.vp.View())
+		body = lipgloss.JoinVertical(lipgloss.Left, body, detailBox)
 	}
 
 	if m.err != nil {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
 	}
 
-	hints := []string{"f", "filter", "d", "detail", "r", "refresh", "E", "export CSV", "J", "export JSON"}
+	hints := []string{"f", "all", "l", "license", "k", "key", "s", "server", "i", "identity", "p", "probe", "d", "detail", "r", "refresh"}
 	return lipgloss.JoinVertical(lipgloss.Left, body, renderStatusBar(hints, m.width))
 }
 

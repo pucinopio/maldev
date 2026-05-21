@@ -3,15 +3,21 @@
 9 Settings                                                                                                              
                                                                                                            ───────────  
  audit                                                                                                                  
- ┌─────┐                                                                                                                
-│ all │                                                                                                                 
-└─────┘ ┌───────────┐                                                                                                   
-│ license.* │                                                                                                           
-└───────────┘ ┌───────┐                                                                                                 
-│ key.* │                                                                                                               
-└───────┘ ┌─────────┐                                                                                                   
-│ probe.* │                                                                                                             
-└─────────┘                                                                                                             
+ filtres :  ┌────────┐                     E export CSV  J export JSON                                                  
+            │  f all │                                                                                                  
+            └────────┘ ┌────────────┐                                                                                   
+            │  l license │                                                                                              
+            └────────────┘ ┌────────┐                                                                                   
+            │  k key │                                                                                                  
+            └────────┘ ┌───────────┐                                                                                    
+            │  s server │                                                                                               
+            └───────────┘ ┌─────────────┐                                                                               
+            │  i identity │                                                                                             
+            └─────────────┘ ┌──────────┐                                                                                
+            │  p probe │                                                                                                
+            └──────────┘                                                                                                
+                                                                                                                        
+Audit (0)  [d] detail · [r] refresh · [pgup/pgdn] page                                                                  
  TIMESTAMP             KIND                  ACTOR           TARGET            NOTE                                     
                                                                                                                         
                                                                                                                         
@@ -46,6 +52,6 @@
                                                                                                                         
                                                                                                                         
                                                                                                                         
- f filter   d detail   r refresh   E export CSV   J export JSON                                               ┌────────┐
+ f all   l license   k key   s server   i identity   p probe   d detail   r refresh                           ┌────────┐
 │ ~ tour │                                                                                                              
 └────────┘                                                                                                              
