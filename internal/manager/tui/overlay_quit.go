@@ -20,15 +20,29 @@ func newQuitOverlay(serversRunning bool) *quitOverlay {
 func (o *quitOverlay) Init() tea.Cmd { return nil }
 
 func (o *quitOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
-	km, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return o, nil
-	}
-	switch km.String() {
-	case "y", "Y", "enter":
+	switch m := msg.(type) {
+	case tea.KeyMsg:
+		switch m.String() {
+		case "y", "Y", "enter":
+			return o, func() tea.Msg { return OverlayDoneMsg{Result: true} }
+		case "n", "N", "esc", "q":
+			return o, func() tea.Msg { return OverlayDoneMsg{Result: false} }
+		}
+	case tea.MouseMsg:
+		if m.Button != tea.MouseButtonLeft || m.Action != tea.MouseActionPress {
+			return o, nil
+		}
+		// 58x12 modal; body has 1 (title) + 2 (blank+body) + 1 (blank) + 1 (footer)
+		// = 5 content lines + 4 (border+padding) = 9 rows; centered → starts at Y=1.
+		// Footer at content row 4 → overlay Y = 1 + 1 (border) + 1 (pad) + 4 = 7.
+		if m.Y != 7 {
+			return o, nil
+		}
+		// Inner X spans ~3..55. Cancel left half, Quit right half.
+		if m.X < 29 {
+			return o, func() tea.Msg { return OverlayDoneMsg{Result: false} }
+		}
 		return o, func() tea.Msg { return OverlayDoneMsg{Result: true} }
-	case "n", "N", "esc", "q":
-		return o, func() tea.Msg { return OverlayDoneMsg{Result: false} }
 	}
 	return o, nil
 }

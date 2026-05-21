@@ -37,9 +37,9 @@ func newInputOverlay(id, title, placeholder string, charLimit int) *inputOverlay
 func (o *inputOverlay) Init() tea.Cmd { return textinput.Blink }
 
 func (o *inputOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
-	switch msg := msg.(type) {
+	switch m := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
+		switch m.String() {
 		case "enter":
 			val := o.input.Value()
 			if val == "" {
@@ -51,6 +51,25 @@ func (o *inputOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 			}
 		case "esc":
 			return o, func() tea.Msg { return OverlayDoneMsg{Result: nil} }
+		}
+	case tea.MouseMsg:
+		if m.Button != tea.MouseButtonLeft || m.Action != tea.MouseActionPress {
+			return o, nil
+		}
+		// Same geometry as confirm overlay: 54x12 modal, footer at Y=7.
+		if m.Y != 7 {
+			return o, nil
+		}
+		if m.X < 27 {
+			return o, func() tea.Msg { return OverlayDoneMsg{Result: nil} }
+		}
+		val := o.input.Value()
+		if val == "" {
+			return o, nil
+		}
+		id, v := o.id, val
+		return o, func() tea.Msg {
+			return OverlayDoneMsg{Result: InputResultMsg{ID: id, Value: v}}
 		}
 	}
 	var cmd tea.Cmd

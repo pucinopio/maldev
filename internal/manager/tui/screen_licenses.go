@@ -57,7 +57,8 @@ type licensesModel struct {
 	svc    *service.Services
 	rows   []*ent.License
 	err    error
-	filter licenseFilter
+	filter    licenseFilter
+	detailTab int // 0=Ident, 1=Bind, 2=PEM, 3=Audit, 4=Chain
 	search textinput.Model
 	table  table.Model
 	detail bool
@@ -201,6 +202,22 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 
 		case "d", "enter":
 			m.detail = !m.detail
+			return m, nil
+
+		case "I":
+			m.detailTab = 0
+			return m, nil
+		case "B":
+			m.detailTab = 1
+			return m, nil
+		case "P":
+			m.detailTab = 2
+			return m, nil
+		case "A":
+			m.detailTab = 3
+			return m, nil
+		case "C":
+			m.detailTab = 4
 			return m, nil
 
 		case "n":
@@ -436,18 +453,7 @@ func (m licensesModel) renderDetail() string {
 	}
 	header := title + "\n" + tabStrip + strings.Repeat(" ", gap) + actions
 
-	// Identité tab body: 2-column KVs matching licenses.jsx ident tab.
-	statusPill := licStatusPill(row.Status)
-	body := lipgloss.JoinVertical(lipgloss.Left,
-		kvRow("status", statusPill, 14),
-		kvRow("subject", row.Subject, 14),
-		kvRow("issuer", row.IssuerName, 14),
-		kvRow("audience", strings.Join(row.Audience, ", "), 14),
-		kvRow("features", strings.Join(row.Features, ", "), 14),
-		kvRow("not-before", row.NotBefore.Format("2006-01-02"), 14),
-		kvRow("not-after", row.NotAfter.Format("2006-01-02"), 14),
-		kvRow("uuid", GlowCyan.Render(row.LicenseUUID), 14),
-	)
+	body := m.renderDetailBody(row)
 
 	return BoxStyle.Width(m.width - 2).Render(
 		lipgloss.JoinVertical(lipgloss.Left, header, "", body),
@@ -475,6 +481,37 @@ func licStatusPill(s licenseent.Status) string {
 }
 
 // handleRevokeResult applies the result of revokeOverlay back to this screen.
+// renderDetailBody dispatches to the per-tab body renderer based on detailTab.
+// Identité (0), Bindings (1), PEM (2), Audit (3), Chaîne (4).
+func (m licensesModel) renderDetailBody(row *ent.License) string {
+	switch m.detailTab {
+	case 1:
+		return Dim.Render("  bindings — machine fingerprint, TOTP, IP allowlist…") + "\n" +
+			Dim.Render("  (vue Bindings à implémenter)")
+	case 2:
+		return Dim.Render("  PEM blob — appuie sur [c] pour copier dans le presse-papier") + "\n" +
+			Base.Render("  -----BEGIN LICENSE-----\n  ...\n  -----END LICENSE-----")
+	case 3:
+		return Dim.Render("  historique audit pour cette licence (timestamp, kind, actor)") + "\n" +
+			Dim.Render("  (vue Audit chronologique à implémenter)")
+	case 4:
+		return Dim.Render("  chaîne de succession — re-émissions, parent, supersession") + "\n" +
+			Dim.Render("  (graphe à implémenter)")
+	}
+	// Default: Identité tab.
+	statusPill := licStatusPill(row.Status)
+	return lipgloss.JoinVertical(lipgloss.Left,
+		kvRow("status", statusPill, 14),
+		kvRow("subject", row.Subject, 14),
+		kvRow("issuer", row.IssuerName, 14),
+		kvRow("audience", strings.Join(row.Audience, ", "), 14),
+		kvRow("features", strings.Join(row.Features, ", "), 14),
+		kvRow("not-before", row.NotBefore.Format("2006-01-02"), 14),
+		kvRow("not-after", row.NotAfter.Format("2006-01-02"), 14),
+		kvRow("uuid", GlowCyan.Render(row.LicenseUUID), 14),
+	)
+}
+
 func (m licensesModel) handleRevokeResult(res RevokeConfirmedMsg) (licensesModel, tea.Cmd) {
 	if m.svc == nil {
 		return m, nil

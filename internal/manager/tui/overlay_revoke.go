@@ -37,9 +37,9 @@ func newRevokeOverlay(licenseID uuid.UUID, subject string) *revokeOverlay {
 func (o *revokeOverlay) Init() tea.Cmd { return textinput.Blink }
 
 func (o *revokeOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
-	switch msg := msg.(type) {
+	switch m := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
+		switch m.String() {
 		case "enter":
 			reason := o.input.Value()
 			if reason == "" {
@@ -51,6 +51,27 @@ func (o *revokeOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 			}
 		case "esc":
 			return o, func() tea.Msg { return OverlayDoneMsg{Result: nil} }
+		}
+	case tea.MouseMsg:
+		if m.Button != tea.MouseButtonLeft || m.Action != tea.MouseActionPress {
+			break
+		}
+		// 62x18 modal; footer is the last content line. Modal content ≈ 10 rows,
+		// rendered with border+padding = 14 rows total. Centered in 18 → starts at
+		// Y=2. Footer at content row 9 → overlay Y = 2 + 1 (border) + 1 (pad) + 9 = 13.
+		if m.Y != 13 {
+			break
+		}
+		if m.X < 31 {
+			return o, func() tea.Msg { return OverlayDoneMsg{Result: nil} }
+		}
+		reason := o.input.Value()
+		if reason == "" {
+			return o, nil
+		}
+		id := o.licenseID
+		return o, func() tea.Msg {
+			return OverlayDoneMsg{Result: RevokeConfirmedMsg{LicenseID: id, Reason: reason}}
 		}
 	}
 	var cmd tea.Cmd
