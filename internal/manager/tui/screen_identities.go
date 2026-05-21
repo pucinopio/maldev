@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
@@ -187,13 +185,43 @@ func (m identitiesModel) renderDetail() string {
 	if row == nil {
 		return Dim.Render("  no selection")
 	}
-	lines := []string{
-		fmt.Sprintf("  %-12s %s", "name:", row.Name),
-		fmt.Sprintf("  %-12s %s", "sha256:", row.Sha256),
-		fmt.Sprintf("  %-12s %s", "created:", row.CreatedAt.Format(time.RFC3339)),
-		fmt.Sprintf("  %-12s %s", "db-id:", row.ID.String()),
+
+	refs := m.refCount(row)
+	// Left column: Détail KVs matching identities.jsx expandedRowRender.
+	colW := detailColW(m.width)
+	refsLabel := fmt.Sprintf("%d licence(s) pinnée(s) sur cette identité", refs)
+	detail := lipgloss.JoinVertical(lipgloss.Left,
+		GlowCyan.Render("Détail"),
+		kvRow("name", row.Name, 10),
+		kvRow("sha256", GlowCyan.Render(row.Sha256), 10),
+		kvRow("bytes", "32 (aléatoires, crypto/rand)", 10),
+		kvRow("created", row.CreatedAt.Format("2006-01-02"), 10),
+		kvRow("refs", refsLabel, 10),
+	)
+
+	// Right column: Actions matching identities.jsx Actions section.
+	regenDanger := GlowYellow.Render("[R]")
+	if refs > 0 {
+		regenDanger = GlowRed.Render("[R]")
 	}
-	return BoxStyle.Width(m.width - 2).Render(strings.Join(lines, "\n"))
+	regenLabel := fmt.Sprintf("régénérer — casse %d licence(s) ⚠", refs)
+	deleteLabel := "supprimer"
+	if refs > 0 {
+		deleteLabel = fmt.Sprintf("supprimer (impossible : %d refs)", refs)
+	}
+	actions := lipgloss.JoinVertical(lipgloss.Left,
+		GlowCyan.Render("Actions"),
+		HintKey.Render("[E]")+" "+Dim.Render("exporter le .bin (prêt pour //go:embed)"),
+		regenDanger+" "+Dim.Render(regenLabel),
+		GlowRed.Render("[x]")+" "+Dim.Render(deleteLabel),
+	)
+
+	cols := lipgloss.JoinHorizontal(lipgloss.Top,
+		lipgloss.NewStyle().Width(colW).Render(detail),
+		"  ",
+		lipgloss.NewStyle().Width(colW).Render(actions),
+	)
+	return BoxStyle.Width(m.width - 2).Render(cols)
 }
 
 // handleIdentityInputResult processes overlay results for the identities screen.

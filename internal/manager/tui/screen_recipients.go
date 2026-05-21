@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
@@ -158,14 +156,37 @@ func (m recipientsModel) renderDetail() string {
 	if row == nil {
 		return Dim.Render("  no selection")
 	}
+
 	pubHex := fmt.Sprintf("%x", row.PublicKey)
-	lines := []string{
-		fmt.Sprintf("  %-14s %s", "name:", row.Name),
-		fmt.Sprintf("  %-14s %s", "public-key:", pubHex),
-		fmt.Sprintf("  %-14s %s", "created:", row.CreatedAt.Format(time.RFC3339)),
-		fmt.Sprintf("  %-14s %s", "db-id:", row.ID.String()),
+	if len(pubHex) > 32 {
+		pubHex = pubHex[:32] + "…"
 	}
-	return BoxStyle.Width(m.width - 2).Render(strings.Join(lines, "\n"))
+
+	// Left column: Détail KVs matching recipients.jsx expandedRowRender.
+	colW := detailColW(m.width)
+	detail := lipgloss.JoinVertical(lipgloss.Left,
+		GlowCyan.Render("Détail"),
+		kvRow("keyid", GlowCyan.Render(row.ID.String()[:8]+"…"), 10),
+		kvRow("name", row.Name, 10),
+		kvRow("created", row.CreatedAt.Format("2006-01-02"), 10),
+		kvRow("fpr", GlowCyan.Render(pubHex), 10),
+		kvRow("sealed", "—", 10),
+	)
+
+	// Right column: Actions matching recipients.jsx Actions section.
+	actions := lipgloss.JoinVertical(lipgloss.Left,
+		GlowCyan.Render("Actions"),
+		HintKey.Render("[E]")+" "+Dim.Render("exporter clé publique (.pub) pour l'embarquer"),
+		HintKey.Render("[K]")+" "+Dim.Render("exporter clé privée (.key) — réservé au destinataire"),
+		GlowRed.Render("[x]")+" "+Dim.Render("retirer (sealed payloads existants inutilisables)"),
+	)
+
+	cols := lipgloss.JoinHorizontal(lipgloss.Top,
+		lipgloss.NewStyle().Width(colW).Render(detail),
+		"  ",
+		lipgloss.NewStyle().Width(colW).Render(actions),
+	)
+	return BoxStyle.Width(m.width - 2).Render(cols)
 }
 
 // handleRecipientInputResult processes overlay results for the recipients screen.

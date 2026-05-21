@@ -199,10 +199,7 @@ func (m issuersModel) renderDetail() string {
 	}
 
 	// Left column: metadata KVs matching issuers.jsx expandedRowRender.
-	colW := m.width/2 - 4
-	if colW < 20 {
-		colW = 20
-	}
+	colW := detailColW(m.width)
 	meta := lipgloss.JoinVertical(lipgloss.Left,
 		GlowCyan.Render("Métadonnées"),
 		kvRow("keyid", GlowCyan.Render(row.KeyID), 10),

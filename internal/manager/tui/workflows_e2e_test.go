@@ -1705,6 +1705,48 @@ func TestE2E_RecipientsScreenLoadsRows(t *testing.T) {
 	}
 }
 
+// TestE2E_RecipientsDetailPanel verifies the 2-column detail panel renders
+// Détail KVs and Actions for the recipients screen.
+func TestE2E_RecipientsDetailPanel(t *testing.T) {
+	svc, _ := newTestServices(t)
+	if _, err := svc.Recipient.Generate(context.Background(), "acme-recipient", "operator"); err != nil {
+		t.Fatalf("Recipient.Generate: %v", err)
+	}
+
+	rm := newRecipientsModel(svc)
+	rm, _ = rm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	rm, _ = rm.Update(listRecipientsCmd(svc)())
+	rm.detail = true
+	got := rm.View()
+
+	for _, label := range []string{"Détail", "acme-recipient", "Actions", "[E]", "[K]", "[x]"} {
+		if !strings.Contains(got, label) {
+			t.Errorf("RecipientsDetailPanel: %q not found in view", label)
+		}
+	}
+}
+
+// TestE2E_IdentitiesDetailPanel verifies the 2-column detail panel renders
+// Détail KVs and Actions (with refs-aware danger styling) for the identities screen.
+func TestE2E_IdentitiesDetailPanel(t *testing.T) {
+	svc, _ := newTestServices(t)
+	if _, err := svc.Identity.Create(context.Background(), "prod-binary-v1", "operator"); err != nil {
+		t.Fatalf("Identity.Create: %v", err)
+	}
+
+	im := newIdentitiesModel(svc)
+	im, _ = im.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	im, _ = im.Update(listIdentitiesCmd(svc)())
+	im.detail = true
+	got := im.View()
+
+	for _, label := range []string{"Détail", "prod-binary-v1", "Actions", "[E]", "[R]", "[x]"} {
+		if !strings.Contains(got, label) {
+			t.Errorf("IdentitiesDetailPanel: %q not found in view", label)
+		}
+	}
+}
+
 // TestE2E_AuditScreenLoadsRows asserts auditModel populates from listAuditCmd
 // (any action through the service layer creates an audit row).
 func TestE2E_AuditScreenLoadsRows(t *testing.T) {

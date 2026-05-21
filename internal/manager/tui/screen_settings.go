@@ -211,9 +211,20 @@ func settingsBox(w int, title, body string) string {
 func settingsKV(key, value string) string { return kvRow(key, value, 22) }
 
 // kvRow renders a dim-key / fg-value row with an explicit key field width.
-// Shared by settingsKV, issuerKV, and similar detail-panel helpers.
+// Shared by settingsKV and detail-panel helpers across screen files.
 func kvRow(key, value string, keyW int) string {
 	return Dim.Render(fmt.Sprintf("%-*s", keyW, key)) + Base.Render(value)
+}
+
+// detailColW returns the width of each column in a 2-column detail panel
+// given the total screen width. Ensures a minimum of 20 chars so labels
+// are never truncated on narrow terminals.
+func detailColW(totalW int) int {
+	w := totalW/2 - 4
+	if w < 20 {
+		return 20
+	}
+	return w
 }
 
 // settingsToggle renders a toggle row: [✓]/[ ] label  on/off.
