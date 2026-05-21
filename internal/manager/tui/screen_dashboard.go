@@ -134,7 +134,13 @@ func (m dashboardModel) buildWidgetTree() Widget {
 	)
 
 	// Left column (~5/11 ≈ 45%): issuer key box + servers box.
-	keyContent := widgets.NewText(m.keyCardContent(), lipgloss.NewStyle())
+	// keyTextW = leftColW - 6 (box border+padding overhead) for ACTIVE pill alignment.
+	leftColW, _ := dashBodyColW(w)
+	keyTextW := leftColW - 6
+	if keyTextW < 1 {
+		keyTextW = 1
+	}
+	keyContent := widgets.NewText(m.keyCardContent(keyTextW), lipgloss.NewStyle())
 	keyBox := NewBoxWithHint(keyContent, "Clé d'émission active", "[k] gérer", false)
 	serversContent := widgets.NewText(m.serversCardContent(), lipgloss.NewStyle())
 	serversBox := NewBoxWithHint(serversContent, "Serveurs HTTP", "[7] détail · [s] start/stop", false)
@@ -215,16 +221,25 @@ func truncateFingerprint(fpr string) string {
 // keyCardContent builds the text content for the issuer key card.
 // The KeyID is shown large; name and fingerprint follow on subsequent lines.
 // An ACTIVE pill appears on the right of the first data line when a key is set.
-// keyActivePill is a flat single-line ACTIVE tag — GlowGreen without a border,
-// because the bordered PillActive is 3 lines tall and cannot be embedded inline.
+// keyActivePill is the inline ACTIVE badge — flat (no border) so it stays
+// on one line. The bordered PillActive is 3 lines tall and cannot be used inline.
 var keyActivePill = GlowGreen
 
-func (m dashboardModel) keyCardContent() string {
+// keyCardContent builds the issuer key card text for the given inner text width.
+// The ACTIVE pill is right-aligned on the KeyID line so it mirrors the reference.
+func (m dashboardModel) keyCardContent(textW int) string {
 	if m.activeKey.id == "" {
 		return Mute.Render("aucune clé active")
 	}
 	pill := keyActivePill.Render("ACTIVE")
-	idLine := GlowCyan.Render(m.activeKey.id) + "  " + pill
+	keyID := GlowCyan.Render(m.activeKey.id)
+	keyIDW := lipgloss.Width(keyID)
+	pillW := lipgloss.Width(pill)
+	gap := textW - keyIDW - pillW
+	if gap < 1 {
+		gap = 1
+	}
+	idLine := keyID + strings.Repeat(" ", gap) + pill
 	fpr := truncateFingerprint(m.activeKey.fingerprint)
 	return lipgloss.JoinVertical(lipgloss.Left,
 		idLine,

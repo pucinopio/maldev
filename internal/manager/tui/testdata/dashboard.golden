@@ -11,7 +11,7 @@
 └──────────────────────┘└──────────────────────┘└──────────────────────┘└──────────────────────┘└──────────────────────┘
 ┌──────────────────────────────────────────────────┐┌────────────────────────────────────────────────────────────┐      
 │ Clé d'émission active                 [k] gérer  ││ 5 dernières actions                      [8] tout l'audit  │      
-│ maldev-prod-01  ACTIVE                           ││ 00:00:00 license.issue uuid-1 (operator)                   │      
+│ maldev-prod-01                            ACTIVE ││ 00:00:00 license.issue uuid-1 (operator)                   │      
 │ nom production-2026                              ││ 00:00:00 issuer.create uuid-2 (operator)                   │      
 │ fpr ed25519:abcd…ef01                            ││                                                            │      
 │                                                  ││                                                            │      
