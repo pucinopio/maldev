@@ -374,10 +374,23 @@ func serverCountLabel(statuses map[string]httpsrv.Status) string {
 	return fmt.Sprintf("%d/3 running", activeServerCount(statuses))
 }
 
-// OnClick handles sub-tab bar clicks. Chrome takes Y=0..3 (title + tabs +
-// underline + breadcrumb) so the sub-tab bar is at Y=4. Each tab pill renders
-// as `[K] Label ●` separated by spaces.
+// OnClick handles sub-tab bar clicks (Y=4) AND the status pill / start hint
+// in the left-column Status box (~Y=7 for the [s] start text, Y=9 for the
+// ON/OFF pill).
+//
+// Chrome rows 0..3, sub-tabs Y=4, status box starts at Y=5 (top border).
+// Inside the status box: row 0=top border, row 1=title row, row 2=blank,
+// row 3=●/port line, row 4=stopped hint OR url, etc.
 func (m serversModel) OnClick(x, y, _ int) tea.Cmd {
+	// Click on the OFF/ON pill area or the [s] start hint toggles the active
+	// server. Pill renders inside the status box at row 3 (X≈3..10).
+	if y == 7 || y == 9 {
+		name := serverNames[m.activeTab]
+		if m.cards[m.activeTab].status.Running {
+			return func() tea.Msg { return serverStopMsg{name: name} }
+		}
+		return func() tea.Msg { return serverStartMsg{name: name} }
+	}
 	if y != 4 {
 		return nil
 	}

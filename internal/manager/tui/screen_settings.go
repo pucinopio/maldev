@@ -54,11 +54,13 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 		m.row = msg.Row
 		return m, nil
 	case settingsSetThemeMsg:
-		// Persist would go through svc.Settings.SetTheme; for now we just
-		// acknowledge so the UI feedback proves the click landed. Wire to the
-		// real service in a follow-up once the schema lands.
-		_ = msg
-		return m, loadSettingsCmd(m.svc)
+		// Echo the theme choice via an OK overlay so the user sees that the
+		// click landed. Persistence (svc.Settings.SetTheme) is a follow-up.
+		themeName := []string{"neon", "mono", "nord-soft"}[max(0, min(2, msg.idx-1))]
+		return m, func() tea.Msg {
+			return pushOverlayMsg{NewOKOverlay("Thème",
+				"Thème '"+themeName+"' sélectionné (stub — persistence à câbler).")}
+		}
 
 	case settingsToggleMsg:
 		// Toggle the in-memory row so the UI feedback proves the click landed.

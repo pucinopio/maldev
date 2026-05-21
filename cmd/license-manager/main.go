@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/term"
 
 	"github.com/oioio-space/maldev/internal/manager/crypto"
+	"github.com/oioio-space/maldev/internal/manager/httpsrv"
 	"github.com/oioio-space/maldev/internal/manager/service"
 	"github.com/oioio-space/maldev/internal/manager/store"
 	"github.com/oioio-space/maldev/internal/manager/tui"
@@ -125,7 +127,15 @@ func runMainTUI(ctx context.Context, st *store.Store, kek *crypto.KEK, flags cli
 		return printSmokeSummary(ctx, svc)
 	}
 
-	root := tui.New(svc, nil /* httpsrv wired in Phase 4 */, tui.SessionReady)
+	// Build the httpsrv bundle so the Servers screen can actually start/stop
+	// the three HTTP services.
+	rev := httpsrv.NewRevocationServer(svc.Revoke, svc.License, svc.Settings, svc.KEK)
+	hb := httpsrv.NewHeartbeatServer(svc.Issuer, svc.License, svc.Settings)
+	pb := httpsrv.NewProbeServer(svc.Probe, svc.Settings)
+	bundle := httpsrv.NewBundle(rev, hb, pb)
+	defer func() { _ = bundle.StopAll(5 * time.Second) }()
+
+	root := tui.New(svc, bundle, tui.SessionReady)
 	p := tea.NewProgram(root, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
 	return err
