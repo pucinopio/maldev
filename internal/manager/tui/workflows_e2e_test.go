@@ -1153,6 +1153,297 @@ func TestE2E_QROverlayQRSavedMsgUpdatesState(t *testing.T) {
 	_ = o
 }
 
+// ── Bug B guards: passphrase prompt quit + pending-pass value ─────────────────
+
+// TestE2E_PassphraseSuccessEmitsQuit drives passphraseModel (with a real
+// in-memory store) with the correct passphrase + Enter, dispatches the async
+// UnlockResultMsg, and asserts:
+//   - finalCmd is a tea.BatchMsg containing both PassphraseResult (with the
+//     correct Passphrase value) and a tea.QuitMsg.
+func TestE2E_PassphraseSuccessEmitsQuit(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.New(ctx, ":memory:")
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	salt := [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	kek := crypto.DeriveFromPassphrase("right-pass", salt)
+	canary, err := crypto.NewCanary(kek)
+	if err != nil {
+		t.Fatalf("crypto.NewCanary: %v", err)
+	}
+	kek.Wipe()
+	if err := st.EnsureSingletons(ctx, salt[:], canary); err != nil {
+		t.Fatalf("EnsureSingletons: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	var m tea.Model = NewPassphrasePrompt(st, "")
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = driveStr(m, "right-pass")
+	// Enter → TryUnlockCmd is returned.
+	var unlockCmd tea.Cmd
+	m, unlockCmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if unlockCmd == nil {
+		t.Fatal("Enter with store wired must return TryUnlockCmd, got nil")
+	}
+	unlockMsg := unlockCmd()
+	// Dispatch the async result.
+	var finalCmd tea.Cmd
+	m, finalCmd = m.Update(unlockMsg)
+	if finalCmd == nil {
+		t.Fatal("UnlockResultMsg OK must return a batch cmd, got nil")
+	}
+	batch, ok := finalCmd().(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("expected tea.BatchMsg, got %T", finalCmd())
+	}
+	var gotPassphrase string
+	var gotQuit bool
+	for _, c := range batch {
+		if c == nil {
+			continue
+		}
+		msg := c()
+		switch v := msg.(type) {
+		case PassphraseResult:
+			gotPassphrase = v.Passphrase
+		case tea.QuitMsg:
+			gotQuit = true
+		}
+	}
+	if gotPassphrase != "right-pass" {
+		t.Fatalf("PassphraseResult.Passphrase = %q, want 'right-pass'", gotPassphrase)
+	}
+	if !gotQuit {
+		t.Fatal("BatchMsg must include tea.QuitMsg so the sub-program exits")
+	}
+	_ = m
+}
+
+// TestE2E_PassphraseFailureShowsErrorNotQuit verifies that a wrong passphrase
+// attempt leaves the program running: err is set, no tea.Quit is emitted, and
+// attempts counter increments.
+func TestE2E_PassphraseFailureShowsErrorNotQuit(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.New(ctx, ":memory:")
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	salt := [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	kek := crypto.DeriveFromPassphrase("right-pass", salt)
+	canary, err := crypto.NewCanary(kek)
+	if err != nil {
+		t.Fatalf("crypto.NewCanary: %v", err)
+	}
+	kek.Wipe()
+	if err := st.EnsureSingletons(ctx, salt[:], canary); err != nil {
+		t.Fatalf("EnsureSingletons: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	var m tea.Model = NewPassphrasePrompt(st, "")
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = driveStr(m, "wrong-pass")
+	var unlockCmd tea.Cmd
+	m, unlockCmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if unlockCmd == nil {
+		t.Fatal("Enter must return unlock cmd")
+	}
+	unlockMsg := unlockCmd()
+	var finalCmd tea.Cmd
+	m, finalCmd = m.Update(unlockMsg)
+
+	pm, ok := m.(passphraseModel)
+	if !ok {
+		t.Fatalf("expected passphraseModel, got %T", m)
+	}
+	if pm.err == "" {
+		t.Fatal("wrong passphrase must set err, got empty")
+	}
+	if !strings.Contains(pm.err, "wrong passphrase") {
+		t.Fatalf("err = %q, want substring 'wrong passphrase'", pm.err)
+	}
+	if pm.attempts != 1 {
+		t.Fatalf("attempts = %d, want 1", pm.attempts)
+	}
+	// No tea.Quit — the program must stay open for retry.
+	if finalCmd != nil {
+		msg := finalCmd()
+		if _, isQuit := msg.(tea.QuitMsg); isQuit {
+			t.Fatal("wrong-pass must NOT emit tea.QuitMsg (program must stay open for retry)")
+		}
+	}
+}
+
+// TestE2E_PassphraseAfterClearStillProducesValue is the direct Bug B guard.
+// It drives the prompt with the correct passphrase, presses Enter (which clears
+// the input), dispatches the UnlockResultMsg, and asserts the emitted
+// PassphraseResult carries the typed value — not the empty string produced by
+// the unfixed code that reads m.input.Value() AFTER SetValue("").
+func TestE2E_PassphraseAfterClearStillProducesValue(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.New(ctx, ":memory:")
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	salt := [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	kek := crypto.DeriveFromPassphrase("correct-pass", salt)
+	canary, err := crypto.NewCanary(kek)
+	if err != nil {
+		t.Fatalf("crypto.NewCanary: %v", err)
+	}
+	kek.Wipe()
+	if err := st.EnsureSingletons(ctx, salt[:], canary); err != nil {
+		t.Fatalf("EnsureSingletons: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	var m tea.Model = NewPassphrasePrompt(st, "")
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = driveStr(m, "correct-pass")
+	var unlockCmd tea.Cmd
+	m, unlockCmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if unlockCmd == nil {
+		t.Fatal("Enter must return TryUnlockCmd")
+	}
+	// After Enter the input has been cleared — m.input.Value() is now "".
+	// The bug: unfixed code does m.result = m.input.Value() in the OK branch,
+	// which gives "". The fix saves pendingPass before the clear.
+	unlockMsg := unlockCmd()
+	var finalCmd tea.Cmd
+	m, finalCmd = m.Update(unlockMsg)
+	if finalCmd == nil {
+		t.Fatal("UnlockResultMsg OK must return cmd")
+	}
+	batch, ok := finalCmd().(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("expected tea.BatchMsg, got %T", finalCmd())
+	}
+	var gotPassphrase string
+	for _, c := range batch {
+		if c == nil {
+			continue
+		}
+		if pr, ok := c().(PassphraseResult); ok {
+			gotPassphrase = pr.Passphrase
+		}
+	}
+	if gotPassphrase != "correct-pass" {
+		t.Fatalf("PassphraseResult.Passphrase = %q, want 'correct-pass' — Bug B: input was cleared before result was read",
+			gotPassphrase)
+	}
+	_ = m
+}
+
+// ── Bug A guards: onboarding chains into main TUI ─────────────────────────────
+
+// TestE2E_OnboardingPersistEnablesMainTUILaunch guards Bug A. After
+// PersistOnboarding writes the DB, the post-onboarding code path opens the
+// store, derives the KEK, verifies the canary, constructs *service.Services,
+// and builds tui.New(svc, nil, SessionReady). Sending WindowSizeMsg must
+// produce a non-empty View() containing "Dashboard".
+func TestE2E_OnboardingPersistEnablesMainTUILaunch(t *testing.T) {
+	ctx := context.Background()
+	dbPath := t.TempDir() + "/chain.db"
+
+	msg := OnboardingDoneMsg{
+		Passphrase:  "chain-pass-99",
+		IssuerName:  "chain-issuer",
+		IssuerKeyID: "key-chain",
+	}
+	if err := PersistOnboarding(ctx, dbPath, msg); err != nil {
+		t.Fatalf("PersistOnboarding: %v", err)
+	}
+
+	// Simulate the chain runOnboarding does after persist.
+	st, err := store.New(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	row, err := st.Client.Setting.Get(ctx, 1)
+	if err != nil {
+		t.Fatalf("Setting.Get: %v", err)
+	}
+	var salt [16]byte
+	copy(salt[:], row.KekSalt)
+	kek := crypto.DeriveFromPassphrase("chain-pass-99", salt)
+	if !kek.VerifyCanary(row.KekCanary) {
+		kek.Wipe()
+		t.Fatal("canary mismatch — PersistOnboarding wrote a different passphrase than we derived from")
+	}
+
+	svc := service.New(st, kek)
+	t.Cleanup(func() { _ = svc.Close() })
+
+	var m tea.Model = New(svc, nil, SessionReady)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	view := m.View()
+	if view == "" {
+		t.Fatal("View() is empty after onboarding chain — TUI did not render")
+	}
+	if !strings.Contains(view, "Dashboard") {
+		t.Fatalf("View() does not contain 'Dashboard'; got:\n%s", view)
+	}
+}
+
+// TestE2E_MainTUIRendersDashboardAfterOnboarding is an integration-level guard:
+// calls PersistOnboarding, walks the same code-path main.go will follow
+// (open store → derive KEK → verify canary → build services → build rootModel),
+// and asserts the dashboard view reflects "1 issuer" seeded by onboarding.
+func TestE2E_MainTUIRendersDashboardAfterOnboarding(t *testing.T) {
+	ctx := context.Background()
+	dbPath := t.TempDir() + "/integration.db"
+
+	if err := PersistOnboarding(ctx, dbPath, OnboardingDoneMsg{
+		Passphrase:  "integ-pass",
+		IssuerName:  "integ-issuer",
+		IssuerKeyID: "key-integ",
+	}); err != nil {
+		t.Fatalf("PersistOnboarding: %v", err)
+	}
+
+	st, err := store.New(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	row, err := st.Client.Setting.Get(ctx, 1)
+	if err != nil {
+		t.Fatalf("Setting.Get: %v", err)
+	}
+	var salt [16]byte
+	copy(salt[:], row.KekSalt)
+	kek := crypto.DeriveFromPassphrase("integ-pass", salt)
+	if !kek.VerifyCanary(row.KekCanary) {
+		kek.Wipe()
+		t.Fatal("canary mismatch")
+	}
+
+	svc := service.New(st, kek)
+	t.Cleanup(func() { _ = svc.Close() })
+
+	// Verify service layer sees exactly 1 issuer created by onboarding.
+	issuers, err := svc.Issuer.List(ctx)
+	if err != nil {
+		t.Fatalf("Issuer.List: %v", err)
+	}
+	if len(issuers) != 1 {
+		t.Fatalf("expected 1 issuer from onboarding, got %d", len(issuers))
+	}
+	if issuers[0].Name != "integ-issuer" {
+		t.Fatalf("issuer Name = %q, want 'integ-issuer'", issuers[0].Name)
+	}
+
+	// Build rootModel in SessionReady and confirm dashboard renders.
+	var m tea.Model = New(svc, nil, SessionReady)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	view := m.View()
+	if !strings.Contains(view, "Dashboard") {
+		t.Fatalf("dashboard view does not contain 'Dashboard' after onboarding; got:\n%s", view)
+	}
+}
+
 // keyName is a debug helper for table-driven key tests.
 func keyName(k tea.KeyType) string {
 	switch k {
