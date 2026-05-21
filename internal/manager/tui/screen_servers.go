@@ -78,6 +78,12 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 		m.log, _ = w.(*serverLog)
 		return m, cmd
 
+	case serverSubTabClickMsg:
+		m.activeTab = msg.tab
+		w, cmd := m.log.Update(serverLogFilterMsg{server: msg.srv})
+		m.log, _ = w.(*serverLog)
+		return m, cmd
+
 	case serverLogClearMsg, serverLogFilterMsg:
 		w, cmd := m.log.Update(msg)
 		m.log, _ = w.(*serverLog)
@@ -366,4 +372,38 @@ func activeServerCount(statuses map[string]httpsrv.Status) int {
 // serverCountLabel formats "N/3 running" for the dashboard tile.
 func serverCountLabel(statuses map[string]httpsrv.Status) string {
 	return fmt.Sprintf("%d/3 running", activeServerCount(statuses))
+}
+
+// OnClick handles sub-tab bar clicks. The bar lives on body row Y=3 (title+tabs+
+// breadcrumb=3) and contains [R] Revocation, [H] Heartbeat, [P] Fingerprint probe.
+// Each tab pill renders as `[K] Label ●` separated by spaces.
+func (m serversModel) OnClick(x, y, _ int) tea.Cmd {
+	if y != 3 {
+		return nil
+	}
+	labels := []struct {
+		label string
+		tab   serverSubTab
+		srv   string
+	}{
+		{"[R] Revocation ●", serverTabRevocation, "revocation"},
+		{"[H] Heartbeat ●", serverTabHeartbeat, "heartbeat"},
+		{"[P] Fingerprint probe ●", serverTabProbe, "probe"},
+	}
+	cursor := 0
+	for _, t := range labels {
+		w := lipgloss.Width(t.label) + 2 // 1 left + 1 right padding
+		if x >= cursor && x < cursor+w {
+			target, srv := t.tab, t.srv
+			return func() tea.Msg { return serverSubTabClickMsg{tab: target, srv: srv} }
+		}
+		cursor += w
+	}
+	return nil
+}
+
+// serverSubTabClickMsg signals a sub-tab click; handled in Update.
+type serverSubTabClickMsg struct {
+	tab serverSubTab
+	srv string
 }

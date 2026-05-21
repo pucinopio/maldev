@@ -11,6 +11,7 @@ func init() {
 	// importing tui (which would create a cycle).
 	core.Colors.Bg1 = "#0a0a18"
 	core.Colors.Border = "#2a2a52"
+	core.Colors.BorderBright = "#4a4aa0"
 	core.Colors.Fg = "#e6e6ff"
 	core.Colors.FgDim = "#7a7ab8"
 	core.Colors.FgMute = "#4a4a78"
@@ -43,7 +44,10 @@ var (
 	GlowRed    = lipgloss.NewStyle().Foreground(Palette.Red).Bold(true)
 	GlowYellow = lipgloss.NewStyle().Foreground(Palette.Yellow).Bold(true)
 
-	BoxStyle   = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(Palette.Border).Padding(0, 1)
+	// BorderBright is used for box edges so the grid is legible on dark
+	// terminals — Palette.Border is intentionally dim and only meant for
+	// inner separators / inactive chips.
+	BoxStyle   = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(Palette.BorderBright).Padding(0, 1)
 	BoxFocused = BoxStyle.Border(lipgloss.NormalBorder()).BorderForeground(Palette.Magenta)
 
 	TabActive = lipgloss.NewStyle().Foreground(Palette.Fg).Bold(true).Padding(0, 2).

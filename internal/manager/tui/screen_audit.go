@@ -132,6 +132,11 @@ func (m auditModel) Update(msg tea.Msg) (auditModel, tea.Cmd) {
 		m.rebuildTable()
 		return m, nil
 
+	case auditFilterClickMsg:
+		m.filter = msg.f
+		m.rebuildTable()
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.detail {
 			switch msg.String() {
@@ -412,3 +417,30 @@ func writeAuditJSON(path string, rows []*ent.AuditEvent) error {
 	}
 	return os.WriteFile(path, b, 0o644)
 }
+
+// OnClick handles filter-chip clicks on row Y=3 (chip bar).
+// Mirrors chipBar layout: 1 space + "filtres :" + 2 spaces + chips separated
+// by zero spaces (each chip is its own bordered pill).
+func (m auditModel) OnClick(x, y, _ int) tea.Cmd {
+	if y < 3 || y > 5 {
+		return nil
+	}
+	allFilters := []auditKindFilter{
+		auditFilterAll, auditFilterLicense, auditFilterKey,
+		auditFilterServer, auditFilterIdentity, auditFilterProbe,
+	}
+	// 1 leading space + "filtres :" (9 chars) + 2 spaces = 12 cells before chips.
+	cursor := 12
+	for _, f := range allFilters {
+		// Pill width: hotkey(1) + label width + border+padding(4)
+		w := 1 + lipgloss.Width(f.label()) + 4
+		if x >= cursor && x < cursor+w {
+			target := f
+			return func() tea.Msg { return auditFilterClickMsg{f: target} }
+		}
+		cursor += w
+	}
+	return nil
+}
+
+type auditFilterClickMsg struct{ f auditKindFilter }

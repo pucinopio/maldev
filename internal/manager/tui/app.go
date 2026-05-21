@@ -592,11 +592,38 @@ func (m rootModel) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		cmd := dispatchClick(tree, msg.X, msg.Y)
 		return m, cmd
 	}
+	// Per-screen click router: each non-dashboard screen implements its own
+	// hit-testing for chips / sub-tabs / rows. Screens that don't implement
+	// ScreenMouseClick simply ignore body clicks (tab strip still works).
+	if mc, ok := m.activeScreenWithMouse(); ok {
+		cmd := mc.OnClick(msg.X, msg.Y, m.width)
+		return m, cmd
+	}
 	if m.rootWidget != nil {
 		cmd := dispatchClick(m.rootWidget, msg.X, msg.Y)
 		return m, cmd
 	}
 	return m, nil
+}
+
+// ScreenMouseClick is the optional interface screens implement to handle clicks
+// inside their content area (everything below row 2 — title + tabs). x,y are
+// absolute terminal cell coordinates; width is the current terminal width so
+// hit-testing helpers can mirror the renderer's layout decisions.
+type ScreenMouseClick interface {
+	OnClick(x, y, width int) tea.Cmd
+}
+
+func (m rootModel) activeScreenWithMouse() (ScreenMouseClick, bool) {
+	switch m.active {
+	case ViewLicenses:
+		return m.licenses, true
+	case ViewServers:
+		return m.servers, true
+	case ViewAudit:
+		return m.audit, true
+	}
+	return nil, false
 }
 
 // dispatchClick walks the widget tree rooted at w and calls OnClick on the

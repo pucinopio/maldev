@@ -11,8 +11,9 @@ import (
 // Colors holds the palette values injected by tui/theme.go at init time.
 // widgets/ reads these instead of hard-coding hex literals.
 var Colors struct {
-	Bg1      lipgloss.Color // #0a0a18 — tab bar / status bar background
-	Border   lipgloss.Color // #2a2a52 — default border
+	Bg1          lipgloss.Color // #0a0a18 — tab bar / status bar background
+	Border       lipgloss.Color // #2a2a52 — dim separator border
+	BorderBright lipgloss.Color // #4a4aa0 — primary box border
 	Fg       lipgloss.Color // #e6e6ff — primary text
 	FgDim    lipgloss.Color // #7a7ab8 — secondary / dim text
 	FgMute   lipgloss.Color // #4a4a78 — muted / separator

@@ -97,7 +97,7 @@ var tileStyleCache = sync.OnceValue(func() tileStyleSet {
 func tileOuterBorder(noLeftBorder bool) lipgloss.Style {
 	st := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
-		BorderForeground(core.Colors.Border)
+		BorderForeground(core.Colors.BorderBright)
 	if noLeftBorder {
 		st = st.BorderLeft(false)
 	}

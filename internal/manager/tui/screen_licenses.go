@@ -169,6 +169,11 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 		m.rebuildTable()
 		return m, nil
 
+	case licenseFilterClickMsg:
+		m.filter = msg.f
+		m.rebuildTable()
+		return m, nil
+
 	case tea.KeyMsg:
 		// Search mode absorbs keys.
 		if m.search.Focused() {
@@ -356,6 +361,32 @@ func (m licensesModel) View() string {
 	// Status bar rendered globally by the root chrome — don't duplicate here.
 	return body
 }
+
+// OnClick handles mouse clicks on the licenses screen.
+// Chip row is at body row Y=3 (title=0, tabs=1, breadcrumb=2, chips=3).
+// Each chip is a 3-line bordered pill — the click is on the middle row.
+func (m licensesModel) OnClick(x, y, _ int) tea.Cmd {
+	// Chip row spans Y=3..5 (3-line pill). Treat any click inside as a chip click.
+	if y < 3 || y > 5 {
+		return nil
+	}
+	filters := []licenseFilter{licFilterAll, licFilterActive, licFilterExpiring, licFilterExpired, licFilterRevoked, licFilterSuperseded}
+	// Mirror renderFilterBar layout: 1 PaddingLeft + each pill(label+4 border/padding) + 1 separator space.
+	cursor := 1
+	for _, f := range filters {
+		w := lipgloss.Width(f.String()) + 4
+		if x >= cursor && x < cursor+w {
+			target := f
+			return func() tea.Msg { return licenseFilterClickMsg{f: target} }
+		}
+		cursor += w + 1
+	}
+	return nil
+}
+
+// licenseFilterClickMsg is dispatched from OnClick when the operator clicks a
+// filter chip; the licenses model handles it in Update.
+type licenseFilterClickMsg struct{ f licenseFilter }
 
 func (m licensesModel) renderFilterBar() string {
 	filters := []licenseFilter{licFilterAll, licFilterActive, licFilterExpiring, licFilterExpired, licFilterRevoked, licFilterSuperseded}

@@ -2577,3 +2577,104 @@ func min1(a, b int) int {
 	return b
 }
 
+// TestE2E_EveryViewKeysDoNotPanic visits every view via digit keys + Tab/Shift-
+// Tab and presses every documented hotkey in turn. It asserts the model stays
+// alive (View() returns a non-empty string) for every (view × key) cell.
+func TestE2E_EveryViewKeysDoNotPanic(t *testing.T) {
+	var m tea.Model = New(nil, nil, SessionReady)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+
+	cases := []struct {
+		view ViewID
+		key  rune
+		keys []rune
+	}{
+		{ViewDashboard, '1', []rune{'a', 'r', 'e', 'w', 'u', 'k', '?', 'r'}},
+		{ViewLicenses, '2', []rune{'f', 'f', 'f', 'f', 'f', 'f', '/'}},
+		{ViewIssuers, '3', []rune{'d', 'd'}},
+		{ViewRecipients, '4', []rune{'d'}},
+		{ViewIdentities, '5', []rune{'d'}},
+		{ViewRevocation, '6', []rune{'r'}},
+		{ViewServers, '7', []rune{'R', 'H', 'P', 'c'}},
+		{ViewAudit, '8', []rune{'l', 'k', 's', 'i', 'p', 'f'}},
+		{ViewSettings, '9', []rune{}},
+	}
+	for _, c := range cases {
+		m = driveRune(m, c.key)
+		r := rootOf(t, m)
+		if r.active != c.view {
+			t.Errorf("digit %c expected to land on %s, got %s", c.key, c.view, r.active)
+		}
+		for _, k := range c.keys {
+			m = driveRune(m, k)
+			view := m.View()
+			if view == "" {
+				t.Errorf("View() returned empty after %q on %s", string(k), c.view)
+			}
+			// Dismiss any overlay opened by the key so we don't accidentally leak
+			// modal state into the next iteration.
+			if r2 := rootOf(t, m); len(r2.overlays) > 0 {
+				updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+				if cmd != nil {
+					if msg := cmd(); msg != nil {
+						updated, _ = updated.Update(msg)
+					}
+				}
+				m = updated
+			}
+		}
+	}
+}
+
+// TestE2E_LicenseFilterChipClick guards that clicking the licenses filter
+// chip row dispatches a licenseFilterClickMsg and the model updates its filter.
+func TestE2E_LicenseFilterChipClick(t *testing.T) {
+	var m tea.Model = New(nil, nil, SessionReady)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	m = driveRune(m, '2') // Licenses
+	// First chip (`all`) is at x≈1..7 on row Y=3. Click "active" at ~x=12.
+	updated, cmd := m.Update(tea.MouseMsg{
+		X: 12, Y: 3,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionPress,
+	})
+	if cmd != nil {
+		if msg := cmd(); msg != nil {
+			updated, _ = updated.Update(msg)
+		}
+	}
+	m = updated
+	r := rootOf(t, m)
+	if r.licenses.filter == licFilterAll {
+		t.Errorf("expected click on `active` chip to change filter, still licFilterAll")
+	}
+}
+
+// TestE2E_ServerSubTabClick guards that clicking the servers sub-tab row
+// switches the active server tab.
+func TestE2E_ServerSubTabClick(t *testing.T) {
+	var m tea.Model = New(nil, nil, SessionReady)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	m = driveRune(m, '7') // Servers
+	r := rootOf(t, m)
+	if r.servers.activeTab != serverTabRevocation {
+		t.Fatalf("expected starting tab=Revocation, got %v", r.servers.activeTab)
+	}
+	// "[R] Revocation ●" ≈ 16 cells; click on Heartbeat ~ x=20 on row Y=3.
+	updated, cmd := m.Update(tea.MouseMsg{
+		X: 22, Y: 3,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionPress,
+	})
+	if cmd != nil {
+		if msg := cmd(); msg != nil {
+			updated, _ = updated.Update(msg)
+		}
+	}
+	m = updated
+	r = rootOf(t, m)
+	if r.servers.activeTab != serverTabHeartbeat {
+		t.Errorf("expected Heartbeat after click, got %v", r.servers.activeTab)
+	}
+}
+
