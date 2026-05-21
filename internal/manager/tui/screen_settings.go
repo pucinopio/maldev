@@ -53,13 +53,41 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 		m.err = msg.Err
 		m.row = msg.Row
 		return m, nil
+	case settingsActionMsg:
+		// Action dispatch wires the toolbar + future click handlers to the
+		// same code path so the user sees identical behaviour from either input.
+		switch msg.kind {
+		case "rekey":
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newInputOverlay("settings-rekey", "Changer la passphrase de la DB", "nouvelle passphrase…", 200)}
+			}
+		case "vacuum":
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newConfirmOverlay("settings-vacuum", "VACUUM + ANALYZE", "Lancer VACUUM puis ANALYZE sur la base ?", "lancer", "annuler", false)}
+			}
+		case "backup":
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newInputOverlay("settings-backup", "Backup chiffré", "/path/to/backup.tar.gz.enc", 256)}
+			}
+		}
 	case tea.KeyMsg:
-		if msg.String() == "r" {
+		switch msg.String() {
+		case "r":
 			return m, loadSettingsCmd(m.svc)
+		case "P":
+			return m, func() tea.Msg { return settingsActionMsg{kind: "rekey"} }
+		case "V":
+			return m, func() tea.Msg { return settingsActionMsg{kind: "vacuum"} }
+		case "B":
+			return m, func() tea.Msg { return settingsActionMsg{kind: "backup"} }
 		}
 	}
 	return m, nil
 }
+
+// settingsActionMsg is dispatched by both key handlers and OnClick so the
+// keyboard and mouse paths converge in one place.
+type settingsActionMsg struct{ kind string }
 
 func (m settingsModel) View() string {
 	w := m.width
