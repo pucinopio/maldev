@@ -3,22 +3,22 @@
 9 Settings                                                                                                              
                                                                                                            ───────────  
  audit                                                                                                                  
- filtres :  ┌────────┐                     E export CSV  J export JSON                                                  
-            │  f all │                                                                                                  
-            └────────┘ ┌────────────┐                                                                                   
-            │  l license │                                                                                              
-            └────────────┘ ┌────────┐                                                                                   
-            │  k key │                                                                                                  
-            └────────┘ ┌───────────┐                                                                                    
-            │  s server │                                                                                               
-            └───────────┘ ┌─────────────┐                                                                               
-            │  i identity │                                                                                             
-            └─────────────┘ ┌──────────┐                                                                                
-            │  p probe │                                                                                                
-            └──────────┘                                                                                                
+ filtres :  ┌────────┐┌────────────┐┌────────┐┌───────────┐┌─────────────┐┌──────────┐  E export CSV  J export JSON     
+            │  f all ││  l license ││  k key ││  s server ││  i identity ││  p probe │                                  
+            └────────┘└────────────┘└────────┘└───────────┘└─────────────┘└──────────┘                                  
                                                                                                                         
 Audit (0)  [d] detail · [r] refresh · [pgup/pgdn] page                                                                  
  TIMESTAMP             KIND                  ACTOR           TARGET            NOTE                                     
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

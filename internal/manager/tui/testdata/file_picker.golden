@@ -3,21 +3,21 @@
 9 Settings                                                                                                              
                ──────────────                                                                                           
  licenses                                                                                                               
- ┌─────┐                                                                                                                
-│ all │                                                                                                                 
-└─────┘ ┌────────┐                                                                                                      
-│ active │                                                                                                              
-└────────┘ ┌──────────┐                                                                                                 
-│ expiring │                                                                                                            
-└──────────┘ ┌─────────┐                                                                                                
-│ expired │                                                                                                             
-└─────────┘ ┌─────────┐                                                                                                 
-│ revoked │                                                                                                             
-└─────────┘ ┌────────────┐                                                                                              
-│ superseded │                                                                                                          
-└────────────┘                                                                                                          
+ ┌─────┐ ┌────────┐ ┌──────────┐ ┌─────────┐ ┌─────────┐ ┌────────────┐                                                 
+│ all │ │ active │ │ expiring │ │ expired │ │ revoked │ │ superseded │                                                  
+└─────┘ └────────┘ └──────────┘ └─────────┘ └─────────┘ └────────────┘                                                  
  / to search                                                                                                            
  STATUS       SUBJECT                 AUDIENCE          KEYID               EXPIRES       FEATURES                      
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

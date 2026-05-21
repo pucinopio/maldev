@@ -178,8 +178,8 @@ func (m issuersModel) View() string {
 	if m.err != nil {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
 	}
-	hints := []string{"a", "set active", "n", "new", "E", "export pub", "K", "export priv", "x", "retire", "d", "detail", "r", "refresh"}
-	return lipgloss.JoinVertical(lipgloss.Left, body, renderStatusBar(hints, m.width))
+	// Status bar rendered globally by the root chrome — don't duplicate here.
+	return body
 }
 
 func (m issuersModel) renderDetail() string {

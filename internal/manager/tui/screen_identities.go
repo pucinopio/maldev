@@ -176,8 +176,8 @@ func (m identitiesModel) View() string {
 	if m.err != nil {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
 	}
-	hints := []string{"n", "new", "E", "export bin", "R", "regenerate", "x", "delete", "d", "detail", "r", "refresh"}
-	return lipgloss.JoinVertical(lipgloss.Left, body, renderStatusBar(hints, m.width))
+	// Status bar rendered globally by the root chrome — don't duplicate here.
+	return body
 }
 
 func (m identitiesModel) renderDetail() string {

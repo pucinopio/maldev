@@ -319,9 +319,10 @@ func (m auditModel) View() string {
 		}
 	}
 	exportHints := Dim.Render("E export CSV  J export JSON")
+	chipRow := lipgloss.JoinHorizontal(lipgloss.Top, chips...)
 	chipBar := lipgloss.JoinHorizontal(lipgloss.Top,
 		" ", filterLabel, "  ",
-		strings.Join(chips, " "),
+		chipRow,
 		"  ", exportHints,
 	)
 
@@ -343,8 +344,8 @@ func (m auditModel) View() string {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
 	}
 
-	hints := []string{"f", "all", "l", "license", "k", "key", "s", "server", "i", "identity", "p", "probe", "d", "detail", "r", "refresh"}
-	return lipgloss.JoinVertical(lipgloss.Left, body, renderStatusBar(hints, m.width))
+	// Status bar rendered globally by the root chrome — don't duplicate here.
+	return body
 }
 
 // handleAuditInputResult processes input overlay results for the audit screen.

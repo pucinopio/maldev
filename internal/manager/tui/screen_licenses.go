@@ -307,15 +307,8 @@ func (m licensesModel) View() string {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
 	}
 
-	hints := []string{
-		"f", "filter",
-		"/", "search",
-		"d/↵", "detail",
-		"n", "new",
-		"x", "revoke",
-		"c", "copy PEM",
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, body, renderStatusBar(hints, m.width))
+	// Status bar rendered globally by the root chrome — don't duplicate here.
+	return body
 }
 
 func (m licensesModel) renderFilterBar() string {
@@ -328,8 +321,9 @@ func (m licensesModel) renderFilterBar() string {
 		} else {
 			parts = append(parts, PillOff.Render(label))
 		}
+		parts = append(parts, " ")
 	}
-	return " " + strings.Join(parts, " ")
+	return " " + lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 }
 
 func (m licensesModel) renderDetail() string {
