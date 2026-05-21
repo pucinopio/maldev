@@ -2133,14 +2133,15 @@ func TestE2E_OnboardingWelcomeBannerCards(t *testing.T) {
 }
 
 // TestE2E_OnboardingPassphraseStepHasProgressStrip verifies the progress strip
-// appears with "1/3" and the step label after advancing past welcome.
+// appears with "2/4" and the step label after advancing past welcome.
+// The 4-step wizard counts: 1=welcome 2=passphrase 3=issuer 4=first-licence.
 func TestE2E_OnboardingPassphraseStepHasProgressStrip(t *testing.T) {
 	m := newOnboardingRoot(t)
 	m = driveKey(m, tea.KeyEnter) // welcome → passphrase
 
 	got := m.View()
-	if !strings.Contains(got, "1/3") {
-		t.Errorf("OnboardingPassphraseStepHasProgressStrip: '1/3' not found in view")
+	if !strings.Contains(got, "2/4") {
+		t.Errorf("OnboardingPassphraseStepHasProgressStrip: '2/4' not found in view")
 	}
 	if !strings.Contains(got, "Passphrase") {
 		t.Errorf("OnboardingPassphraseStepHasProgressStrip: 'Passphrase' label not found in view")
@@ -2148,7 +2149,7 @@ func TestE2E_OnboardingPassphraseStepHasProgressStrip(t *testing.T) {
 }
 
 // TestE2E_OnboardingIssuerStepHasProgressStrip verifies the progress strip
-// shows "2/3" and the issuer label when on the issuer step.
+// shows "3/4" and the issuer label when on the issuer step.
 func TestE2E_OnboardingIssuerStepHasProgressStrip(t *testing.T) {
 	m := newOnboardingRoot(t)
 	m = advanceToPassphraseStep(t, m)
@@ -2161,8 +2162,8 @@ func TestE2E_OnboardingIssuerStepHasProgressStrip(t *testing.T) {
 		t.Fatalf("expected stepIssuer, got %d", rootOf(t, m).onboarding.step)
 	}
 	got := m.View()
-	if !strings.Contains(got, "2/3") {
-		t.Errorf("OnboardingIssuerStepHasProgressStrip: '2/3' not found in view")
+	if !strings.Contains(got, "3/4") {
+		t.Errorf("OnboardingIssuerStepHasProgressStrip: '3/4' not found in view")
 	}
 }
 

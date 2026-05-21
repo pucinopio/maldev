@@ -333,7 +333,12 @@ func (m wizardModel) View() string {
 		Dim.Render("  ·  "),
 		GlowCyan.Render(meta.label),
 	)
-	stripHints := Dim.Render("[Tab] suivant  [⇧Tab] précédent  [1-8] aller à  [esc] annuler")
+	stripHints := lipgloss.JoinHorizontal(lipgloss.Top,
+		HintKey.Render("Tab"), HintText.Render(" suivant  "),
+		HintKey.Render("⇧Tab"), HintText.Render(" précédent  "),
+		HintKey.Render("1-8"), HintText.Render(" aller à  "),
+		HintKey.Render("esc"), HintText.Render(" annuler"),
+	)
 	strip := lipgloss.JoinHorizontal(lipgloss.Top,
 		stripLeft,
 		lipgloss.NewStyle().Width(m.width-lipgloss.Width(stripLeft)-lipgloss.Width(stripHints)-2).Render(""),
@@ -345,23 +350,18 @@ func (m wizardModel) View() string {
 	progressStrip := lipgloss.JoinVertical(lipgloss.Left, strip, bar)
 
 	// ── Sidebar ───────────────────────────────────────────────────────────
-	sideW := 28 // character width of sidebar (prototype uses ~260px ≈ 26 chars)
+	// sideW is the inner text width of the sidebar column (before the right border).
+	// Prototype uses ~260px ≈ 26 chars of text; add 1 for the right border = 27 total.
+	sideW := 27
 	var sideLines []string
 	for i, sm := range wizardStepMetas {
 		s := wizardStep(i)
-		// Step number badge.
+		// Badge: "[N]" styled by active/done state — single-line, no lipgloss borders.
 		var badge string
-		switch {
-		case s == m.step:
-			badge = lipgloss.NewStyle().
-				Foreground(Palette.Magenta).Bold(true).
-				Border(lipgloss.NormalBorder()).BorderForeground(Palette.Magenta).
-				Padding(0, 0).Width(2).Render(fmt.Sprintf("%d", i+1))
-		default:
-			badge = lipgloss.NewStyle().
-				Foreground(Palette.FgMute).
-				Border(lipgloss.NormalBorder()).BorderForeground(Palette.Border).
-				Padding(0, 0).Width(2).Render(fmt.Sprintf("%d", i+1))
+		if s == m.step {
+			badge = lipgloss.NewStyle().Foreground(Palette.Magenta).Bold(true).Render(fmt.Sprintf("[%d]", i+1))
+		} else {
+			badge = lipgloss.NewStyle().Foreground(Palette.FgMute).Render(fmt.Sprintf("[%d]", i+1))
 		}
 
 		var labelStyle lipgloss.Style
@@ -370,22 +370,19 @@ func (m wizardModel) View() string {
 		} else {
 			labelStyle = Dim
 		}
+		label := labelStyle.Render(sm.label)
 
-		row := lipgloss.JoinHorizontal(lipgloss.Top,
-			badge, " ", labelStyle.Render(sm.label),
-		)
-		// Border-left indicator for active step.
+		// Active step gets a "│ " left-margin accent; others get "  ".
+		var prefix string
 		if s == m.step {
-			row = lipgloss.NewStyle().
-				BorderLeft(true).BorderStyle(lipgloss.NormalBorder()).
-				BorderForeground(Palette.Magenta).
-				PaddingLeft(1).
-				Render(row)
+			prefix = lipgloss.NewStyle().Foreground(Palette.Magenta).Render("│") + " "
 		} else {
-			row = "  " + row
+			prefix = "  "
 		}
+		row := prefix + badge + " " + label
 		sideLines = append(sideLines, row)
-		sideLines = append(sideLines, Mute.Render("    "+sm.hint))
+		// Truncate hint so it never wraps: 4-char indent + right border + 1 clearance.
+		sideLines = append(sideLines, "    "+Mute.Render(truncateRunes(sm.hint, sideW-6)))
 	}
 	sidebar := lipgloss.NewStyle().
 		Width(sideW).

@@ -599,6 +599,30 @@ func dispatchClick(w Widget, x, y int) tea.Cmd {
 	return nil
 }
 
+// activeScreenWithHints returns the ScreenWithHints implementation for the
+// currently active view, if it has one, plus a boolean ok flag.
+func (m rootModel) activeScreenWithHints() (ScreenWithHints, bool) {
+	switch m.active {
+	case ViewLicenses:
+		return m.licenses, true
+	case ViewIssuers:
+		return m.issuers, true
+	case ViewRecipients:
+		return m.recipients, true
+	case ViewIdentities:
+		return m.identities, true
+	case ViewRevocation:
+		return m.revocation, true
+	case ViewServers:
+		return m.servers, true
+	case ViewAudit:
+		return m.audit, true
+	case ViewSettings:
+		return m.settings, true
+	}
+	return nil, false
+}
+
 func (m rootModel) viewReady() string {
 	title := renderTitleBar(m.width)
 	tabs := renderTabStrip(m.active, m.width)
@@ -640,14 +664,21 @@ func (m rootModel) viewReady() string {
 		Height(contentH).
 		Render(content)
 
-	statusBar := renderStatusBar([]string{
+	// Use screen-specific hints when the active screen provides them;
+	// fall back to the global default hint set otherwise.
+	defaultHints := []string{
 		"1-9", "onglets",
 		"n", "nouvelle licence",
 		"/", "rechercher",
 		"k", "clés actives",
 		"?", "aide",
 		"q", "quitter",
-	}, m.width)
+	}
+	activeHints := defaultHints
+	if sh, ok := m.activeScreenWithHints(); ok {
+		activeHints = sh.Hints()
+	}
+	statusBar := renderStatusBar(activeHints, m.width)
 
 	chrome := lipgloss.JoinVertical(lipgloss.Left, title, tabs, crumb)
 

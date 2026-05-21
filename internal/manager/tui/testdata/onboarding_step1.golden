@@ -8,25 +8,25 @@
                                                                                                                         
                                                                                                                         
                                                                                                                         
-                        ◆ PREMIÈRE UTILISATION                                                                          
-                        Aucune base détectée                                                                            
                                                                                                                         
-                        ┌──────────────────────────────────┐┌──────────────────────────────────┐                        
-                        │ ┌──┐ Chiffrer une base SQLite    ││ ┌──┐ Créer ton identité          │                        
-                        │ locale avec ta passphrase        ││ d'émission (issuer)              │                        
-                        │ │1 │                             ││ │2 │                             │                        
-                        │ └──┘                             ││ └──┘                             │                        
-                        └──────────────────────────────────┘└──────────────────────────────────┘                        
-                        ┌──────────────────────────────────┐┌──────────────────────────────────┐                        
-                        │ ┌──┐ Générer ta première paire   ││ ┌──┐ Émettre une licence pour    │                        
-                        │ de clés Ed25519                  ││ toi, pinnée à ta machine         │                        
-                        │ │3 │                             ││ │4 │                             │                        
-                        │ └──┘                             ││ └──┘                             │                        
-                        └──────────────────────────────────┘└──────────────────────────────────┘                        
                                                                                                                         
-                        Tu pourras revenir sur tous ces choix dans Settings après coup.                                 
+                      ◆ PREMIÈRE UTILISATION                                                                            
+                      Aucune base détectée                                                                              
                                                                                                                         
-                         enter  Commencer    esc  Quitter                                                               
+                      ┌────────────────────────────────────┐┌────────────────────────────────────┐                      
+                      │ [1] Chiffrer une base SQLite       ││ [2] Créer ton identité d'émission  │                      
+                      │ locale avec ta passphrase          ││ (issuer)                           │                      
+                      └────────────────────────────────────┘└────────────────────────────────────┘                      
+                      ┌────────────────────────────────────┐┌────────────────────────────────────┐                      
+                      │ [3] Générer ta première paire de   ││ [4] Émettre une licence pour toi,  │                      
+                      │ clés Ed25519                       ││ pinnée à ta machine                │                      
+                      └────────────────────────────────────┘└────────────────────────────────────┘                      
+                                                                                                                        
+                      Tu pourras revenir sur tous ces choix dans Settings après coup.                                   
+                                                                                                                        
+                       enter  Commencer    esc  Quitter                                                                 
+                                                                                                                        
+                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

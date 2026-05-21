@@ -337,6 +337,19 @@ func clampToHeight(s string, h, _ int) string {
 	return strings.Join(lines, "\n")
 }
 
+// truncateRunes returns s truncated to max visible rune positions, appending "…"
+// when a cut is made. Used by sidebar and card layouts that must not wrap.
+func truncateRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	if max <= 1 {
+		return "…"
+	}
+	return string(r[:max-1]) + "…"
+}
+
 // renderProgressBar renders a horizontal progress bar of width w with cur/total
 // filled cells using the Magenta accent for the filled portion and Border colour
 // for the remainder. Both screens (wizard, onboarding) share this helper.

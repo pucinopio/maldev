@@ -81,6 +81,9 @@ func (m settingsModel) View() string {
 }
 
 // renderGrid builds the 2-column grid matching settings.jsx layout.
+// Both columns are rendered to the same total height so their bottoms align —
+// this prevents the right column from appearing shorter when its boxes have
+// different content heights than the left column boxes.
 func (m settingsModel) renderGrid(w int) string {
 	r := m.row
 	colW := w/2 - 1
@@ -88,17 +91,33 @@ func (m settingsModel) renderGrid(w int) string {
 		colW = 20
 	}
 
-	left := lipgloss.JoinVertical(lipgloss.Left,
+	leftBoxes := []string{
 		m.boxDefaultsLicence(colW, r),
 		m.boxIdentiteOperateur(colW, r),
 		m.boxCycleVieServeurs(colW, r),
 		m.boxCascadePassphrase(colW, r),
-	)
-	right := lipgloss.JoinVertical(lipgloss.Left,
+	}
+	rightBoxes := []string{
 		m.boxArgonPreset(colW, r),
 		m.boxBaseDeDonnees(colW, r),
 		m.boxApparence(colW),
-	)
+	}
+
+	left := lipgloss.JoinVertical(lipgloss.Left, leftBoxes...)
+	right := lipgloss.JoinVertical(lipgloss.Left, rightBoxes...)
+
+	// Pad the shorter column to match the taller one so JoinHorizontal
+	// produces flush bottoms instead of a ragged staircase.  Width must be
+	// set on the padded column so every appended blank line has the correct
+	// width and lipgloss.JoinHorizontal sees uniform line lengths.
+	lh := lipgloss.Height(left)
+	rh := lipgloss.Height(right)
+	switch {
+	case lh > rh:
+		right = lipgloss.NewStyle().Width(colW + 2).Height(lh).Render(right)
+	case rh > lh:
+		left = lipgloss.NewStyle().Width(colW + 2).Height(rh).Render(left)
+	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, " ", right)
 }

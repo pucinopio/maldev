@@ -37,4 +37,4 @@ R revocation  H heartbeat  P probe  s start/stop  c clear log  g regen token    
                                                                                                                         
                                                                                                                         
                                                                                                                         
-1-9 onglets  n nouvelle licence  / rechercher  k clés actives  ? aide  q quitter                                 ~ tour 
+s start/stop  A tout démarrer  Z tout arrêter  g regen token  q quitter                                          ~ tour 

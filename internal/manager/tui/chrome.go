@@ -122,3 +122,14 @@ func renderStatusBar(hints []string, width int) string {
 	sb.Layout(Rect{W: width, H: 1})
 	return sb.View()
 }
+
+// ScreenWithHints is an optional interface that screens implement to supply
+// their own key-hint slice for the bottom status bar.  The slice must have an
+// even number of elements arranged as alternating key / description pairs,
+// matching the format accepted by renderStatusBar.
+//
+// When the active screen implements ScreenWithHints, viewReady uses its hints
+// instead of the global default set.
+type ScreenWithHints interface {
+	Hints() []string
+}

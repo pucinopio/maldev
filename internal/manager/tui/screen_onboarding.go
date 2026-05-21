@@ -255,24 +255,25 @@ func (m onboardingModel) View() string {
 		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, m.viewWelcome())
 	}
 
-	// Steps 1-3 share a progress strip + centered content box.
+	// Steps 1-3 map to overall wizard positions 2-4 (welcome = step 1).
+	// Prototype shows "étape N/4" throughout the 4-step wizard.
 	type stepInfo struct {
-		n     int
+		n     int // 1-based display index (2..4)
 		label string
 	}
 	info := []stepInfo{
-		{1, "Passphrase DB"},
-		{2, "Issuer & 1ère clé"},
-		{3, "Première licence"},
+		{2, "Passphrase DB"},
+		{3, "Issuer & 1ère clé"},
+		{4, "Première licence"},
 	}[int(m.step)-1]
 
 	// Progress strip.
-	total := 3
+	total := 4
 	cur := info.n
 	stripLeft := lipgloss.JoinHorizontal(lipgloss.Top,
 		GlowMagent.Render("◆ PREMIÈRE UTILISATION"),
 		Dim.Render("  étape  "),
-		Base.Bold(true).Render(fmt.Sprintf("%d/3", cur)),
+		Base.Bold(true).Render(fmt.Sprintf("%d/4", cur)),
 		Dim.Render("  ·  "),
 		GlowCyan.Render(info.label),
 	)
@@ -305,7 +306,7 @@ func (m onboardingModel) viewWelcome() string {
 	type card struct {
 		n    int
 		text string
-		cyan bool // true = cyan border, false = magenta
+		cyan bool // true = cyan accent, false = magenta
 	}
 	cards := []card{
 		{1, "Chiffrer une base SQLite locale avec ta passphrase", true},
@@ -314,22 +315,32 @@ func (m onboardingModel) viewWelcome() string {
 		{4, "Émettre une licence pour toi, pinnée à ta machine", false},
 	}
 
-	cardW := 34
+	// cardW is passed to BoxStyle.Width(), which sets the content area (excl. border).
+	// BoxStyle has Padding(0,1) so usable text = cardW-2. textW reserves badge "[N]"(3)
+	// + space(1) from that, leaving cardW-6 for the description.
+	const cardW = 36
+	const textW = cardW - 6 // padding(2) + badge(3) + space(1)
+
 	var row1, row2 []string
 	for i, c := range cards {
 		color := Palette.Cyan
 		if !c.cyan {
 			color = Palette.Magenta
 		}
+		// Badge: " N " with colored bracket — no Border() to avoid multi-line layout.
 		badge := lipgloss.NewStyle().
 			Foreground(color).Bold(true).
-			Border(lipgloss.NormalBorder()).BorderForeground(color).
-			Padding(0, 0).Width(2).
-			Render(fmt.Sprintf("%d", c.n))
+			Render(fmt.Sprintf("[%d]", c.n))
+		// Wrap text at textW so it doesn't push the card wider.
+		wrapped := lipgloss.NewStyle().
+			Foreground(Palette.FgDim).
+			Width(textW).
+			Render(c.text)
+		row := badge + " " + wrapped
 		cell := lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).BorderForeground(Palette.Border).
 			Padding(0, 1).Width(cardW).
-			Render(lipgloss.JoinHorizontal(lipgloss.Top, badge, " ", Dim.Render(c.text)))
+			Render(row)
 		if i < 2 {
 			row1 = append(row1, cell)
 		} else {
@@ -343,11 +354,8 @@ func (m onboardingModel) viewWelcome() string {
 	)
 
 	note := Dim.Render("Tu pourras revenir sur tous ces choix dans Settings après coup.")
-	action := lipgloss.JoinHorizontal(lipgloss.Top,
-		HintKey.Render("enter")+" "+HintText.Render("Commencer"),
-		"   ",
-		HintKey.Render("esc")+" "+HintText.Render("Quitter"),
-	)
+	action := HintKey.Render("enter") + " " + HintText.Render("Commencer") +
+		"   " + HintKey.Render("esc") + " " + HintText.Render("Quitter")
 
 	header := GlowMagent.Render("◆ PREMIÈRE UTILISATION")
 	subHead := Dim.Render("Aucune base détectée")
