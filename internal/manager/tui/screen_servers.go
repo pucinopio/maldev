@@ -448,7 +448,16 @@ func (m serversModel) renderProbeTokens() string {
 	title := GlowCyan.Render("Tokens actifs (0)")
 	header := title + "  " + hint
 	body := Dim.Render("\n  aucun token actif — [n] pour en générer un\n")
-	return lipgloss.JoinVertical(lipgloss.Left, header, body)
+
+	// Astuce callout matching the prototype Servers — Probe panel.
+	astuceTitle := GlowCyan.Render("Astuce")
+	astuceBody := Dim.Render(
+		"Le ProbeServer s'utilise surtout depuis le wizard licence → bindings → machine →\n" +
+			" « récupérer depuis une machine distante » (overlay). Mais tu peux le démarrer ici\n" +
+			" pour générer un batch de tokens (cas d'usage §10 Probe batch).")
+	astuce := BoxStyle.Render(astuceTitle + "\n\n" + astuceBody)
+
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, "", astuce)
 }
 
 // renderProbeHistory placeholder for consumed/expired tokens.
