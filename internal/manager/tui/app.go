@@ -160,6 +160,20 @@ func (m rootModel) OnboardingResult() *OnboardingDoneMsg {
 // nil (typed nil interface) when bundle itself is nil. This avoids the
 // classic Go footgun where assigning a nil *Bundle to an interface variable
 // produces a non-nil interface value that panics on method dispatch.
+// anyServerRunning reports whether at least one server in the bundle is up.
+// Returns false when the bundle is nil so the quit path stays a simple no-op.
+func anyServerRunning(b *httpsrv.Bundle) bool {
+	if b == nil {
+		return false
+	}
+	for _, s := range b.Statuses() {
+		if s.Running {
+			return true
+		}
+	}
+	return false
+}
+
 func bundleAsController(b *httpsrv.Bundle) httpsrv.Controller {
 	if b == nil {
 		return nil
@@ -335,8 +349,7 @@ func (m rootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.active = nextView(m.active, -1)
 		return m, m.initScreen(m.active)
 	case "q":
-		serversRunning := m.httpsrv != nil
-		if serversRunning {
+		if anyServerRunning(m.httpsrv) {
 			m.overlays = append(m.overlays, newQuitOverlay(true))
 			return m, m.overlays[len(m.overlays)-1].Init()
 		}
@@ -452,6 +465,14 @@ func (m rootModel) updateOverlay(msg tea.Msg) (tea.Model, tea.Cmd) {
 	updated, cmd := top.Update(msg)
 
 	if done, ok := msg.(OverlayDoneMsg); ok {
+		// Quit overlay returns a plain bool — true means "confirm quit".
+		if b, isBool := done.Result.(bool); isBool {
+			m.overlays = m.overlays[:len(m.overlays)-1]
+			if b {
+				return m, tea.Quit
+			}
+			return m, nil
+		}
 		m.overlays = m.overlays[:len(m.overlays)-1]
 		// Dispatch overlay result to the active screen.
 		m = m.dispatchOverlayResult(done.Result)

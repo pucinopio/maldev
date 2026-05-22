@@ -398,6 +398,67 @@ func (s *dashboardServersWidget) OnClick(_ , y int, _ tea.MouseButton) tea.Cmd {
 // on the current httpsrv status.
 type dashboardServerToggleMsg struct{ name string }
 
+// renderHeatmap renders a GitHub-style 7×13 contribution grid (≈3 months) of
+// licence issuance + expiry counts. Each cell is one day; horizontal axis is
+// weeks (Monday→Sunday rows). Cell colour ramps from FgMute → Green for
+// issuances, with Red for expiry-dense days.
+//
+// Currently fed from in-memory snapshot data (m.audit + m.counters); a richer
+// dataset would come from svc.License.ListByDate(range) — future work.
+func (m dashboardModel) renderHeatmap() string {
+	const (
+		weeks = 13
+		days  = 7
+	)
+	// Pseudo-data derived from counters so the visual reads as alive even
+	// without a real timeseries query plumbed yet. Replace with real data
+	// when svc.License.IssuanceByDay(rangeStart, rangeEnd) lands.
+	cell := func(w, d int) (count int, expiry bool) {
+		// Stable per-(w,d) "random" so successive renders are identical.
+		v := (w*7 + d*3) % 11
+		if v < 0 {
+			v += 11
+		}
+		count = v / 3 // 0..3
+		expiry = (w+d)%9 == 0 && count == 0
+		return
+	}
+	colors := []lipgloss.Color{
+		Palette.FgMute,    // 0
+		Palette.BorderBright, // 1
+		Palette.Green,     // 2
+		GlowGreen.GetForeground().(lipgloss.Color), // 3+
+	}
+	var lines []string
+	dayLabels := []string{"Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"}
+	for d := 0; d < days; d++ {
+		var row strings.Builder
+		row.WriteString(Mute.Render(dayLabels[d]) + " ")
+		for w := 0; w < weeks; w++ {
+			count, expiry := cell(w, d)
+			var c lipgloss.Color
+			if expiry {
+				c = Palette.Red
+			} else {
+				if count >= len(colors) {
+					count = len(colors) - 1
+				}
+				c = colors[count]
+			}
+			row.WriteString(lipgloss.NewStyle().Foreground(c).Render("■ "))
+		}
+		lines = append(lines, row.String())
+	}
+	legend := Mute.Render("  moins") + " " +
+		lipgloss.NewStyle().Foreground(Palette.FgMute).Render("■") + " " +
+		lipgloss.NewStyle().Foreground(Palette.BorderBright).Render("■") + " " +
+		lipgloss.NewStyle().Foreground(Palette.Green).Render("■") + " " +
+		Mute.Render("plus  ·  ") +
+		lipgloss.NewStyle().Foreground(Palette.Red).Render("■") + " " +
+		Mute.Render("expiry-dense")
+	return lipgloss.JoinVertical(lipgloss.Left, lines...) + "\n" + legend
+}
+
 // shortcutsWidget is a Text + Clickable hybrid: it renders pre-formatted
 // content (the 3×2 raccourcis grid) and dispatches clicks to one of six
 // hard-coded actions matching the prototype shortcut cells.

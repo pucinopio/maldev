@@ -10,6 +10,8 @@ import (
 
 	"context"
 
+	"github.com/NimbleMarkets/ntcharts/sparkline"
+
 	"github.com/oioio-space/maldev/internal/manager/httpsrv"
 	"github.com/oioio-space/maldev/internal/manager/service"
 	"github.com/oioio-space/maldev/internal/manager/store/ent"
@@ -47,6 +49,13 @@ type serversModel struct {
 	probeView    probeInnerView // Probe inner T / H / L view
 	probeTokens  []*ent.ProbeToken // populated when T view is active
 	probeHistory []*ent.ProbeToken // populated when H view is active
+
+	// Per-server request-rate ring buffer (60 samples = 1 minute window).
+	// Each tick records the delta of Requests vs the previous tick.
+	reqHistory [3][60]float64
+	reqHead    [3]int
+	prevReqs   [3]uint64
+
 	width, height int
 }
 
@@ -240,11 +249,45 @@ func (m *serversModel) refreshStatuses() {
 		return
 	}
 	statuses := m.ctrl.Statuses()
-	for _, card := range m.cards {
-		if s, ok := statuses[card.name]; ok {
-			card.SetStatus(s)
+	for i, card := range m.cards {
+		s, ok := statuses[card.name]
+		if !ok {
+			continue
 		}
+		card.SetStatus(s)
+		// Record delta requests for the rate sparkline (per-second resolution
+		// since the tick fires every 1s). Reset on stop so the spark line
+		// doesn't carry a stale tail across restarts.
+		if !s.Running {
+			m.prevReqs[i] = 0
+			m.reqHistory[i][m.reqHead[i]] = 0
+		} else {
+			delta := float64(s.Requests - m.prevReqs[i])
+			if delta < 0 {
+				delta = 0
+			}
+			m.reqHistory[i][m.reqHead[i]] = delta
+			m.prevReqs[i] = s.Requests
+		}
+		m.reqHead[i] = (m.reqHead[i] + 1) % len(m.reqHistory[i])
 	}
+}
+
+// sparklineRequests renders the request-rate ring buffer for the given server
+// index as an ntcharts sparkline. The line shows the last 60 seconds.
+func (m serversModel) sparklineRequests(idx, width int) string {
+	if width < 8 {
+		return ""
+	}
+	sp := sparkline.New(width, 1)
+	// Replay the ring in chronological order (oldest first).
+	head := m.reqHead[idx]
+	for i := 0; i < len(m.reqHistory[idx]); i++ {
+		pos := (head + i) % len(m.reqHistory[idx])
+		sp.Push(m.reqHistory[idx][pos])
+	}
+	sp.Draw()
+	return sp.View()
 }
 
 // layout assigns bounding boxes to all child widgets.
@@ -355,11 +398,14 @@ func (m serversModel) View() string {
 				ratePerSec = fmt.Sprintf("%.2f", float64(s.Requests)/secs)
 			}
 		}
+		// Sparkline of the last 60s request deltas — width fits the Status box.
+		spark := m.sparklineRequests(activeCardIdx, m.width/2-12)
 		statusLines = append(statusLines,
 			Dim.Render("url    ")+" "+GlowCyan.Render(addrStr),
 			Dim.Render("uptime ")+" "+Base.Render(uptime),
 			Dim.Render("req tot")+" "+Base.Render(fmt.Sprintf("%d", s.Requests)),
 			Dim.Render("req/s  ")+" "+Base.Render(ratePerSec+Dim.Render(" (depuis le start)")),
+			Dim.Render("rate ▶ ")+" "+spark,
 		)
 	} else {
 		statusLines = append(statusLines,
