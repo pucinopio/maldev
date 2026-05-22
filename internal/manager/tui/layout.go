@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -364,31 +365,29 @@ func truncateRunes(s string, max int) string {
 // renderProgressBar renders a horizontal progress bar of width w with cur/total
 // filled cells using the Magenta accent for the filled portion and Border colour
 // for the remainder. Both screens (wizard, onboarding) share this helper.
+// renderProgressBar wraps the bubbles/progress widget for the wizard +
+// onboarding strips. The widget handles gradient fill, sub-cell rounding,
+// and overflow protection (no more strings.Repeat negative-count panics).
 func renderProgressBar(w, cur, total int) string {
 	if w < 3 {
-		// Not enough space for the bar — render nothing rather than panic on
-		// strings.Repeat with a negative count.
 		return ""
 	}
 	if total <= 0 {
 		total = 1
 	}
-	filled := (w - 2) * cur / total
-	if filled < 0 {
-		filled = 0
-	}
-	if filled > w-2 {
-		filled = w - 2
-	}
-	remainder := w - 2 - filled
-	if remainder < 0 {
-		remainder = 0
-	}
-	return lipgloss.NewStyle().Foreground(Palette.Magenta).Render(
-		strings.Repeat("─", filled),
-	) + lipgloss.NewStyle().Foreground(Palette.BorderBright).Render(
-		strings.Repeat("─", remainder),
+	p := progress.New(
+		progress.WithSolidFill(string(Palette.Magenta)),
+		progress.WithoutPercentage(),
+		progress.WithWidth(w),
 	)
+	pct := float64(cur) / float64(total)
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 1 {
+		pct = 1
+	}
+	return p.ViewAs(pct)
 }
 
 // ── Pad ───────────────────────────────────────────────────────────────────────
