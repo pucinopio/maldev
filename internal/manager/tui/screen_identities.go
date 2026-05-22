@@ -192,17 +192,35 @@ func (m identitiesModel) OnClick(x, y, _ int) tea.Cmd {
 }
 
 func (m identitiesModel) View() string {
-	body := m.table.View()
-	if hint := emptyTableHint(len(m.rows), m.width, "aucune identité — émets une licence pour en créer une"); hint != "" {
-		body = lipgloss.JoinVertical(lipgloss.Left, body, "", hint)
+	// Descriptive intro paragraph (prototype: identities.jsx).
+	intro := Dim.Render(" Une ") + GlowCyan.Render("identity.bin") +
+		Dim.Render(" est un blob de 32 octets aléatoires embarqué dans le binaire via ") +
+		GlowCyan.Render("//go:embed") +
+		Dim.Render(". Une licence peut être pinnée à son sha256 pour validation.")
+
+	// Bordered titled box with right-aligned action chips, matching the
+	// prototype "Identities (N)  [n] créer · [E] export .bin · [R] régénérer · [x] supprimer".
+	titleLabel := fmt.Sprintf("Identities (%d)", len(m.rows))
+	hint := HintKey.Render("[n]") + Dim.Render(" créer ") +
+		Mute.Render("· ") + HintKey.Render("[E]") + Dim.Render(" export .bin ") +
+		Mute.Render("· ") + HintKey.Render("[R]") + Dim.Render(" régénérer ") + GlowYellow.Render("⚠ ") +
+		Mute.Render("· ") + HintKey.Render("[x]") + Dim.Render(" supprimer")
+	// Box content area = m.width - 2 (style.Width param) - 2 (Padding 0,1).
+	title := titledBoxRow(titleLabel, hint, m.width-4)
+
+	tableBody := m.table.View()
+	if h := emptyTableHint(len(m.rows), m.width, "aucune identité — émets une licence pour en créer une"); h != "" {
+		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", h)
 	}
+	boxed := BoxStyle.Width(m.width - 2).Render(title + "\n" + tableBody)
+
+	body := lipgloss.JoinVertical(lipgloss.Left, "", intro, "", boxed)
 	if m.detail {
 		body = lipgloss.JoinVertical(lipgloss.Left, body, m.renderDetail())
 	}
 	if m.err != nil {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
 	}
-	// Status bar rendered globally by the root chrome — don't duplicate here.
 	return body
 }
 

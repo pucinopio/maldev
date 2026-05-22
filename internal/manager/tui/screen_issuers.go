@@ -200,17 +200,29 @@ func (m issuersModel) OnClick(x, y, _ int) tea.Cmd {
 type tableSelectRowMsg struct{ row int }
 
 func (m issuersModel) View() string {
-	body := m.table.View()
-	if hint := emptyTableHint(len(m.rows), m.width, "aucune clé d'émission — n pour créer la première"); hint != "" {
-		body = lipgloss.JoinVertical(lipgloss.Left, body, "", hint)
+	intro := Dim.Render(" Les ") + GlowCyan.Render("issuer keys") +
+		Dim.Render(" sont les clés Ed25519 qui signent tes licences. Une seule clé est active à la fois ; les autres sont retraitées (retired).")
+
+	titleLabel := fmt.Sprintf("Issuer keys Ed25519 (%d)", len(m.rows))
+	hint := HintKey.Render("[n]") + Dim.Render(" générer ") +
+		Mute.Render("· ") + HintKey.Render("[a]") + Dim.Render(" activer ") +
+		Mute.Render("· ") + HintKey.Render("[E]") + Dim.Render(" export .pub ") +
+		Mute.Render("· ") + HintKey.Render("[x]") + Dim.Render(" retraiter")
+	title := titledBoxRow(titleLabel, hint, m.width-4)
+
+	tableBody := m.table.View()
+	if h := emptyTableHint(len(m.rows), m.width, "aucune clé d'émission — n pour créer la première"); h != "" {
+		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", h)
 	}
+	boxed := BoxStyle.Width(m.width - 2).Render(title + "\n" + tableBody)
+
+	body := lipgloss.JoinVertical(lipgloss.Left, "", intro, "", boxed)
 	if m.detail {
 		body = lipgloss.JoinVertical(lipgloss.Left, body, m.renderDetail())
 	}
 	if m.err != nil {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
 	}
-	// Status bar rendered globally by the root chrome — don't duplicate here.
 	return body
 }
 

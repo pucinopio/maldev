@@ -3,17 +3,17 @@
 9 Settings                                                                                                              
                              ─────────────────                                                                          
  issuers                                                                                                                
- KEYID                 NAME                      STATUS      CREATED       #SIGNED                                      
                                                                                                                         
+ Les issuer keys sont les clés Ed25519 qui signent tes licences. Une seule clé est active à la fois ; les autres sont   
+retraitées (retired).                                                                                                   
                                                                                                                         
-                                    aucune clé d'émission — n pour créer la première                                    
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ Issuer keys Ed25519 (0)                           [n]  générer ·  [a]  activer ·  [E]  export .pub ·  [x]  retraiter │
+│  KEYID                 NAME                      STATUS      CREATED       #SIGNED                                   │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                     aucune clé d'émission — n pour créer la première                                 │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
                                                                                                                         
                                                                                                                         
                                                                                                                         

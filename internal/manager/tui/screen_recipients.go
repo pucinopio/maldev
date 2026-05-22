@@ -163,17 +163,29 @@ func (m recipientsModel) OnClick(x, y, _ int) tea.Cmd {
 }
 
 func (m recipientsModel) View() string {
-	body := m.table.View()
-	if hint := emptyTableHint(len(m.rows), m.width, "aucun destinataire — n pour en ajouter un"); hint != "" {
-		body = lipgloss.JoinVertical(lipgloss.Left, body, "", hint)
+	intro := Dim.Render(" Les ") + GlowCyan.Render("recipient keys") +
+		Dim.Render(" servent à sceller un payload (NaCl box). Le destinataire d'une licence possède la clé privée X25519 et peut déchiffrer le sealed payload.")
+
+	titleLabel := fmt.Sprintf("Recipient keys X25519 (%d)", len(m.rows))
+	hint := HintKey.Render("[n]") + Dim.Render(" générer ") +
+		Mute.Render("· ") + HintKey.Render("[i]") + Dim.Render(" importer ") +
+		Mute.Render("· ") + HintKey.Render("[E]") + Dim.Render(" export .pub ") +
+		Mute.Render("· ") + HintKey.Render("[x]") + Dim.Render(" retirer")
+	title := titledBoxRow(titleLabel, hint, m.width-4)
+
+	tableBody := m.table.View()
+	if h := emptyTableHint(len(m.rows), m.width, "aucun destinataire — n pour en ajouter un"); h != "" {
+		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", h)
 	}
+	boxed := BoxStyle.Width(m.width - 2).Render(title + "\n" + tableBody)
+
+	body := lipgloss.JoinVertical(lipgloss.Left, "", intro, "", boxed)
 	if m.detail {
 		body = lipgloss.JoinVertical(lipgloss.Left, body, m.renderDetail())
 	}
 	if m.err != nil {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
 	}
-	// Status bar rendered globally by the root chrome — don't duplicate here.
 	return body
 }
 

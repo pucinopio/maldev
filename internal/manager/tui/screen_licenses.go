@@ -115,6 +115,25 @@ func stretchLastColumn(t *table.Model, width int) {
 	t.SetColumns(cols)
 }
 
+// titledBoxRow lays out a box title row: cyan-bold label flush-left,
+// right-aligned hint, single line. innerW is the available content width
+// excluding the bordered frame's own padding.
+//
+// Mirrors the prototype Box title pattern, e.g.:
+//
+//	Identities (4)                    [n] créer · [E] export .bin · [R] régénérer
+func titledBoxRow(label, hint string, innerW int) string {
+	if innerW < 1 {
+		innerW = 1
+	}
+	left := GlowCyan.Render(label)
+	gap := innerW - lipgloss.Width(left) - lipgloss.Width(hint)
+	if gap < 1 {
+		gap = 1
+	}
+	return left + strings.Repeat(" ", gap) + hint
+}
+
 // emptyTableHint returns a centered muted line shown under a table that has
 // no rows, hinting at the keybind that creates one. Returns "" when rows > 0.
 func emptyTableHint(rows int, width int, message string) string {
