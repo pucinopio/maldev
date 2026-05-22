@@ -105,10 +105,10 @@ func (svc *TOTPService) Delete(ctx context.Context, id uuid.UUID) error {
 	return svc.store.Client.TOTPSecret.DeleteOneID(id).Exec(ctx)
 }
 
-// GetByID returns the decrypted view of a TOTPSecret by its own ID (rather
-// than the parent licence ID like Get). issuerName is used when rendering the
+// ByID returns the decrypted view of a TOTPSecret addressed by its own ID
+// (rather than by parent licence ID like Get). issuerName is rendered into the
 // otpauth:// URI + QR artefacts.
-func (svc *TOTPService) GetByID(ctx context.Context, id uuid.UUID, issuerName string) (*TOTPSecretView, error) {
+func (svc *TOTPService) ByID(ctx context.Context, id uuid.UUID, issuerName string) (*TOTPSecretView, error) {
 	r, err := svc.store.Client.TOTPSecret.Get(ctx, id)
 	if err != nil {
 		return nil, err

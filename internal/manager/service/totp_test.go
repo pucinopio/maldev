@@ -83,7 +83,7 @@ func TestTOTPStandaloneCRUD(t *testing.T) {
 		t.Fatalf("List returned %d rows, want 1 containing the new ID", len(list))
 	}
 
-	view, err := svc.GetByID(ctx, row.ID, "issuer-x")
+	view, err := svc.ByID(ctx, row.ID, "issuer-x")
 	if err != nil {
 		t.Fatal(err)
 	}

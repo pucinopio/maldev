@@ -76,7 +76,7 @@ func loadTOTPDetailCmd(svc *service.Services, id uuid.UUID, issuerName string) t
 		if svc == nil {
 			return totpDetailLoadedMsg{}
 		}
-		v, err := svc.TOTP.GetByID(context.Background(), id, issuerName)
+		v, err := svc.TOTP.ByID(context.Background(), id, issuerName)
 		return totpDetailLoadedMsg{View: v, Err: err}
 	}
 }
