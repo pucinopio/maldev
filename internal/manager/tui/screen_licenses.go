@@ -480,7 +480,13 @@ func (m licensesModel) renderFilterBar() string {
 func (m licensesModel) renderDetail() string {
 	row := m.selectedRow()
 	if row == nil {
-		return Dim.Render("  no selection")
+		title := Dim.Render("Détail licence")
+		hint := Dim.Render("aucune sélection — émets une licence avec ") + HintKey.Render("[n]") +
+			Dim.Render(" ou sélectionne une ligne pour voir les onglets ") +
+			HintKey.Render("[I/B/P/A/C]")
+		return BoxStyle.Width(m.width - 2).Render(
+			lipgloss.JoinVertical(lipgloss.Left, title, "", hint),
+		)
 	}
 
 	// Header: license ID + subject + tab strip + action hints.
