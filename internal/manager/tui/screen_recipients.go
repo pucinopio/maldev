@@ -132,7 +132,8 @@ func (m *recipientsModel) rebuildTable() {
 		created := r.CreatedAt.Format("2006-01-02")
 		rows = append(rows, table.Row{keyID, r.Name, created, "—"})
 	}
-	tableH := m.hgt - 11 // chrome+intro+box+statusbar overhead
+	tableH := listTableHeight(m.hgt, m.width,
+		" Les recipient keys servent à sceller un payload (NaCl box). Le destinataire d'une licence possède la clé privée X25519 et peut déchiffrer le sealed payload.")
 	if m.detail {
 		tableH = tableH / 2
 	}

@@ -102,14 +102,18 @@ func (o *filePickerOverlay) handleEnter() (Overlay, tea.Cmd) {
 		o.load()
 		return o, nil
 	}
-	// File selected — call onPick and close overlay.
+	// File selected — close overlay first, THEN deliver the path. Using
+	// tea.Sequence guarantees OverlayDoneMsg lands before the onPick cmd
+	// fires, so the picked-path message reaches whichever overlay/screen is
+	// underneath (e.g. the wizard) rather than racing into the now-closing
+	// file picker.
 	var cmd tea.Cmd
 	if o.onPick != nil {
 		cmd = o.onPick(full)
 	}
-	return o, tea.Batch(
-		cmd,
+	return o, tea.Sequence(
 		func() tea.Msg { return OverlayDoneMsg{Result: nil} },
+		cmd,
 	)
 }
 

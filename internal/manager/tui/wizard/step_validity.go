@@ -74,28 +74,22 @@ func (s *StepValidity) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 			}
 			return s, func() tea.Msg { return ValidityMsg{NotBefore: nb, NotAfter: na} }
 
-		// Duration shortcuts — single-key, only active when end field is focused.
-		// 7 = +7d, 3 = +30d, y = +1y, f = forever.
-		case "7":
-			if s.active == validityFieldEnd && !s.endIn.Focused() {
-				s.applyShortcut(7 * 24 * time.Hour)
-				return s, nil
-			}
-		case "3":
-			if s.active == validityFieldEnd && !s.endIn.Focused() {
-				s.applyShortcut(30 * 24 * time.Hour)
-				return s, nil
-			}
-		case "y":
-			if s.active == validityFieldEnd && !s.endIn.Focused() {
-				s.applyShortcut(365 * 24 * time.Hour)
-				return s, nil
-			}
-		case "f":
-			if s.active == validityFieldEnd && !s.endIn.Focused() {
-				s.endIn.SetValue("forever")
-				return s, nil
-			}
+		// Duration shortcuts — ctrl-prefixed so they don't collide with digit
+		// entry inside the YYYY-MM-DD textinput. Always apply to the end date
+		// regardless of which field has focus, and blur the input so the new
+		// value is visible immediately.
+		case "ctrl+w":
+			s.applyShortcut(7 * 24 * time.Hour)
+			return s, nil
+		case "ctrl+m":
+			s.applyShortcut(30 * 24 * time.Hour)
+			return s, nil
+		case "ctrl+y":
+			s.applyShortcut(365 * 24 * time.Hour)
+			return s, nil
+		case "ctrl+f":
+			s.endIn.SetValue("forever")
+			return s, nil
 		}
 		// Forward to active field.
 		return s, s.forwardKey(msg)
@@ -176,7 +170,7 @@ func (s *StepValidity) View() string {
 		endLabel,
 		"  " + s.endIn.View(),
 		"",
-		fgDim.Render("  shortcuts: +7d  +30d  +1y  forever(0)"),
+		fgDim.Render("  shortcuts: ctrl+w +7d   ctrl+m +30d   ctrl+y +1y   ctrl+f forever"),
 		fgDim.Render("  tab switch field   enter confirm"),
 	}
 	if s.errMsg != "" {

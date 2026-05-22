@@ -122,7 +122,8 @@ func (m *revocationModel) rebuildTable() {
 		}
 		rows = append(rows, table.Row{subject, r.KeyID, at, reason})
 	}
-	tableH := m.hgt - 11 // chrome+intro+box+statusbar overhead
+	tableH := listTableHeight(m.hgt, m.width,
+		" La CRL (Certificate Revocation List) liste les licences révoquées. Le serveur revocation l'expose en HTTPS pour que les clients vérifient la validité d'une licence.") - 5 // 3 KPI tiles take ~5 lines (border+content+padding)
 	if tableH < 3 {
 		tableH = 3
 	}

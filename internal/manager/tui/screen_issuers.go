@@ -163,8 +163,8 @@ func (m *issuersModel) rebuildTable() {
 			r.KeyID, r.Name, status, created, "—",
 		})
 	}
-	// chrome(4) + intro+blank(3) + box border(2) + box title(1) + statusbar(1) = 11
-	tableH := m.hgt - 11
+	tableH := listTableHeight(m.hgt, m.width,
+		"Les issuer keys sont les clés Ed25519 qui signent tes licences. Une seule clé est active à la fois ; les autres sont retraitées (retired).")
 	if m.detail {
 		tableH = tableH / 2
 	}
@@ -199,6 +199,27 @@ func (m issuersModel) OnClick(x, y, _ int) tea.Cmd {
 
 // tableSelectRowMsg asks the active screen to move its table cursor to row.
 type tableSelectRowMsg struct{ row int }
+
+// listTableHeight returns the table height budget for a list screen whose body
+// is "intro paragraph + boxed table". Accounts for the intro wrapping on narrow
+// terminals so the box bottom border never overflows into the status bar.
+//
+// chrome=4 (title+tabs+breadcrumb+spacer), intro+blank=introH+2,
+// box border+title+padding=4, status bar=1 → total fixed overhead = 11+introH-1.
+func listTableHeight(hgt, width int, intro string) int {
+	introH := 1
+	if width > 1 {
+		introH = (len(intro) + width - 2) / (width - 1)
+		if introH < 1 {
+			introH = 1
+		}
+	}
+	h := hgt - (4 + introH + 2 + 2 + 1 + 1)
+	if h < 3 {
+		h = 3
+	}
+	return h
+}
 
 func (m issuersModel) View() string {
 	intro := Dim.Render(" Les ") + GlowCyan.Render("issuer keys") +

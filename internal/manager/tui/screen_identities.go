@@ -161,7 +161,8 @@ func (m *identitiesModel) rebuildTable() {
 		created := r.CreatedAt.Format("2006-01-02")
 		rows = append(rows, table.Row{r.Name, sha, "—", created})
 	}
-	tableH := m.hgt - 11 // chrome+intro+box+statusbar overhead
+	tableH := listTableHeight(m.hgt, m.width,
+		" Une identity.bin est un blob de 32 octets aléatoires embarqué dans le binaire via //go:embed. Une licence peut être pinnée à son sha256 pour validation.")
 	if m.detail {
 		tableH = tableH / 2
 	}

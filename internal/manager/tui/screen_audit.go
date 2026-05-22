@@ -334,10 +334,30 @@ func (m auditModel) View() string {
 
 	body := lipgloss.JoinVertical(lipgloss.Left, chipBar, "", tableBox)
 
-	if m.detail {
-		detailBox := BoxFocused.Width(m.width - 4).Render(m.vp.View())
-		body = lipgloss.JoinVertical(lipgloss.Left, body, detailBox)
+	// Always render the detail card — prototype shows it even with no row
+	// selected so the box position stays stable. When detail mode is on we
+	// show the payload viewport; otherwise a short hint.
+	var detailBox string
+	switch {
+	case m.detail:
+		detailBox = BoxFocused.Width(m.width - 4).Render(m.vp.View())
+	case m.selectedRow() != nil:
+		row := m.selectedRow()
+		title := Dim.Render("Detail · ") + GlowCyan.Render(row.Kind) + Dim.Render(" · ") + Base.Render(row.Actor)
+		hint := HintKey.Render("[d]") + Dim.Render(" déplier le payload  ·  ") +
+			HintKey.Render("[E/J]") + Dim.Render(" exporter")
+		detailBox = BoxStyle.Width(m.width - 4).Render(
+			lipgloss.JoinVertical(lipgloss.Left, title, "", hint),
+		)
+	default:
+		title := Dim.Render("Detail")
+		hint := Dim.Render("aucune sélection — utilise ↑/↓ pour choisir une ligne puis ") +
+			HintKey.Render("[d]") + Dim.Render(" pour le détail")
+		detailBox = BoxStyle.Width(m.width - 4).Render(
+			lipgloss.JoinVertical(lipgloss.Left, title, "", hint),
+		)
 	}
+	body = lipgloss.JoinVertical(lipgloss.Left, body, detailBox)
 
 	if m.err != nil {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
