@@ -19,6 +19,12 @@ type serverStartMsg struct{ name string }
 // serverStopMsg is fired when the operator presses Stop on a card.
 type serverStopMsg struct{ name string }
 
+// serverStartedMsg / serverStoppedMsg signal that the action succeeded — they
+// are distinct from serverStartMsg/serverStopMsg (the *triggers*) so the
+// Update handler doesn't loop by re-issuing the same command.
+type serverStartedMsg struct{ name string }
+type serverStoppedMsg struct{ name string }
+
 // serverActionErrMsg carries an error from a start/stop attempt.
 type serverActionErrMsg struct {
 	name string
@@ -165,7 +171,9 @@ func (sc *ServerCard) Children() []Widget {
 	return []Widget{sc.startBtn, sc.stopBtn}
 }
 
-// startServerCmd issues a Start call on the controller in a background goroutine.
+// startServerCmd issues a Start call on the controller in a background
+// goroutine and reports completion via serverStartedMsg (not the trigger
+// serverStartMsg — using the same type would loop forever).
 func startServerCmd(ctrl httpsrv.Controller, name string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -173,17 +181,18 @@ func startServerCmd(ctrl httpsrv.Controller, name string) tea.Cmd {
 		if err := ctrl.Start(ctx, name); err != nil {
 			return serverActionErrMsg{name: name, err: err}
 		}
-		return serverStartMsg{name: name}
+		return serverStartedMsg{name: name}
 	}
 }
 
-// stopServerCmd issues a Stop call on the controller in a background goroutine.
+// stopServerCmd issues a Stop call on the controller and reports completion
+// via serverStoppedMsg.
 func stopServerCmd(ctrl httpsrv.Controller, name string) tea.Cmd {
 	return func() tea.Msg {
 		if err := ctrl.Stop(name); err != nil {
 			return serverActionErrMsg{name: name, err: err}
 		}
-		return serverStopMsg{name: name}
+		return serverStoppedMsg{name: name}
 	}
 }
 

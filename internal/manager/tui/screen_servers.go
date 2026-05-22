@@ -67,6 +67,23 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 			return m, stopServerCmd(m.ctrl, msg.name)
 		}
 
+	case serverStartedMsg, serverStoppedMsg:
+		// Refresh card statuses immediately so the UI flips ON/OFF without
+		// waiting for the first event to arrive on MergedEvents.
+		m.refreshStatuses()
+		// Also push a synthetic event into the log so the operator sees the
+		// transition timestamped even before the server's own events fire.
+		var ev httpsrv.Event
+		switch v := msg.(type) {
+		case serverStartedMsg:
+			ev = httpsrv.Event{Server: v.name, Kind: "lifecycle", Note: "started"}
+		case serverStoppedMsg:
+			ev = httpsrv.Event{Server: v.name, Kind: "lifecycle", Note: "stopped"}
+		}
+		w, cmd := m.log.Update(serverEventMsg{ev: ev})
+		m.log, _ = w.(*serverLog)
+		return m, cmd
+
 	case serverActionErrMsg:
 		// Push error event into the log so the operator sees it.
 		errEv := httpsrv.Event{

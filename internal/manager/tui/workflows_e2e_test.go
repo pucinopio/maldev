@@ -9,6 +9,7 @@ package tui
 
 import (
 	"context"
+	"sync"
 	"fmt"
 	"strings"
 	"testing"
@@ -2750,6 +2751,90 @@ func TestE2E_OverlayKeysDoNotPanic(t *testing.T) {
 				o = next
 			}
 		})
+	}
+}
+
+// fakeController is a Controller stub for E2E tests: tracks start/stop calls
+// and reports back via Statuses() so the UI can flip ON/OFF visibly.
+type fakeController struct {
+	mu       sync.Mutex
+	running  map[string]bool
+	merged   chan httpsrv.Event
+	startErr error
+}
+
+func newFakeController() *fakeController {
+	return &fakeController{
+		running: map[string]bool{"revocation": false, "heartbeat": false, "probe": false},
+		merged:  make(chan httpsrv.Event, 32),
+	}
+}
+func (f *fakeController) Start(_ context.Context, name string) error {
+	if f.startErr != nil {
+		return f.startErr
+	}
+	f.mu.Lock()
+	f.running[name] = true
+	f.mu.Unlock()
+	return nil
+}
+func (f *fakeController) Stop(name string) error {
+	f.mu.Lock()
+	f.running[name] = false
+	f.mu.Unlock()
+	return nil
+}
+func (f *fakeController) Statuses() map[string]httpsrv.Status {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make(map[string]httpsrv.Status, len(f.running))
+	for name, on := range f.running {
+		out[name] = httpsrv.Status{Running: on}
+	}
+	return out
+}
+func (f *fakeController) MergedEvents() <-chan httpsrv.Event { return f.merged }
+
+// TestE2E_ServerStartFlipsPillImmediately is the user-reported defect:
+// pressing 's' (or clicking the pill) emits serverStartMsg → startServerCmd
+// returns serverStartedMsg, and the Status box flips to ON on the next View
+// pass without waiting for an event from MergedEvents. Pre-fix, startServerCmd
+// returned serverStartMsg (the same as the trigger) → infinite loop, never
+// refreshed.
+func TestE2E_ServerStartFlipsPillImmediately(t *testing.T) {
+	fake := newFakeController()
+	m := newServersModel(fake)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	// Press 's' triggers serverStartMsg on the *active* tab (revocation).
+	m, cmd := m.Update(serverStartMsg{name: "revocation"})
+	for i := 0; i < 4 && cmd != nil; i++ {
+		msg := cmd()
+		if msg == nil {
+			break
+		}
+		m, cmd = m.Update(msg)
+	}
+	if !m.cards[0].status.Running {
+		t.Errorf("expected revocation card.Running=true after start cmd, got false")
+	}
+}
+
+// TestE2E_ServerStopRefreshes mirrors the start path on the stop side.
+func TestE2E_ServerStopRefreshes(t *testing.T) {
+	fake := newFakeController()
+	_ = fake.Start(context.Background(), "heartbeat") // prime
+	m := newServersModel(fake)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
+	m, cmd := m.Update(serverStopMsg{name: "heartbeat"})
+	for i := 0; i < 4 && cmd != nil; i++ {
+		msg := cmd()
+		if msg == nil {
+			break
+		}
+		m, cmd = m.Update(msg)
+	}
+	if m.cards[1].status.Running {
+		t.Errorf("expected heartbeat card.Running=false after stop cmd, got true")
 	}
 }
 
