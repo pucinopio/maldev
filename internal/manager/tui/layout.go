@@ -362,6 +362,39 @@ func truncateRunes(s string, max int) string {
 	return string(r[:max-1]) + "…"
 }
 
+// renderHealthBar renders a health-style bar: green at 100 %, yellow ≈ 30 %,
+// red near 0 %. Use for "remaining time" / "remaining quota" style metrics
+// where filling represents *health*, not *progress*. pct is clamped 0..1.
+func renderHealthBar(w int, pct float64) string {
+	if w < 3 {
+		return ""
+	}
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 1 {
+		pct = 1
+	}
+	// Pick the gradient endpoints from the current "health" percentage so the
+	// fill always reads coherently — full = green→green, mid = orange→green,
+	// low = red→red.
+	var start, end string
+	switch {
+	case pct >= 0.66:
+		start, end = string(Palette.Yellow), string(Palette.Green)
+	case pct >= 0.33:
+		start, end = string(Palette.Red), string(Palette.Yellow)
+	default:
+		start, end = string(Palette.Red), string(Palette.Orange)
+	}
+	p := progress.New(
+		progress.WithScaledGradient(start, end),
+		progress.WithoutPercentage(),
+		progress.WithWidth(w),
+	)
+	return p.ViewAs(pct)
+}
+
 // renderProgressBar renders a horizontal progress bar of width w with cur/total
 // filled cells using the Magenta accent for the filled portion and Border colour
 // for the remainder. Both screens (wizard, onboarding) share this helper.
@@ -375,8 +408,10 @@ func renderProgressBar(w, cur, total int) string {
 	if total <= 0 {
 		total = 1
 	}
+	// Scaled gradient: cyan at 0 % → magenta at 100 %. Width-scaled (not
+	// position-scaled) so the same colour ramp shows whatever the bar width.
 	p := progress.New(
-		progress.WithSolidFill(string(Palette.Magenta)),
+		progress.WithScaledGradient(string(Palette.Cyan), string(Palette.Magenta)),
 		progress.WithoutPercentage(),
 		progress.WithWidth(w),
 	)

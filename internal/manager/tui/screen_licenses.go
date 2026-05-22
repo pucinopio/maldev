@@ -556,6 +556,21 @@ func (m licensesModel) renderDetailBody(row *ent.License) string {
 		return m.renderDetailChain(row)
 	}
 	statusPill := licStatusPill(row.Status)
+
+	// Validity health bar: 100 % at issue, 0 % at expiry. Width tracks the
+	// detail box inner width minus padding + the "validity" label gutter.
+	barW := m.width - 4 - 16
+	if barW < 8 {
+		barW = 8
+	}
+	span := row.NotAfter.Sub(row.NotBefore).Seconds()
+	remaining := time.Until(row.NotAfter).Seconds()
+	pct := 0.0
+	if span > 0 {
+		pct = remaining / span
+	}
+	bar := renderHealthBar(barW, pct)
+
 	return lipgloss.JoinVertical(lipgloss.Left,
 		kvRow("status", statusPill, 14),
 		kvRow("subject", row.Subject, 14),
@@ -564,6 +579,7 @@ func (m licensesModel) renderDetailBody(row *ent.License) string {
 		kvRow("features", strings.Join(row.Features, ", "), 14),
 		kvRow("not-before", row.NotBefore.Format("2006-01-02"), 14),
 		kvRow("not-after", row.NotAfter.Format("2006-01-02"), 14),
+		kvRow("validity", bar, 14),
 		kvRow("uuid", GlowCyan.Render(row.LicenseUUID), 14),
 	)
 }
