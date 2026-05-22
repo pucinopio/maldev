@@ -74,7 +74,7 @@ func TestE2E_SmokeTUI(t *testing.T) {
 //  2. Call View() so Layout() sets widget bounds (same path taken by real renderer).
 //  3. Send a MouseMsg with Action=Release on a coordinate inside the Active tile.
 //  4. Assert that the resulting model is on the Licenses view and its View()
-//     contains the "/ to search" hint unique to the licenses screen body.
+//     contains the "rechercher dans subject" hint unique to the licenses screen body.
 //
 // Also verifies that Action=Press (sent by some terminals instead of Release)
 // triggers the same navigation, since handleMouse accepts both.
@@ -135,7 +135,7 @@ func TestE2E_TileClickNavigatesToLicenses(t *testing.T) {
 			// Step 3: feed SwitchToLicensesMsg back so the model navigates.
 			m3, _ := m2.Update(switchMsg)
 			view := m3.View()
-			if !strings.Contains(view, "/ to search") {
+			if !strings.Contains(view, "rechercher dans subject") {
 				t.Errorf("after tile click (%s) expected Licenses view, got first line: %q", tc.name, firstLine(view))
 			}
 		})

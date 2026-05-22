@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -362,33 +363,50 @@ func (m *licensesModel) rebuildTable() {
 
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
-	stretchLastColumn(&m.table, m.width)
+	stretchLastColumn(&m.table, m.width-4) // -4 = box border(2) + padding(2)
 }
 
 func (m licensesModel) View() string {
-	// Filter chips.
-	chips := m.renderFilterBar()
-
-	// Search bar.
-	var searchBar string
+	// Search bar — when focused or non-empty, show the input; otherwise hint.
+	var searchInput string
 	if m.search.Focused() {
-		searchBar = " " + m.search.View()
+		searchInput = m.search.View()
 	} else if m.search.Value() != "" {
-		searchBar = " " + Dim.Render("search: ") + Base.Render(m.search.Value()) +
+		searchInput = Dim.Render("search: ") + Base.Render(m.search.Value()) +
 			" " + Dim.Render("(/ to edit, esc to clear)")
 	} else {
-		searchBar = " " + Dim.Render("/ to search")
+		searchInput = Dim.Render("/ rechercher dans subject…")
 	}
+	// Count + chips on the same row as the search (prototype layout).
+	count := fmt.Sprintf("%d/%d", len(m.rows), len(m.rows))
+	chips := m.renderFilterBar()
+	// Lay out: search | count | chips, with search flex-growing.
+	rowW := m.width - 4
+	chipsW := lipgloss.Width(chips)
+	countW := lipgloss.Width(count)
+	searchW := rowW - chipsW - countW - 4
+	if searchW < 20 {
+		searchW = 20
+	}
+	searchSegment := lipgloss.NewStyle().Width(searchW).Render(searchInput)
+	topRow := lipgloss.JoinHorizontal(lipgloss.Top,
+		" ", searchSegment, "  ", Dim.Render(count), "  ", chips)
 
-	tableView := m.table.View()
-	if hint := emptyTableHint(len(m.rows), m.width, "aucune licence — n pour en émettre une, ? pour l'aide"); hint != "" {
-		tableView = lipgloss.JoinVertical(lipgloss.Left, tableView, "", hint)
+	// Titled box wrapping the table.
+	titleLabel := fmt.Sprintf("Licences (%d)", len(m.rows))
+	hint := HintKey.Render("[↑↓]") + Dim.Render(" nav ") +
+		Mute.Render("· ") + HintKey.Render("[d]") + Dim.Render(" détail ") +
+		Mute.Render("· ") + HintKey.Render("[n]") + Dim.Render(" nouvelle ") +
+		Mute.Render("· ") + HintKey.Render("[x]") + Dim.Render(" révoquer ") +
+		Mute.Render("· ") + HintKey.Render("[e]") + Dim.Render(" re-émettre")
+	title := titledBoxRow(titleLabel, hint, m.width-4)
+	tableBody := m.table.View()
+	if h := emptyTableHint(len(m.rows), m.width, "aucune licence — n pour en émettre une, ? pour l'aide"); h != "" {
+		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", h)
 	}
-	body := lipgloss.JoinVertical(lipgloss.Left,
-		chips,
-		searchBar,
-		tableView,
-	)
+	boxed := BoxStyle.Width(m.width - 2).Render(title + "\n" + tableBody)
+
+	body := lipgloss.JoinVertical(lipgloss.Left, "", topRow, "", boxed)
 
 	if m.detail {
 		body = lipgloss.JoinVertical(lipgloss.Left, body, m.renderDetail())
@@ -398,7 +416,6 @@ func (m licensesModel) View() string {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
 	}
 
-	// Status bar rendered globally by the root chrome — don't duplicate here.
 	return body
 }
 

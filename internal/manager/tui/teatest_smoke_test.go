@@ -76,8 +76,8 @@ func TestTeatest_DashboardLoads(t *testing.T) {
 	// Wait for initial full frame — tab strip and box titles render immediately.
 	waitFor(t, tm, "Raccourcis")
 
-	// Navigate to Licenses — "/ to search" appears in the diff frame.
-	sendAndWait(t, tm, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}}, "/ to search")
+	// Navigate to Licenses — "rechercher dans subject" appears in the diff frame.
+	sendAndWait(t, tm, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}}, "rechercher dans subject")
 
 	// Return to dashboard — shortcuts box title re-appears in the diff.
 	sendAndWait(t, tm, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}}, "Raccourcis")
@@ -98,7 +98,7 @@ func TestTeatest_TabNavigation(t *testing.T) {
 		key    rune
 		marker string
 	}{
-		{'2', "/ to search"},      // licenses: search hint in status bar
+		{'2', "rechercher dans subject"},      // licenses: search hint in status bar
 		{'3', "KEYID"},            // issuers: column header (NAME/KEYID/CREATED)
 		{'4', "#SEALED"},          // recipients: column header (unique to recipients)
 		{'5', "SHA256"},           // identities: column header
@@ -147,7 +147,7 @@ func TestTeatest_MouseClickDoesNotPanic(t *testing.T) {
 		Action: tea.MouseActionPress,
 		Button: tea.MouseButtonLeft,
 		Type:   tea.MouseLeft,
-	}, "/ to search")
+	}, "rechercher dans subject")
 
 	tm.Send(tea.QuitMsg{})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))

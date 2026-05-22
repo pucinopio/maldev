@@ -3,18 +3,18 @@
 9 Settings                                                                                                              
                ──────────────                                                                                           
  licenses ▸ liste (0)                                                                                                   
- ┌─────┐ ┌────────┐ ┌──────────┐ ┌─────────┐ ┌─────────┐ ┌────────────┐                                                 
- │ all │ │ active │ │ expiring │ │ expired │ │ revoked │ │ superseded │                                                 
- └─────┘ └────────┘ └──────────┘ └─────────┘ └─────────┘ └────────────┘                                                 
- / to search                                                                                                            
- STATUS       SUBJECT                 AUDIENCE          KEYID               EXPIRES       FEATURES                      
                                                                                                                         
+ / rechercher dans subject…             0/0   ┌─────┐ ┌────────┐ ┌──────────┐ ┌─────────┐ ┌─────────┐ ┌────────────┐    
+                                              │ all │ │ active │ │ expiring │ │ expired │ │ revoked │ │ superseded │    
+                                              └─────┘ └────────┘ └──────────┘ └─────────┘ └─────────┘ └────────────┘    
                                                                                                                         
-                                 aucune licence — n pour en émettre une, ? pour l'aide                                  
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ Licences (0)                           [↑↓]  nav ·  [d]  détail ·  [n]  nouvelle ·  [x]  révoquer ·  [e]  re-émettre │
+│  STATUS       SUBJECT                 AUDIENCE          KEYID               EXPIRES       FEATURES                   │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                  aucune licence — n pour en émettre une, ? pour l'aide                               │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
                                                                                                                         
                                                                                                                         
                                                                                                                         
