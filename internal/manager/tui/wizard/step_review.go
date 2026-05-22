@@ -28,6 +28,8 @@ type WizardState struct {
 	BinarySize  int64
 	NotBefore   time.Time
 	NotAfter    time.Time
+	Subject     string // empty = default ("licence")
+	Audience    string // comma-separated tags
 	FreeFields  map[string]string
 	RequireTOTP bool
 	TOTPSecretID string // UUID string; empty when RequireTOTP false
@@ -102,13 +104,23 @@ func buildIssueRequest(st WizardState) (service.IssueRequest, error) {
 		return service.IssueRequest{}, fmt.Errorf("invalid issuer id: %w", err)
 	}
 
+	subject := strings.TrimSpace(st.Subject)
+	if subject == "" {
+		subject = "licence"
+	}
 	req := service.IssueRequest{
 		IssuerID:     issuerUUID,
-		Subject:      "licence", // wizard currently has no subject field; could be added
+		Subject:      subject,
 		NotBefore:    st.NotBefore,
 		NotAfter:     st.NotAfter,
 		BinarySHA256: st.BinarySHA256,
 		Actor:        "operator",
+	}
+	for _, tag := range strings.Split(st.Audience, ",") {
+		tag = strings.TrimSpace(tag)
+		if tag != "" {
+			req.AudienceList = append(req.AudienceList, tag)
+		}
 	}
 
 	if st.FreeFields != nil {
@@ -174,8 +186,14 @@ func (s *StepReview) View() string {
 		freeStr = strings.Join(pairs, ", ")
 	}
 
+	subjectStr := s.state.Subject
+	if subjectStr == "" {
+		subjectStr = "licence (default)"
+	}
 	lines := []string{
 		header, "",
+		row("Subject:", subjectStr),
+		row("Audience:", orDash(s.state.Audience)),
 		row("Issuer ID:", s.state.IssuerID),
 		row("Recipient ID:", orDash(s.state.RecipientID)),
 		row("Machine ID:", orDash(s.state.MachineID)),

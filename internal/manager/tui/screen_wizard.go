@@ -138,6 +138,8 @@ func (m wizardModel) Update(msg tea.Msg) (wizardModel, tea.Cmd) {
 
 	// Step 6 outcomes.
 	case wizard.FreeFieldsMsg:
+		m.state.Subject = msg.Subject
+		m.state.Audience = msg.Audience
 		m.state.FreeFields = msg.Fields
 		return m.advance(wizStepTOTP)
 
