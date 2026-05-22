@@ -1,5 +1,7 @@
 package tui
 
+import "fmt"
+
 // screen_hints.go implements ScreenWithHints for each navigable screen model.
 // Each Hints() returns a flat alternating [key, desc, …] slice consumed by
 // renderStatusBar. Keeping all implementations here makes the full hint map
@@ -84,4 +86,41 @@ func (m settingsModel) Hints() []string {
 		"B", "backup",
 		"q", "quitter",
 	}
+}
+
+// ── CrumbExtras implementations ──────────────────────────────────────────────
+
+func (m licensesModel) CrumbExtras() []string {
+	if row := m.selectedRow(); row != nil {
+		return []string{fmt.Sprintf("liste (%d)", len(m.rows)), row.Subject}
+	}
+	return []string{fmt.Sprintf("liste (%d)", len(m.rows))}
+}
+
+func (m issuersModel) CrumbExtras() []string {
+	if row := m.selectedRow(); row != nil {
+		return []string{row.KeyID}
+	}
+	return nil
+}
+
+func (m recipientsModel) CrumbExtras() []string {
+	if row := m.selectedRow(); row != nil {
+		return []string{"X25519", row.Name}
+	}
+	return []string{"X25519"}
+}
+
+func (m identitiesModel) CrumbExtras() []string {
+	if row := m.selectedRow(); row != nil {
+		return []string{row.Name}
+	}
+	return nil
+}
+
+func (m revocationModel) CrumbExtras() []string {
+	if len(m.rows) == 0 {
+		return []string{"CRL (0)"}
+	}
+	return []string{fmt.Sprintf("CRL (%d)", len(m.rows))}
 }

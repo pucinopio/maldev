@@ -93,15 +93,28 @@ func renderTabStrip(active ViewID, width int) string {
 }
 
 // renderBreadcrumb returns a single-row breadcrumb matching chrome.jsx Crumb.
+// extras are additional path segments contributed by the active screen
+// (e.g. selected row label) — last segment is highlighted as the "here" tag.
 //
-// Examples:  dashboard
+// Examples:
 //
-//	licenses · filter:active
-//	issuers
-func renderBreadcrumb(active ViewID, licFilter licenseFilter, width int) string {
+//	dashboard
+//	licenses · filter:active · alice@research
+//	identities · rshell-windows-amd64.bin
+func renderBreadcrumb(active ViewID, licFilter licenseFilter, extras []string, width int) string {
 	parts := []string{Dim.Render(string(active))}
 	if active == ViewLicenses && licFilter != licFilterAll {
 		parts = append(parts, Dim.Render("filter:"+licFilter.String()))
+	}
+	for i, e := range extras {
+		if e == "" {
+			continue
+		}
+		if i == len(extras)-1 {
+			parts = append(parts, GlowMagent.Render(e))
+		} else {
+			parts = append(parts, Dim.Render(e))
+		}
 	}
 	crumbText := strings.Join(parts, Mute.Render(" ▸ "))
 	return lipgloss.NewStyle().
@@ -132,4 +145,11 @@ func renderStatusBar(hints []string, width int) string {
 // instead of the global default set.
 type ScreenWithHints interface {
 	Hints() []string
+}
+
+// ScreenWithCrumb is optional — screens that have a selected-row or sub-mode
+// can return extra segments to surface in the breadcrumb (e.g. the licence
+// subject, the identity filename, etc.).
+type ScreenWithCrumb interface {
+	CrumbExtras() []string
 }

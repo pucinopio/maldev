@@ -713,6 +713,24 @@ func dispatchClick(w Widget, x, y int) tea.Cmd {
 
 // activeScreenWithHints returns the ScreenWithHints implementation for the
 // currently active view, if it has one, plus a boolean ok flag.
+// activeScreenWithCrumb returns the breadcrumb-contributor for the active
+// screen, if it implements ScreenWithCrumb.
+func (m rootModel) activeScreenWithCrumb() (ScreenWithCrumb, bool) {
+	switch m.active {
+	case ViewLicenses:
+		return m.licenses, true
+	case ViewIssuers:
+		return m.issuers, true
+	case ViewRecipients:
+		return m.recipients, true
+	case ViewIdentities:
+		return m.identities, true
+	case ViewRevocation:
+		return m.revocation, true
+	}
+	return nil, false
+}
+
 func (m rootModel) activeScreenWithHints() (ScreenWithHints, bool) {
 	switch m.active {
 	case ViewLicenses:
@@ -738,7 +756,11 @@ func (m rootModel) activeScreenWithHints() (ScreenWithHints, bool) {
 func (m rootModel) viewReady() string {
 	title := renderTitleBar(m.width)
 	tabs := renderTabStrip(m.active, m.width)
-	crumb := renderBreadcrumb(m.active, m.licenses.filter, m.width)
+	var extras []string
+	if cs, ok := m.activeScreenWithCrumb(); ok {
+		extras = cs.CrumbExtras()
+	}
+	crumb := renderBreadcrumb(m.active, m.licenses.filter, extras, m.width)
 
 	var content string
 	switch m.active {
