@@ -258,11 +258,13 @@ func (m serversModel) View() string {
 	s := card.status
 
 	// ── Status box (left column top) ──────────────────────────────────────
+	// Flat brackets to match the dashboard pattern (3-line bordered pills
+	// don't fit single-line layouts like the Status box header).
 	statusDot := Mute.Render("●")
-	statusPill := PillOff.Render("OFF")
+	statusPill := serverPillOff.Render("[OFF]")
 	if s.Running {
 		statusDot = GlowGreen.Render("●")
-		statusPill = PillOn.Render(" ON ")
+		statusPill = serverPillOn.Render("[ON]")
 	}
 	addrStr := s.ListenAddr
 	if addrStr == "" {

@@ -8,14 +8,12 @@
 ┌─────────────────────────────────────────────────────────┐  Live log · filter revocation  [c] clear · [a] auto-scroll  
 │ Status  [s] start                                       │  12:00:00  revocation    started   127.0.0.1:8443           
 │                                                         │  12:00:01  heartbeat     started   127.0.0.1:8444           
-│ ● ┌─────┐  port —                                       │  12:00:02  revocation    request   GET /revoked.pem 200     
+│ ● [OFF]  port —                                         │  12:00:02  revocation    request   GET /revoked.pem 200     
 10.0.0.1:52000                                                                                                          
-│   │ OFF │                                               │  12:00:03  probe         error     bind: address already in 
+│ — server stopped — start with  s                        │  12:00:03  probe         error     bind: address already in 
 use                                                                                                                     
-│   └─────┘                                               │  12:00:04  heartbeat     request   POST /heartbeat 401      
+└─────────────────────────────────────────────────────────┘  12:00:04  heartbeat     request   POST /heartbeat 401      
 10.0.0.2:41000                                                                                                          
-│ — server stopped — start with  s                        │                                                             
-└─────────────────────────────────────────────────────────┘                                                             
 ┌─────────────────────────────────────────────────────────┐                                                             
 │ Configuration  [e] edit · [g] regen token               │                                                             
 │ port       —                                            │                                                             
@@ -25,6 +23,8 @@ use
 │                                                         │                                                             
 │ endpoint: /crl, /revoke (admin)                         │                                                             
 └─────────────────────────────────────────────────────────┘                                                             
+                                                                                                                        
+                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         
