@@ -249,6 +249,17 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case dashboardServerToggleMsg:
+		// Inspect current status to decide start vs stop.
+		if m.httpsrv == nil {
+			return m, nil
+		}
+		statuses := m.httpsrv.Statuses()
+		if st, ok := statuses[msg.name]; ok && st.Running {
+			return m, stopServerCmd(m.httpsrv, msg.name)
+		}
+		return m, startServerCmd(m.httpsrv, msg.name)
+
 	case SwitchToLicensesMsg:
 		m.active = ViewLicenses
 		filterMap := map[string]licenseFilter{

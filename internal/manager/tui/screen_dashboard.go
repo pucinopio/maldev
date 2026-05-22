@@ -142,7 +142,7 @@ func (m dashboardModel) buildWidgetTree() Widget {
 	keyContent := widgets.NewText(m.keyCardContent(keyTextW), lipgloss.NewStyle())
 	keyBox := NewBoxWithHintClick(keyContent, "Clé d'émission active", "[k] gérer", false,
 		func() tea.Cmd { return func() tea.Msg { return widgets.SwitchViewMsg{ID: string(ViewIssuers)} } })
-	serversContent := widgets.NewText(m.serversCardContent(), lipgloss.NewStyle())
+	serversContent := &dashboardServersWidget{content: m.serversCardContent()}
 	serversBox := NewBoxWithHintClick(serversContent, "Serveurs HTTP", "[7] détail · [s] start/stop", false,
 		func() tea.Cmd { return func() tea.Msg { return widgets.SwitchViewMsg{ID: string(ViewServers)} } })
 	leftCol := NewFlex(Vertical, 1,
@@ -353,6 +353,46 @@ func (m dashboardModel) auditCardContent() string {
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
+
+// dashboardServersWidget is the inner widget of the dashboard's "Serveurs
+// HTTP" box. Each server row spans 2 lines (status line + url/help line);
+// clicking either line toggles that server's running state.
+type dashboardServersWidget struct {
+	content string
+	bounds  Rect
+}
+
+func (s *dashboardServersWidget) Layout(b Rect)                       { s.bounds = b }
+func (s *dashboardServersWidget) Bounds() Rect                        { return s.bounds }
+func (s *dashboardServersWidget) Update(tea.Msg) (Widget, tea.Cmd)    { return s, nil }
+func (s *dashboardServersWidget) View() string                        { return s.content }
+func (s *dashboardServersWidget) OnClick(_ , y int, _ tea.MouseButton) tea.Cmd {
+	// 3 servers × 2 lines per row + 1 dotted separator. Rows render starting
+	// at relative Y=0:
+	//   0,1  → revocation
+	//   2    → separator (no-op)
+	//   3,4  → heartbeat
+	//   5    → separator (no-op)
+	//   6,7  → probe
+	var name string
+	switch {
+	case y >= 0 && y <= 1:
+		name = "revocation"
+	case y >= 3 && y <= 4:
+		name = "heartbeat"
+	case y >= 6 && y <= 7:
+		name = "probe"
+	default:
+		return nil
+	}
+	target := name
+	return func() tea.Msg { return dashboardServerToggleMsg{name: target} }
+}
+
+// dashboardServerToggleMsg signals a click on a server row of the dashboard.
+// Routed through rootModel which dispatches the appropriate start/stop based
+// on the current httpsrv status.
+type dashboardServerToggleMsg struct{ name string }
 
 // shortcutsWidget is a Text + Clickable hybrid: it renders pre-formatted
 // content (the 3×2 raccourcis grid) and dispatches clicks to one of six

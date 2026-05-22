@@ -184,6 +184,18 @@ func (m wizardModel) advance(next wizardStep) (wizardModel, tea.Cmd) {
 	return m, m.initStep(next)
 }
 
+// gotoStep jumps to an arbitrary step — used by the sidebar click handler.
+// Backward jumps allowed; forward jumps allowed too (the operator owns the
+// flow, idempotent steps in the wizard cope with revisits).
+func (m wizardModel) gotoStep(target wizardStep) (wizardModel, tea.Cmd) {
+	if target < wizStepIdentity || target > wizStepReview {
+		return m, nil
+	}
+	m.blurCurrent()
+	m.step = target
+	return m, m.initStep(target)
+}
+
 // retreat moves back one step.
 func (m wizardModel) retreat() (wizardModel, tea.Cmd) {
 	if m.step == wizStepIdentity {
@@ -476,6 +488,16 @@ func (o *wizardOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 		issued := done.Issued
 		return o, func() tea.Msg {
 			return OverlayDoneMsg{Result: issued}
+		}
+	}
+	// Sidebar step click: Y=0,1 are progress strip, Y=2..17 are 8×2-line
+	// step rows. Compute which step the click landed on and jump there.
+	if mm, ok := msg.(tea.MouseMsg); ok && mm.Button == tea.MouseButtonLeft && mm.Action == tea.MouseActionPress {
+		if mm.X < 28 && mm.Y >= 2 && mm.Y < 2+2*len(wizardStepMetas) {
+			target := wizardStep((mm.Y - 2) / 2)
+			updated, cmd := o.model.gotoStep(target)
+			o.model = updated
+			return o, cmd
 		}
 	}
 	updated, cmd := o.model.Update(msg)
