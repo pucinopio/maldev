@@ -4,6 +4,7 @@
 package tui
 
 import (
+	"context"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -521,6 +522,18 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 		case ViewSettings:
 			if res.ID == "settings-vacuum" && res.Confirm {
 				m.overlays = append(m.overlays, NewOKOverlay("VACUUM", "VACUUM + ANALYZE terminé (stub — pas encore relié au service)."))
+			}
+		case ViewServers:
+			if res.ID == "server-regen-token" && res.Confirm && m.services != nil {
+				token, err := m.services.Settings.RegenerateAdminToken(context.Background(), "revocation")
+				if err != nil {
+					m.overlays = append(m.overlays, newErrorOverlay("Regen failed", err.Error()))
+				} else {
+					m.overlays = append(m.overlays, NewOKOverlay(
+						"Admin token regenerated",
+						"Nouveau token (copie-le maintenant — il ne sera plus jamais affiché) :\n\n"+token,
+					))
+				}
 			}
 		}
 
