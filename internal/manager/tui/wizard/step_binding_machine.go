@@ -61,11 +61,13 @@ func (s *StepBindingMachine) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 				return s, textinput.Blink
 			}
 			return s, nil
-		case "esc":
-			// esc always skips regardless of focus state.
+		case "esc", "ctrl+s":
+			// esc and ctrl+s always skip — ctrl+s bypasses input focus so the
+			// operator can skip even while typing in the paste field.
 			return s, func() tea.Msg { return MachineBindingMsg{MachineID: ""} }
 		case "s":
-			// Skip only when the paste textinput is not active.
+			// Bare 's' only skips when the paste textinput is not active
+			// (otherwise it would be consumed as a literal character).
 			if !s.pasteIn.Focused() {
 				return s, func() tea.Msg { return MachineBindingMsg{MachineID: ""} }
 			}
@@ -121,7 +123,7 @@ func (s *StepBindingMachine) View() string {
 			fgDim.Render("  Machine-ID hex:"),
 			"  "+s.pasteIn.View(),
 			"",
-			fgDim.Render("  enter confirm   tab probe mode   s/esc skip"),
+			renderHints("enter confirm", "TAB probe mode", "ctrl+s/esc skip"),
 		)
 	} else {
 		body = lipgloss.JoinVertical(lipgloss.Left,
@@ -130,7 +132,7 @@ func (s *StepBindingMachine) View() string {
 			fgDim.Render("  Press enter to open the probe drawer."),
 			fgDim.Render("  A one-time curl command will be shown for the target to run."),
 			"",
-			fgDim.Render("  enter open drawer   tab paste mode   s/esc skip"),
+			renderHints("enter open drawer", "TAB paste mode", "ctrl+s/esc skip"),
 		)
 	}
 

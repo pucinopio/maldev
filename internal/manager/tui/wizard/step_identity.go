@@ -161,6 +161,14 @@ func (s *StepIdentity) handleCreateKey(msg tea.KeyMsg) tea.Cmd {
 		}
 		svc := s.svc
 		return func() tea.Msg {
+			// Idempotent create: revisiting this step after Back/Next would
+			// otherwise hit a duplicate-key error on the second Generate call.
+			existing, _ := svc.Issuer.List(context.Background())
+			for _, e := range existing {
+				if e.KeyID == keyID || e.Name == name {
+					return IdentityChosenMsg{IssuerID: e.ID.String()}
+				}
+			}
 			row, err := svc.Issuer.Generate(context.Background(), name, keyID, "operator")
 			if err != nil {
 				return IdentityLoadedMsg{Err: err}

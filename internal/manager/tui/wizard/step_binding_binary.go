@@ -63,12 +63,16 @@ func (s *StepBindingBinary) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 			return s, nil
 		}
 		switch msg.String() {
-		case "esc":
+		case "esc", "ctrl+s":
 			return s, func() tea.Msg { return BinaryBindingMsg{} }
 		case "s":
 			if !s.pathIn.Focused() {
 				return s, func() tea.Msg { return BinaryBindingMsg{} }
 			}
+		case "ctrl+f":
+			// Bypass input focus so the operator can open the file picker
+			// while typing in the path field.
+			return s, func() tea.Msg { return OpenFilePickerMsg{Callback: "binary"} }
 		case "enter":
 			if s.sha256 != "" {
 				sha, sz := s.sha256, s.size
@@ -132,7 +136,7 @@ func (s *StepBindingBinary) View() string {
 		"",
 		statusLine,
 		"",
-		fgDim.Render("  enter hash/confirm   f file picker   s/esc skip"),
+		renderHints("enter hash/confirm", "ctrl+f file picker", "ctrl+s/esc skip"),
 	)
 
 	return lipgloss.JoinVertical(lipgloss.Left, header, body)

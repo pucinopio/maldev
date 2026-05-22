@@ -496,12 +496,21 @@ func (b *boxWidget) Layout(bounds Rect) {
 	// BoxStyle visual overhead: border(1) + padding(1) each side = 2 per side.
 	// lipgloss Width(n) includes the padding in n, so the actual text area is
 	// Width(n) - padding(2) = (bounds.W - 4) - 2 = bounds.W - 6.
-	// Inner Layout receives the true usable text width so child content never wraps.
+	// The Y offset depends on whether we render a title row: yOff=2 (border +
+	// title) when there is a title, else yOff=1 (border only). Without this
+	// distinction, child Clickable.OnClick receives a relative-Y that is off
+	// by 1 vs what the user sees (the title eats a row inside the inner area).
+	yOff := 1
+	hOff := 2
+	if b.title != "" {
+		yOff = 2
+		hOff = 3
+	}
 	inner := Rect{
 		X: bounds.X + 2,
-		Y: bounds.Y + 1,
+		Y: bounds.Y + yOff,
 		W: bounds.W - 6,
-		H: bounds.H - 2,
+		H: bounds.H - hOff,
 	}
 	if inner.W < 0 {
 		inner.W = 0

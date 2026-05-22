@@ -133,6 +133,15 @@ func (s *StepRecipient) handleCreateKey(msg tea.KeyMsg) tea.Cmd {
 		}
 		svc := s.svc
 		return func() tea.Msg {
+			// Idempotent create: if a key with this name already exists (e.g.
+			// the operator went Back/Next and revisited this step), reuse it
+			// rather than failing with a duplicate-name error.
+			existing, _ := svc.Recipient.List(context.Background())
+			for _, e := range existing {
+				if e.Name == name {
+					return RecipientChosenMsg{RecipientID: e.ID.String()}
+				}
+			}
 			row, err := svc.Recipient.Generate(context.Background(), name, "operator")
 			if err != nil {
 				return RecipientLoadedMsg{Err: err}
