@@ -131,7 +131,7 @@ func (m *revocationModel) rebuildTable() {
 	}
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
-	stretchLastColumn(&m.table, m.width)
+	stretchLastColumn(&m.table, m.width-4) // -4 = box border(2) + padding(2)
 }
 
 // OnClick handles row clicks on the revocation table. Chrome=4 rows; the 3

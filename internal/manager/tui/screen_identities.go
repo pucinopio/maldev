@@ -173,7 +173,7 @@ func (m *identitiesModel) rebuildTable() {
 	}
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
-	stretchLastColumn(&m.table, m.width)
+	stretchLastColumn(&m.table, m.width-4) // -4 = box border(2) + padding(2)
 }
 
 // OnClick selects the clicked table row. Chrome occupies Y=0..3; data rows
