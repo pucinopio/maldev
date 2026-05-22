@@ -133,16 +133,15 @@ func (s *StepTOTP) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
-// LoadCmd fetches TOTP secrets. Must be called after SetIssuerID.
-// TOTP secrets in this schema link to licences, not issuers directly, so we
-// return all secrets visible in the store and let the operator choose.
+// LoadCmd fetches every available TOTP secret (standalone + licence-bound).
+// The same pool is curated from the manager UI's TOTP tab.
 func (s *StepTOTP) LoadCmd() tea.Cmd {
 	svc := s.svc
 	return func() tea.Msg {
 		if svc == nil {
 			return TOTPSecretsLoadedMsg{}
 		}
-		rows, err := svc.Store.Client.TOTPSecret.Query().All(context.Background())
+		rows, err := svc.TOTP.List(context.Background())
 		return TOTPSecretsLoadedMsg{Rows: rows, Err: err}
 	}
 }

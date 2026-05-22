@@ -61,8 +61,13 @@ func (tb *TabBar) View() string {
 	parts := make([]string, len(tb.Tabs))
 	for i, tab := range tb.Tabs {
 		label := tab.Label
-		if i < 9 {
+		switch {
+		case i < 9:
 			label = dimStyle.Render(string(rune('1'+i))) + " " + label
+		case i == 9:
+			// 10th tab uses "0" as its single-key shortcut so it stays
+			// keyboard-reachable when more than 9 tabs are present.
+			label = dimStyle.Render("0") + " " + label
 		}
 		var rendered string
 		if tab.ID == tb.Active {

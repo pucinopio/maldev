@@ -70,7 +70,7 @@ type seedAudit struct {
 
 func main() {
 	var (
-		viewFlag   = flag.String("view", "dashboard", "view to render: dashboard|licenses|issuers|recipients|identities|revocation|servers|audit|settings|onboarding|passphrase|wizard|wizard-step<N>|overlay-confirm|overlay-error|overlay-quit|overlay-revoke|overlay-input|overlay-qr|overlay-filepicker")
+		viewFlag   = flag.String("view", "dashboard", "view to render: dashboard|licenses|issuers|recipients|identities|revocation|servers|totp|audit|settings|onboarding|passphrase|wizard|wizard-step<N>|overlay-confirm|overlay-error|overlay-quit|overlay-revoke|overlay-input|overlay-qr|overlay-filepicker")
 		widthFlag  = flag.Int("width", 144, "terminal width in cells")
 		heightFlag = flag.Int("height", 44, "terminal height in cells")
 		seedFlag   = flag.String("seed", "", "path to seed JSON file; empty = no data")
@@ -124,8 +124,9 @@ func main() {
 		"identities": '5',
 		"revocation": '6',
 		"servers":    '7',
-		"audit":      '8',
-		"settings":   '9',
+		"totp":       '8',
+		"audit":      '9',
+		"settings":   '0', // 10th tab after TOTP insertion
 	}
 	if r, ok := viewKeyMap[view]; ok && sess == tui.SessionReady {
 		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})

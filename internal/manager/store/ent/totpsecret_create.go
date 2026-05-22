@@ -68,6 +68,14 @@ func (_c *TOTPSecretCreate) SetLicenseID(id uuid.UUID) *TOTPSecretCreate {
 	return _c
 }
 
+// SetNillableLicenseID sets the "license" edge to the License entity by ID if the given value is not nil.
+func (_c *TOTPSecretCreate) SetNillableLicenseID(id *uuid.UUID) *TOTPSecretCreate {
+	if id != nil {
+		_c = _c.SetLicenseID(*id)
+	}
+	return _c
+}
+
 // SetLicense sets the "license" edge to the License entity.
 func (_c *TOTPSecretCreate) SetLicense(v *License) *TOTPSecretCreate {
 	return _c.SetLicenseID(v.ID)
@@ -128,9 +136,6 @@ func (_c *TOTPSecretCreate) check() error {
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "TOTPSecret.created_at"`)}
-	}
-	if len(_c.mutation.LicenseIDs()) == 0 {
-		return &ValidationError{Name: "license", err: errors.New(`ent: missing required edge "TOTPSecret.license"`)}
 	}
 	return nil
 }

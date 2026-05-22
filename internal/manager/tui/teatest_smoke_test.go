@@ -104,8 +104,9 @@ func TestTeatest_TabNavigation(t *testing.T) {
 		{'5', "SHA256"},           // identities: column header
 		{'6', "LICENSE"},          // revocation: column header
 		{'7', "Fingerprint probe"}, // servers: sub-tab label unique to servers screen
-		{'8', "TIMESTAMP"},        // audit: column header
-		{'9', "default_issuer_name"}, // settings: field label unique to settings grid body
+		{'8', "secrets TOTP"},     // totp: intro text unique to the TOTP screen
+		{'9', "TIMESTAMP"},        // audit: column header
+		{'0', "default_issuer_name"}, // settings (10th tab): unique field label
 		{'1', "Raccourcis"}, // dashboard: shortcuts box title re-rendered in diff
 	}
 

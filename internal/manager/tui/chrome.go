@@ -23,6 +23,7 @@ var tabDefs = []struct {
 	{ViewIdentities, "Identities"},
 	{ViewRevocation, "Revocation"},
 	{ViewServers, "Servers"},
+	{ViewTOTP, "TOTP"},
 	{ViewAudit, "Audit"},
 	{ViewSettings, "Settings"},
 }

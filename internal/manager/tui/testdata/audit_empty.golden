@@ -1,26 +1,24 @@
 ◆ license-manager v0.4.0-dev                            db: db.sqlite | net: online | http: 0/3 ON | 21/05/2026 07:54:12
-  1 Dashboard    2 Licenses    3 Issuer keys    4 Recipients    5 Identities    6 Revocation    7 Servers    8 Audit    
-9 Settings                                                                                                              
-                                                                                                           ───────────  
- audit                                                                                                                  
- filtres :  ┌────────┐┌────────────┐┌────────┐┌───────────┐┌─────────────┐┌──────────┐  E export CSV  J export JSON     
-            │  f all ││  l license ││  k key ││  s server ││  i identity ││  p probe │                                  
-            └────────┘└────────────┘└────────┘└───────────┘└─────────────┘└──────────┘                                  
+  1 Dashboard    2 Licenses    3 Issuer keys    4 Recipients    5 Identities    6 Revocation    7 Servers    8 TOTP    9
+Audit    0 Settings                                                                                                     
+                                                                                                           ──────────   
+ totp                                                                                                                   
                                                                                                                         
-Audit (0)  [d] detail · [r] refresh · [pgup/pgdn] page                                                                  
- TIMESTAMP             KIND                  ACTOR           TARGET            NOTE                                     
+ Les secrets TOTP créés ici sont réutilisables — la liste apparaît dans le wizard step 7. Suppression libère le secret  
+mais n'invalide pas les licences qui en dépendent.                                                                      
                                                                                                                         
-                                                                                                                        
-                               aucun évènement — l'historique s'enrichit à chaque action                                
-┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐  
-│ Detail                                                                                                             │  
-│                                                                                                                    │  
-│ aucune sélection — utilise ↑/↓ pour choisir une ligne puis  [d]  pour le détail                                    │  
-└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘  
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
-                                                                                                                        
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ TOTP secrets (0)                             [n]  générer ·  [E]  export QR PNG ·  [x]  supprimer ·  [r]  rafraîchir │
+│  LABEL                             ID            CREATED       BOUND TO                                              │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                       aucun secret TOTP — n pour créer le premier                                    │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ QR code · aucune sélection                                                                                           │
+│                                                                                                                      │
+│ crée un secret avec  [n]  ou clique une ligne pour voir le QR code.                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
                                                                                                                         
                                                                                                                         
                                                                                                                         
@@ -37,4 +35,6 @@ Audit (0)  [d] detail · [r] refresh · [pgup/pgdn] page
                                                                                                                         
                                                                                                                         
                                                                                                                         
-d détail  / chercher  f filtrer  r rafraîchir  q quitter                                                         ~ tour 
+                                                                                                                        
+                                                                                                                        
+n nouveau TOTP E export QR PNG  x supprimer r rafraîchir                                                         ~ tour 

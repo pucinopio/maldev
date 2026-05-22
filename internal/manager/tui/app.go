@@ -43,6 +43,7 @@ const (
 	ViewIdentities ViewID = "identities"
 	ViewRevocation ViewID = "revocation"
 	ViewServers    ViewID = "servers"
+	ViewTOTP       ViewID = "totp"
 	ViewAudit      ViewID = "audit"
 	ViewSettings   ViewID = "settings"
 )
@@ -102,9 +103,15 @@ type rootModel struct {
 	revocation revocationModel
 	audit      auditModel
 	settings   settingsModel
+	totp       totpModel
 
 	// Phase 4 — live Servers screen.
 	servers serversModel
+
+	// pendingCmd is set by dispatchOverlayResult when a screen handler needs
+	// to fire a follow-up Cmd (e.g. TOTP create → reload list). updateOverlay
+	// drains it on the way out so the cmd actually runs.
+	pendingCmd tea.Cmd
 
 	// eventRing retains the last eventRingCap httpsrv events so the Servers
 	// log has history when the operator navigates away and back.
@@ -135,6 +142,7 @@ func New(services *service.Services, bundle *httpsrv.Bundle, sess SessionState) 
 		revocation: newRevocationModel(services),
 		audit:      newAuditModel(services),
 		settings:   newSettingsModel(services),
+		totp:       newTOTPModel(services),
 
 		servers:   newServersModel(services, bundleAsController(bundle)),
 		eventRing: make([]httpsrv.Event, 0, eventRingCap),
@@ -243,6 +251,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.audit, _ = m.audit.Update(msg)
 		m.settings, _ = m.settings.Update(msg)
 		m.servers, _ = m.servers.Update(msg)
+		m.totp, _ = m.totp.Update(msg)
 		return m, nil
 
 	case serverEventMsg:
@@ -334,7 +343,18 @@ func (m rootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	for i, id := range viewOrder {
-		digit := string(rune('1' + i))
+		// 0-9 keyboard nav: positions 1..9 use the matching digit, position 10
+		// (and beyond) wraps to "0" so we keep a single-key shortcut for every
+		// top-level tab without spilling into non-digit keys.
+		var digit string
+		switch {
+		case i < 9:
+			digit = string(rune('1' + i))
+		case i == 9:
+			digit = "0"
+		default:
+			continue // 11+ tabs are reachable only via tab/shift+tab
+		}
 		if msg.String() == digit {
 			prev := m.active
 			m.active = id
@@ -403,6 +423,8 @@ func (m *rootModel) initScreen(id ViewID) tea.Cmd {
 		return m.audit.Init()
 	case ViewSettings:
 		return m.settings.Init()
+	case ViewTOTP:
+		return m.totp.Init()
 	case ViewServers:
 		// Replay ring buffer into the servers log so history is visible
 		// even when the operator navigated away and back. Also boot the
@@ -488,6 +510,12 @@ func (m rootModel) updateOverlay(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if _, isLicense := done.Result.(*service.IssuedLicense); isLicense {
 			cmd = tea.Batch(cmd, ListLicensesCmd(m.services))
 		}
+		// Drain any follow-up cmd that a screen handler stashed during
+		// dispatchOverlayResult (e.g. TOTP create → list reload).
+		if m.pendingCmd != nil {
+			cmd = tea.Batch(cmd, m.pendingCmd)
+			m.pendingCmd = nil
+		}
 		return m, cmd
 	}
 	m.overlays[len(m.overlays)-1] = updated
@@ -526,6 +554,10 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 		case ViewRevocation:
 			updated, _ := m.revocation.handleRevocationConfirmResult(res)
 			m.revocation = updated
+		case ViewTOTP:
+			updated, c := m.totp.handleTOTPConfirmResult(res)
+			m.totp = updated
+			m.pendingCmd = c
 		case ViewSettings:
 			if res.ID == "settings-vacuum" && res.Confirm {
 				m.overlays = append(m.overlays, NewOKOverlay("VACUUM", "VACUUM + ANALYZE terminé (stub — pas encore relié au service)."))
@@ -561,6 +593,10 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 		case ViewAudit:
 			updated, _ := m.audit.handleAuditInputResult(res)
 			m.audit = updated
+		case ViewTOTP:
+			updated, c := m.totp.handleTOTPInputResult(res)
+			m.totp = updated
+			m.pendingCmd = c
 		case ViewSettings:
 			switch res.ID {
 			case "settings-rekey":
@@ -640,6 +676,10 @@ func (m rootModel) routeReady(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ViewAudit:
 		updated, cmd := m.audit.Update(msg)
 		m.audit = updated
+		return m, cmd
+	case ViewTOTP:
+		updated, cmd := m.totp.Update(msg)
+		m.totp = updated
 		return m, cmd
 	case ViewSettings:
 		updated, cmd := m.settings.Update(msg)
@@ -737,6 +777,8 @@ func (m rootModel) activeScreenWithMouse() (ScreenMouseClick, bool) {
 		return m.servers, true
 	case ViewAudit:
 		return m.audit, true
+	case ViewTOTP:
+		return m.totp, true
 	case ViewSettings:
 		return m.settings, true
 	}
@@ -804,6 +846,8 @@ func (m rootModel) activeScreenWithHints() (ScreenWithHints, bool) {
 		return m.servers, true
 	case ViewAudit:
 		return m.audit, true
+	case ViewTOTP:
+		return m.totp, true
 	case ViewSettings:
 		return m.settings, true
 	}
@@ -837,6 +881,8 @@ func (m rootModel) viewReady() string {
 		content = m.servers.View()
 	case ViewAudit:
 		content = m.audit.View()
+	case ViewTOTP:
+		content = m.totp.View()
 	case ViewSettings:
 		content = m.settings.View()
 	}

@@ -247,7 +247,7 @@ var (
 		{Name: "encrypted_secret", Type: field.TypeBytes},
 		{Name: "account_label", Type: field.TypeString},
 		{Name: "created_at", Type: field.TypeTime},
-		{Name: "license_totps", Type: field.TypeUUID},
+		{Name: "license_totps", Type: field.TypeUUID, Nullable: true},
 	}
 	// TotpSecretsTable holds the schema information for the "totp_secrets" table.
 	TotpSecretsTable = &schema.Table{
@@ -259,7 +259,7 @@ var (
 				Symbol:     "totp_secrets_licenses_totps",
 				Columns:    []*schema.Column{TotpSecretsColumns[4]},
 				RefColumns: []*schema.Column{LicensesColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.SetNull,
 			},
 		},
 	}

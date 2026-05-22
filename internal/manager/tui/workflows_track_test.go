@@ -141,7 +141,7 @@ func TestE2E_WorkflowCoverage(t *testing.T) {
 	t.Run("settings/PVB-keys-push-overlay", func(t *testing.T) {
 		var m tea.Model = New(nil, nil, SessionReady)
 		m, _ = m.Update(tea.WindowSizeMsg{Width: W, Height: H})
-		m = driveRune(m, '9')
+		m = driveRune(m, '0') // settings sits at the 10th tab after TOTP insertion
 		// Drain init cmd
 		updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'V'}})
 		for i := 0; i < 4 && cmd != nil; i++ {

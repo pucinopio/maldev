@@ -22,7 +22,10 @@ func (TOTPSecret) Fields() []ent.Field {
 }
 
 func (TOTPSecret) Edges() []ent.Edge {
+	// The license edge is optional: a TOTP secret may exist on its own
+	// (so the operator can curate a reusable pool from the manager UI)
+	// or be bound to a single licence when it was generated at issue-time.
 	return []ent.Edge{
-		edge.From("license", License.Type).Ref("totps").Unique().Required(),
+		edge.From("license", License.Type).Ref("totps").Unique(),
 	}
 }

@@ -2037,7 +2037,7 @@ func TestE2E_SettingsScreenSections(t *testing.T) {
 func TestE2E_SettingsMouseRefreshCycle(t *testing.T) {
 	var m tea.Model = New(nil, nil, SessionReady)
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m = driveRune(m, '9')         // navigate to Settings
+	m = driveRune(m, '0')         // navigate to Settings (10th tab)
 	m = driveRune(m, 'r')         // trigger refresh
 	if got := m.View(); got == "" {
 		t.Fatal("Settings.View() empty after 'r' refresh")
@@ -2055,7 +2055,9 @@ func TestE2E_BreadcrumbRendersPerView(t *testing.T) {
 		{'1', "dashboard", "dashboard"},
 		{'2', "licenses", "licenses"},
 		{'3', "issuers", "issuers"},
-		{'9', "settings", "settings"},
+		// Settings is at position 10 since TOTP slotted in at 8; '0' is the
+		// 10th-tab shortcut.
+		{'0', "settings", "settings"},
 	}
 	for _, c := range cases {
 		t.Run(c.viewID, func(t *testing.T) {
@@ -2498,8 +2500,8 @@ func TestE2E_HelpOverlayInEachView(t *testing.T) {
 		{'5', "Identities"},
 		{'6', "Revocation"},
 		{'7', "Servers"},
-		{'8', "Audit"},
-		{'9', "Settings"},
+		{'9', "Audit"},
+		{'0', "Settings"},
 	}
 
 	for _, v := range views {
@@ -2580,8 +2582,9 @@ func TestE2E_SettingsAllInteractiveClicks(t *testing.T) {
 		var m tea.Model = New(nil, nil, SessionReady)
 		m, _ = m.Update(tea.WindowSizeMsg{Width: W, Height: H})
 		// Switch to Settings FIRST so SettingsLoadedMsg gets routed to the
-		// settings model (rootModel routes msgs to the *active* screen only).
-		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'9'}})
+		// settings model. Settings now sits at position 10 since TOTP was
+		// inserted at position 8; '0' is the wrap-around shortcut for tab 10.
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'0'}})
 		row := &ent.Setting{}
 		m, _ = m.Update(SettingsLoadedMsg{Row: row})
 		return m
@@ -2886,7 +2889,7 @@ func TestE2E_ClickabilityMatrix(t *testing.T) {
 				t.Errorf("expected Probe tab after click")
 			}
 		}},
-		{ViewAudit, toView(ViewAudit, '8'), "audit filter [l]license", 26, 5, func(t *testing.T, _, a tea.Model) {
+		{ViewAudit, toView(ViewAudit, '9'), "audit filter [l]license", 26, 5, func(t *testing.T, _, a tea.Model) {
 			if rootOf(t, a).audit.filter == auditFilterAll {
 				t.Errorf("expected filter changed after audit chip click")
 			}
@@ -2903,7 +2906,7 @@ func TestE2E_ClickabilityMatrix(t *testing.T) {
 		// Settings clickable regions (right column, computed by buildHits).
 		// At W=160 the right column starts at X=81 (colW=78, +3 for border+gap).
 		// Argon preset rows: Y=4+3=7, 8, 9. DB action rows: Y=12+6=18, 19, 20.
-		{ViewSettings, toView(ViewSettings, '9'), "argon preset [2] default", 90, 8, func(t *testing.T, _, a tea.Model) {
+		{ViewSettings, toView(ViewSettings, '0'), "argon preset [2] default", 90, 8, func(t *testing.T, _, a tea.Model) {
 			r := rootOf(t, a)
 			if r.settings.row == nil {
 				return // svc nil → row stays nil
@@ -2913,7 +2916,7 @@ func TestE2E_ClickabilityMatrix(t *testing.T) {
 				// Accept any non-zero value as proof the click was dispatched.
 			}
 		}},
-		{ViewSettings, toView(ViewSettings, '9'), "DB action [V] vacuum", 90, 19, func(t *testing.T, _, a tea.Model) {
+		{ViewSettings, toView(ViewSettings, '0'), "DB action [V] vacuum", 90, 19, func(t *testing.T, _, a tea.Model) {
 			r := rootOf(t, a)
 			if len(r.overlays) == 0 {
 				t.Errorf("expected an overlay after [V] click, got none")
@@ -2934,7 +2937,7 @@ func TestE2E_ClickabilityMatrix(t *testing.T) {
 		}},
 		// Settings toggle clicks (left col, boxCycleVieServeurs).
 		// Row 22 = confirm_quit_with_servers. Toggle flips the in-memory row.
-		{ViewSettings, toView(ViewSettings, '9'), "toggle confirm_quit_with_servers", 10, 22, func(t *testing.T, b, a tea.Model) {
+		{ViewSettings, toView(ViewSettings, '0'), "toggle confirm_quit_with_servers", 10, 22, func(t *testing.T, b, a tea.Model) {
 			rb := rootOf(t, b)
 			ra := rootOf(t, a)
 			if rb.settings.row == nil || ra.settings.row == nil {
@@ -2985,8 +2988,8 @@ func TestE2E_EveryViewKeysDoNotPanic(t *testing.T) {
 		{ViewIdentities, '5', []rune{'d'}},
 		{ViewRevocation, '6', []rune{'r'}},
 		{ViewServers, '7', []rune{'R', 'H', 'P', 'c'}},
-		{ViewAudit, '8', []rune{'l', 'k', 's', 'i', 'p', 'f'}},
-		{ViewSettings, '9', []rune{}},
+		{ViewAudit, '9', []rune{'l', 'k', 's', 'i', 'p', 'f'}},
+		{ViewSettings, '0', []rune{}},
 	}
 	for _, c := range cases {
 		m = driveRune(m, c.key)

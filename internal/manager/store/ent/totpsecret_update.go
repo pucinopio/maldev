@@ -55,6 +55,14 @@ func (_u *TOTPSecretUpdate) SetLicenseID(id uuid.UUID) *TOTPSecretUpdate {
 	return _u
 }
 
+// SetNillableLicenseID sets the "license" edge to the License entity by ID if the given value is not nil.
+func (_u *TOTPSecretUpdate) SetNillableLicenseID(id *uuid.UUID) *TOTPSecretUpdate {
+	if id != nil {
+		_u = _u.SetLicenseID(*id)
+	}
+	return _u
+}
+
 // SetLicense sets the "license" edge to the License entity.
 func (_u *TOTPSecretUpdate) SetLicense(v *License) *TOTPSecretUpdate {
 	return _u.SetLicenseID(v.ID)
@@ -98,18 +106,7 @@ func (_u *TOTPSecretUpdate) ExecX(ctx context.Context) {
 	}
 }
 
-// check runs all checks and user-defined validators on the builder.
-func (_u *TOTPSecretUpdate) check() error {
-	if _u.mutation.LicenseCleared() && len(_u.mutation.LicenseIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "TOTPSecret.license"`)
-	}
-	return nil
-}
-
 func (_u *TOTPSecretUpdate) sqlSave(ctx context.Context) (_node int, err error) {
-	if err := _u.check(); err != nil {
-		return _node, err
-	}
 	_spec := sqlgraph.NewUpdateSpec(totpsecret.Table, totpsecret.Columns, sqlgraph.NewFieldSpec(totpsecret.FieldID, field.TypeUUID))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -199,6 +196,14 @@ func (_u *TOTPSecretUpdateOne) SetLicenseID(id uuid.UUID) *TOTPSecretUpdateOne {
 	return _u
 }
 
+// SetNillableLicenseID sets the "license" edge to the License entity by ID if the given value is not nil.
+func (_u *TOTPSecretUpdateOne) SetNillableLicenseID(id *uuid.UUID) *TOTPSecretUpdateOne {
+	if id != nil {
+		_u = _u.SetLicenseID(*id)
+	}
+	return _u
+}
+
 // SetLicense sets the "license" edge to the License entity.
 func (_u *TOTPSecretUpdateOne) SetLicense(v *License) *TOTPSecretUpdateOne {
 	return _u.SetLicenseID(v.ID)
@@ -255,18 +260,7 @@ func (_u *TOTPSecretUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
-// check runs all checks and user-defined validators on the builder.
-func (_u *TOTPSecretUpdateOne) check() error {
-	if _u.mutation.LicenseCleared() && len(_u.mutation.LicenseIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "TOTPSecret.license"`)
-	}
-	return nil
-}
-
 func (_u *TOTPSecretUpdateOne) sqlSave(ctx context.Context) (_node *TOTPSecret, err error) {
-	if err := _u.check(); err != nil {
-		return _node, err
-	}
 	_spec := sqlgraph.NewUpdateSpec(totpsecret.Table, totpsecret.Columns, sqlgraph.NewFieldSpec(totpsecret.FieldID, field.TypeUUID))
 	id, ok := _u.mutation.ID()
 	if !ok {
