@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -30,6 +31,9 @@ type dashboardModel struct {
 	}
 	servers [3]cmds.ServerStatus
 	recent  []cmds.AuditEntry
+
+	heatIssue  [91]int
+	heatExpiry [91]int
 
 	width, height int
 	err           error
@@ -78,6 +82,8 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 				}
 			}
 			m.recent = msg.RecentAudit
+			m.heatIssue = msg.HeatmapIssuance
+			m.heatExpiry = msg.HeatmapExpiry
 		}
 	}
 	return m, nil
@@ -156,8 +162,11 @@ func (m dashboardModel) buildWidgetTree() Widget {
 		func() tea.Cmd { return func() tea.Msg { return widgets.SwitchViewMsg{ID: string(ViewAudit)} } })
 	shortcutsContent := &shortcutsWidget{content: m.shortcutsCardContent()}
 	shortcutsBox := NewBoxWithHint(shortcutsContent, "Raccourcis", "touche → écran", false)
+	heatContent := widgets.NewText(m.renderHeatmap(), lipgloss.NewStyle())
+	heatBox := NewBoxWithHint(heatContent, "Activité licences (91j)", "émissions · expirations", false)
 	rightCol := NewFlex(Vertical, 1,
 		FlexChild{W: auditBox, Min: 6, Flex: 2},
+		FlexChild{W: heatBox, Min: 9, Max: 10},
 		FlexChild{W: shortcutsBox, Min: 5, Flex: 1},
 	)
 
@@ -399,63 +408,63 @@ func (s *dashboardServersWidget) OnClick(_ , y int, _ tea.MouseButton) tea.Cmd {
 type dashboardServerToggleMsg struct{ name string }
 
 // renderHeatmap renders a GitHub-style 7×13 contribution grid (≈3 months) of
-// licence issuance + expiry counts. Each cell is one day; horizontal axis is
-// weeks (Monday→Sunday rows). Cell colour ramps from FgMute → Green for
-// issuances, with Red for expiry-dense days.
-//
-// Currently fed from in-memory snapshot data (m.audit + m.counters); a richer
-// dataset would come from svc.License.ListByDate(range) — future work.
+// licence activity. Each cell is one day; rows are weekdays Mon→Sun, columns
+// are the last 13 weeks (oldest left → today right). Cell colour ramps from
+// FgMute → Green by issuance count; days where expiry count > issuance get a
+// red tint so renewal-dense weeks stand out.
 func (m dashboardModel) renderHeatmap() string {
 	const (
 		weeks = 13
 		days  = 7
 	)
-	// Pseudo-data derived from counters so the visual reads as alive even
-	// without a real timeseries query plumbed yet. Replace with real data
-	// when svc.License.IssuanceByDay(rangeStart, rangeEnd) lands.
-	cell := func(w, d int) (count int, expiry bool) {
-		// Stable per-(w,d) "random" so successive renders are identical.
-		v := (w*7 + d*3) % 11
-		if v < 0 {
-			v += 11
-		}
-		count = v / 3 // 0..3
-		expiry = (w+d)%9 == 0 && count == 0
-		return
+	// today's weekday (Mon=0 … Sun=6) so column 12 ends on today's row.
+	wd := int(time.Now().Weekday())
+	if wd == 0 { // Sunday
+		wd = 6
+	} else {
+		wd--
 	}
 	colors := []lipgloss.Color{
-		Palette.FgMute,    // 0
-		Palette.BorderBright, // 1
-		Palette.Green,     // 2
-		GlowGreen.GetForeground().(lipgloss.Color), // 3+
+		Palette.FgMute,
+		Palette.BorderBright,
+		Palette.Green,
 	}
-	var lines []string
 	dayLabels := []string{"Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"}
+	var lines []string
 	for d := 0; d < days; d++ {
 		var row strings.Builder
 		row.WriteString(Mute.Render(dayLabels[d]) + " ")
 		for w := 0; w < weeks; w++ {
-			count, expiry := cell(w, d)
+			// offset 0 = today, growing backwards as we move left/up.
+			offset := (weeks-1-w)*7 + (wd - d)
+			var issue, exp int
+			if offset >= 0 && offset < 91 {
+				issue = m.heatIssue[offset]
+				exp = m.heatExpiry[offset]
+			}
 			var c lipgloss.Color
-			if expiry {
+			switch {
+			case exp > issue && exp > 0:
 				c = Palette.Red
-			} else {
-				if count >= len(colors) {
-					count = len(colors) - 1
-				}
-				c = colors[count]
+			case issue >= 3:
+				c = GlowGreen.GetForeground().(lipgloss.Color)
+			case issue >= 1:
+				c = colors[2]
+			case offset < 0 || offset >= 91:
+				c = Palette.FgMute
+			default:
+				c = colors[0]
 			}
 			row.WriteString(lipgloss.NewStyle().Foreground(c).Render("■ "))
 		}
 		lines = append(lines, row.String())
 	}
-	legend := Mute.Render("  moins") + " " +
+	legend := Mute.Render("  émissions") + " " +
 		lipgloss.NewStyle().Foreground(Palette.FgMute).Render("■") + " " +
 		lipgloss.NewStyle().Foreground(Palette.BorderBright).Render("■") + " " +
-		lipgloss.NewStyle().Foreground(Palette.Green).Render("■") + " " +
-		Mute.Render("plus  ·  ") +
+		lipgloss.NewStyle().Foreground(Palette.Green).Render("■") + "  ·  " +
 		lipgloss.NewStyle().Foreground(Palette.Red).Render("■") + " " +
-		Mute.Render("expiry-dense")
+		Mute.Render("expirations > émissions")
 	return lipgloss.JoinVertical(lipgloss.Left, lines...) + "\n" + legend
 }
 

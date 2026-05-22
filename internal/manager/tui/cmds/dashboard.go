@@ -28,6 +28,12 @@ type DashboardSnapshot struct {
 
 	RecentAudit []AuditEntry
 
+	// HeatmapIssuance/HeatmapExpiry hold per-day counts for the last 91 days
+	// (13 weeks × 7 days). Index 0 = today, index 90 = 90 days ago. Days with
+	// no licence are left as 0 so the dashboard heatmap can render mute cells.
+	HeatmapIssuance [91]int
+	HeatmapExpiry   [91]int
+
 	Err error
 }
 
@@ -73,6 +79,13 @@ func DashboardSnapshotCmd(svc *service.Services) tea.Cmd {
 			snap.Err = err
 			return DashboardSnapshotMsg(snap)
 		}
+		bucketDay := func(t time.Time) int {
+			d := int(now.Sub(t).Hours() / 24)
+			if d < 0 || d >= 91 {
+				return -1
+			}
+			return d
+		}
 		for _, lic := range active {
 			if lic.NotAfter.Before(now) {
 				snap.Expired++
@@ -80,6 +93,12 @@ func DashboardSnapshotCmd(svc *service.Services) tea.Cmd {
 				snap.ExpiringSoon++
 			} else {
 				snap.Active++
+			}
+			if d := bucketDay(lic.CreatedAt); d >= 0 {
+				snap.HeatmapIssuance[d]++
+			}
+			if d := bucketDay(lic.NotAfter); d >= 0 {
+				snap.HeatmapExpiry[d]++
 			}
 		}
 
