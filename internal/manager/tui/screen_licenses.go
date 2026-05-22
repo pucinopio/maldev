@@ -58,8 +58,9 @@ type licensesModel struct {
 	svc    *service.Services
 	rows   []*ent.License
 	err    error
-	filter    licenseFilter
-	detailTab int // 0=Ident, 1=Bind, 2=PEM, 3=Audit, 4=Chain
+	filter         licenseFilter
+	detailTab      int // 0=Ident, 1=Bind, 2=PEM, 3=Audit, 4=Chain
+	detailAuditRows []*ent.AuditEvent // lazy-loaded when A tab opens
 	search textinput.Model
 	table  table.Model
 	detail bool
@@ -195,6 +196,10 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 		m.rebuildTable()
 		return m, nil
 
+	case licenseAuditLoadedMsg:
+		m.detailAuditRows = msg.rows
+		return m, nil
+
 	case tableSelectRowMsg:
 		m.table.SetCursor(msg.row)
 		return m, nil
@@ -239,7 +244,7 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 			return m, nil
 		case "A":
 			m.detailTab = 3
-			return m, nil
+			return m, loadLicenseAuditCmd(m.svc, m.selectedRow())
 		case "C":
 			m.detailTab = 4
 			return m, nil
@@ -534,19 +539,14 @@ func licStatusPill(s licenseent.Status) string {
 func (m licensesModel) renderDetailBody(row *ent.License) string {
 	switch m.detailTab {
 	case 1:
-		return Dim.Render("  bindings — machine fingerprint, TOTP, IP allowlist…") + "\n" +
-			Dim.Render("  (vue Bindings à implémenter)")
+		return m.renderDetailBindings(row)
 	case 2:
-		return Dim.Render("  PEM blob — appuie sur [c] pour copier dans le presse-papier") + "\n" +
-			Base.Render("  -----BEGIN LICENSE-----\n  ...\n  -----END LICENSE-----")
+		return m.renderDetailPEM(row)
 	case 3:
-		return Dim.Render("  historique audit pour cette licence (timestamp, kind, actor)") + "\n" +
-			Dim.Render("  (vue Audit chronologique à implémenter)")
+		return m.renderDetailAudit(row)
 	case 4:
-		return Dim.Render("  chaîne de succession — re-émissions, parent, supersession") + "\n" +
-			Dim.Render("  (graphe à implémenter)")
+		return m.renderDetailChain(row)
 	}
-	// Default: Identité tab.
 	statusPill := licStatusPill(row.Status)
 	return lipgloss.JoinVertical(lipgloss.Left,
 		kvRow("status", statusPill, 14),
@@ -558,6 +558,101 @@ func (m licensesModel) renderDetailBody(row *ent.License) string {
 		kvRow("not-after", row.NotAfter.Format("2006-01-02"), 14),
 		kvRow("uuid", GlowCyan.Render(row.LicenseUUID), 14),
 	)
+}
+
+// renderDetailBindings shows the licence's bindings (machine fingerprint,
+// password preset, TOTP, k/v) and pinning fields. Reads from BindingsMeta +
+// IdentitySha256 + BinarySha256 + PayloadKind on the row.
+func (m licensesModel) renderDetailBindings(row *ent.License) string {
+	var lines []string
+	lines = append(lines, GlowCyan.Render("Bindings"))
+	if len(row.BindingsMeta) == 0 {
+		lines = append(lines, Dim.Render("  (no bindings)"))
+	} else {
+		for k, v := range row.BindingsMeta {
+			lines = append(lines, kvRow(k, fmt.Sprintf("%v", v), 14))
+		}
+	}
+	lines = append(lines, "", GlowCyan.Render("Pinning"))
+	if row.IdentitySha256 != "" {
+		lines = append(lines, kvRow("identity", GlowCyan.Render(row.IdentitySha256[:min(16, len(row.IdentitySha256))]+"…"), 14))
+	} else {
+		lines = append(lines, kvRow("identity", Dim.Render("—"), 14))
+	}
+	if row.BinarySha256 != "" {
+		lines = append(lines, kvRow("binary", GlowCyan.Render(row.BinarySha256[:min(16, len(row.BinarySha256))]+"…"), 14))
+	} else {
+		lines = append(lines, kvRow("binary", Dim.Render("—"), 14))
+	}
+	lines = append(lines, "", GlowCyan.Render("Sealed payload"))
+	lines = append(lines, kvRow("kind", string(row.PayloadKind), 14))
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+// renderDetailPEM displays the licence PEM text + a hint to copy.
+func (m licensesModel) renderDetailPEM(row *ent.License) string {
+	hint := HintKey.Render("[c]") + Dim.Render(" copier · ") +
+		HintKey.Render("↑↓") + Dim.Render(" scroll")
+	pem := string(row.Pem)
+	if pem == "" {
+		pem = Dim.Render("(PEM not loaded — re-émettre pour regénérer)")
+	}
+	return GlowCyan.Render("PEM signé") + "  " + hint + "\n" + Base.Render(pem)
+}
+
+// renderDetailAudit lists audit events for the selected licence. The list is
+// populated on tab-open by loadLicenseAuditCmd; until that completes we show
+// a one-line "loading" hint.
+func (m licensesModel) renderDetailAudit(row *ent.License) string {
+	hint := HintKey.Render("[r]") + Dim.Render(" refresh")
+	header := GlowCyan.Render("Audit · "+row.LicenseUUID[:8]+"…") + "  " + hint
+	if len(m.detailAuditRows) == 0 {
+		return header + "\n" + Dim.Render("  (aucun évènement pour cette licence)")
+	}
+	lines := []string{header}
+	for _, e := range m.detailAuditRows {
+		ts := e.CreatedAt.Format("2006-01-02 15:04:05")
+		lines = append(lines, "  "+
+			Mute.Render(ts)+"  "+
+			GlowCyan.Render(e.Kind)+"  "+
+			Dim.Render(e.Actor))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// licenseAuditLoadedMsg carries the audit history for the selected licence.
+type licenseAuditLoadedMsg struct {
+	rows []*ent.AuditEvent
+}
+
+// loadLicenseAuditCmd fetches the audit events for one licence via
+// svc.Audit.ListForTarget. Returns a no-op when svc or row is nil.
+func loadLicenseAuditCmd(svc *service.Services, row *ent.License) tea.Cmd {
+	if svc == nil || row == nil {
+		return nil
+	}
+	licID := row.ID
+	return func() tea.Msg {
+		rows, _ := svc.Audit.ListForTarget(context.Background(),
+			service.Target{Kind: "License", ID: licID.String()}, 50)
+		return licenseAuditLoadedMsg{rows: rows}
+	}
+}
+
+// renderDetailChain renders the parent → here → successors lineage. The ent
+// schema doesn't model parent/successor links yet, so this is a stub that
+// surfaces what we DO know (PayloadKind + status superseded warning).
+func (m licensesModel) renderDetailChain(row *ent.License) string {
+	var b strings.Builder
+	b.WriteString(GlowCyan.Render("Chaîne de succession") + "\n\n")
+	b.WriteString(Dim.Render("  parent → ") + Mute.Render("aucun (racine)") + "\n")
+	b.WriteString("  " + GlowMagent.Render(row.LicenseUUID[:8]+"…") + " " +
+		Dim.Render("("+row.Subject+")") + "\n")
+	b.WriteString(Dim.Render("  successeurs → ") + Mute.Render("aucun") + "\n")
+	if row.Status == "superseded" {
+		b.WriteString("\n" + GlowYellow.Render("⚠ cette licence est SUPERSEDED — re-émets le successeur le plus récent."))
+	}
+	return b.String()
 }
 
 func (m licensesModel) handleRevokeResult(res RevokeConfirmedMsg) (licensesModel, tea.Cmd) {

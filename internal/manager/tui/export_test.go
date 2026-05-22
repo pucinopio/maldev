@@ -37,7 +37,7 @@ func ServerStopMsg(name string) tea.Msg { return serverStopMsg{name: name} }
 // NewServersModelForTest constructs a serversModel backed by the given
 // Controller so tests can exercise start/stop routing without a real Bundle.
 func NewServersModelForTest(ctrl httpsrv.Controller) serversModel {
-	return newServersModel(ctrl)
+	return newServersModel(nil, ctrl)
 }
 
 // InitServersModel applies a WindowSizeMsg to m and returns the updated model.

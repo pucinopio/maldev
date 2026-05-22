@@ -441,7 +441,7 @@ func TestE2E_PassphraseUnlockWrong(t *testing.T) {
 // serversModel directly and asserts the mock controller records the calls.
 func TestE2E_ServersStartStop(t *testing.T) {
 	mc := &testCtrl{}
-	sm := newServersModel(mc)
+	sm := newServersModel(nil, mc)
 	sm, _ = sm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 
 	sm, cmd := sm.Update(serverStartMsg{name: "revocation"})
@@ -2242,7 +2242,7 @@ func TestE2E_ServersSubTabSwitching(t *testing.T) {
 	for _, c := range cases {
 		c := c
 		t.Run(string(c.key), func(t *testing.T) {
-			sm := newServersModel(nil)
+			sm := newServersModel(nil, nil)
 			sm, _ = sm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 			sm, _ = sm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{c.key}})
 			if sm.activeTab != c.wantTab {
@@ -2259,7 +2259,7 @@ func TestE2E_ServersSubTabSwitching(t *testing.T) {
 // TestE2E_ServersViewRendersSubTabBar verifies that the sub-tab bar renders
 // [R], [H], [P] hotkey labels in the servers screen view.
 func TestE2E_ServersViewRendersSubTabBar(t *testing.T) {
-	sm := newServersModel(nil)
+	sm := newServersModel(nil, nil)
 	sm, _ = sm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	got := sm.View()
 	for _, label := range []string{"[R]", "[H]", "[P]"} {
@@ -2803,7 +2803,7 @@ func (f *fakeController) MergedEvents() <-chan httpsrv.Event { return f.merged }
 // refreshed.
 func TestE2E_ServerStartFlipsPillImmediately(t *testing.T) {
 	fake := newFakeController()
-	m := newServersModel(fake)
+	m := newServersModel(nil, fake)
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
 	// Press 's' triggers serverStartMsg on the *active* tab (revocation).
 	m, cmd := m.Update(serverStartMsg{name: "revocation"})
@@ -2823,7 +2823,7 @@ func TestE2E_ServerStartFlipsPillImmediately(t *testing.T) {
 func TestE2E_ServerStopRefreshes(t *testing.T) {
 	fake := newFakeController()
 	_ = fake.Start(context.Background(), "heartbeat") // prime
-	m := newServersModel(fake)
+	m := newServersModel(nil, fake)
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
 	m, cmd := m.Update(serverStopMsg{name: "heartbeat"})
 	for i := 0; i < 4 && cmd != nil; i++ {

@@ -8,7 +8,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"context"
+
 	"github.com/oioio-space/maldev/internal/manager/httpsrv"
+	"github.com/oioio-space/maldev/internal/manager/service"
+	"github.com/oioio-space/maldev/internal/manager/store/ent"
 )
 
 // serverSubTab identifies which sub-tab (server type) is active.
@@ -33,20 +37,23 @@ const (
 // serversModel is the root model for the Servers screen (ViewServers).
 // It renders prototype sub-tabs (R/H/P) with a 2-column status+log layout.
 type serversModel struct {
+	svc  *service.Services  // for probe token queries (nil when not wired)
 	ctrl httpsrv.Controller // nil when bundle not wired
 
 	cards [3]*ServerCard
 	log   *serverLog
 
-	activeTab     serverSubTab   // R / H / P sub-tab
-	probeView     probeInnerView // Probe inner T / H / L view
+	activeTab    serverSubTab   // R / H / P sub-tab
+	probeView    probeInnerView // Probe inner T / H / L view
+	probeTokens  []*ent.ProbeToken // populated when T view is active
+	probeHistory []*ent.ProbeToken // populated when H view is active
 	width, height int
 }
 
 var serverNames = [3]string{"revocation", "heartbeat", "probe"}
 
-func newServersModel(ctrl httpsrv.Controller) serversModel {
-	m := serversModel{ctrl: ctrl, log: newServerLog()}
+func newServersModel(svc *service.Services, ctrl httpsrv.Controller) serversModel {
+	m := serversModel{svc: svc, ctrl: ctrl, log: newServerLog()}
 	for i, name := range serverNames {
 		m.cards[i] = newServerCard(name)
 	}
@@ -107,6 +114,14 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 		m.log, _ = w.(*serverLog)
 		return m, cmd
 
+	case probeTokensLoadedMsg:
+		m.probeTokens = msg.rows
+		return m, nil
+
+	case probeHistoryLoadedMsg:
+		m.probeHistory = msg.rows
+		return m, nil
+
 	case serverSubTabClickMsg:
 		m.activeTab = msg.tab
 		w, cmd := m.log.Update(serverLogFilterMsg{server: msg.srv})
@@ -163,12 +178,12 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 		case "t":
 			if m.activeTab == serverTabProbe {
 				m.probeView = probeViewTokens
-				return m, nil
+				return m, loadProbeTokensCmd(m.svc)
 			}
 		case "h":
 			if m.activeTab == serverTabProbe {
 				m.probeView = probeViewHistory
-				return m, nil
+				return m, loadProbeHistoryCmd(m.svc)
 			}
 		case "l":
 			if m.activeTab == serverTabProbe {
@@ -305,13 +320,19 @@ func (m serversModel) View() string {
 	}
 	if s.Running {
 		uptime := "—"
+		ratePerSec := "—"
 		if !s.StartedAt.IsZero() {
-			uptime = formatDuration(time.Since(s.StartedAt))
+			elapsed := time.Since(s.StartedAt)
+			uptime = formatDuration(elapsed)
+			if secs := elapsed.Seconds(); secs > 0 {
+				ratePerSec = fmt.Sprintf("%.2f", float64(s.Requests)/secs)
+			}
 		}
 		statusLines = append(statusLines,
 			Dim.Render("url    ")+" "+GlowCyan.Render(addrStr),
 			Dim.Render("uptime ")+" "+Base.Render(uptime),
-			Dim.Render("reqs   ")+" "+Base.Render(fmt.Sprintf("%d", s.Requests)),
+			Dim.Render("req tot")+" "+Base.Render(fmt.Sprintf("%d", s.Requests)),
+			Dim.Render("req/s  ")+" "+Base.Render(ratePerSec+Dim.Render(" (depuis le start)")),
 		)
 	} else {
 		statusLines = append(statusLines,
@@ -440,14 +461,48 @@ func (m serversModel) renderLogPanel() string {
 	return lipgloss.JoinVertical(lipgloss.Left, title, m.log.View())
 }
 
-// renderProbeTokens is a placeholder Tokens-actifs table — once
-// svc.Probe.ListActiveTokens exists, populate it with real rows. The columns
-// match the prototype (TOKEN / LABEL / ISSUED / TTL / STATE).
+// renderProbeTokens lists outstanding (not-yet-consumed, not-expired) probe
+// tokens. Columns mirror the prototype: TOKEN / LABEL / ISSUED / TTL / STATE.
+// Rows come from svc.Probe.History filtered to those still in waiting state.
 func (m serversModel) renderProbeTokens() string {
-	hint := Mute.Render("[n] générer · [q] QR · [x] révoquer")
-	title := GlowCyan.Render("Tokens actifs (0)")
+	hint := HintKey.Render("[n]") + Dim.Render(" générer · ") +
+		HintKey.Render("[q]") + Dim.Render(" QR · ") +
+		HintKey.Render("[x]") + Dim.Render(" révoquer")
+	title := GlowCyan.Render(fmt.Sprintf("Tokens actifs (%d)", len(m.probeTokens)))
 	header := title + "  " + hint
-	body := Dim.Render("\n  aucun token actif — [n] pour en générer un\n")
+
+	var body string
+	if len(m.probeTokens) == 0 {
+		body = Dim.Render("\n  aucun token actif — [n] pour en générer un\n")
+	} else {
+		col := func(label string, w int) string {
+			return lipgloss.NewStyle().Width(w).Render(GlowCyan.Render(label))
+		}
+		head := col("TOKEN", 22) + col("LABEL", 16) + col("ISSUED", 20) + col("TTL", 8) + col("STATE", 10)
+		lines := []string{head}
+		for _, t := range m.probeTokens {
+			tok := t.ID
+			if len(tok) > 20 {
+				tok = tok[:20] + "…"
+			}
+			ttl := "—"
+			if !t.ExpiresAt.IsZero() {
+				ttl = time.Until(t.ExpiresAt).Round(time.Second).String()
+			}
+			state := "waiting"
+			if !t.UsedAt.IsZero() {
+				state = "consumed"
+			}
+			lines = append(lines,
+				lipgloss.NewStyle().Width(22).Render(tok)+
+					lipgloss.NewStyle().Width(16).Render(t.Label)+
+					lipgloss.NewStyle().Width(20).Render(t.CreatedAt.Format("2006-01-02 15:04")) +
+					lipgloss.NewStyle().Width(8).Foreground(Palette.Yellow).Render(ttl)+
+					lipgloss.NewStyle().Width(10).Foreground(Palette.Yellow).Render(state),
+			)
+		}
+		body = strings.Join(lines, "\n")
+	}
 
 	// Astuce callout matching the prototype Servers — Probe panel.
 	astuceTitle := GlowCyan.Render("Astuce")
@@ -460,12 +515,78 @@ func (m serversModel) renderProbeTokens() string {
 	return lipgloss.JoinVertical(lipgloss.Left, header, body, "", astuce)
 }
 
-// renderProbeHistory placeholder for consumed/expired tokens.
+// renderProbeHistory shows received fingerprints (consumed tokens) with the
+// machine identity each one delivered. Columns mirror the prototype:
+// RECEIVED / LABEL / HOSTNAME / OS / LOCAL / USED IN.
 func (m serversModel) renderProbeHistory() string {
-	title := GlowCyan.Render("Fingerprints history (0)")
-	hint := Mute.Render("[d] détail · [↵] créer licence depuis…")
-	body := Dim.Render("\n  aucun fingerprint reçu — démarre un agent pour voir la liste ici\n")
-	return lipgloss.JoinVertical(lipgloss.Left, title+"  "+hint, body)
+	hint := HintKey.Render("[d]") + Dim.Render(" détail · ") +
+		HintKey.Render("[↵]") + Dim.Render(" créer licence depuis…")
+	title := GlowCyan.Render(fmt.Sprintf("Fingerprints history (%d)", len(m.probeHistory)))
+	if len(m.probeHistory) == 0 {
+		return title + "  " + hint + "\n" +
+			Dim.Render("  aucun fingerprint reçu — démarre un agent pour voir la liste ici")
+	}
+	col := func(label string, w int) string {
+		return lipgloss.NewStyle().Width(w).Render(GlowCyan.Render(label))
+	}
+	head := col("RECEIVED", 18) + col("LABEL", 14) + col("HOSTNAME", 16) + col("OS", 10) + col("LOCAL", 14)
+	lines := []string{title + "  " + hint, head}
+	for _, t := range m.probeHistory {
+		recv := t.UsedAt.Format("2006-01-02 15:04")
+		local := t.LocalHex
+		if len(local) > 12 {
+			local = local[:12] + "…"
+		}
+		lines = append(lines,
+			lipgloss.NewStyle().Width(18).Render(recv)+
+				lipgloss.NewStyle().Width(14).Render(t.Label)+
+				lipgloss.NewStyle().Width(16).Render(t.Hostname)+
+				lipgloss.NewStyle().Width(10).Render(t.Os)+
+				lipgloss.NewStyle().Width(14).Foreground(Palette.Cyan).Render(local),
+		)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// probeTokensLoadedMsg / probeHistoryLoadedMsg carry the result of an async
+// probe history fetch; populated when the operator opens the Tokens / History
+// inner views on the Probe sub-tab.
+type probeTokensLoadedMsg struct{ rows []*ent.ProbeToken }
+type probeHistoryLoadedMsg struct{ rows []*ent.ProbeToken }
+
+// loadProbeTokensCmd fetches recent probe-token rows. svc.Probe.History returns
+// the most recent N regardless of state; we filter into "waiting" vs "used"
+// here to populate the two views in one round-trip.
+func loadProbeTokensCmd(svc *service.Services) tea.Cmd {
+	if svc == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		rows, _ := svc.Probe.History(context.Background(), 20)
+		var active []*ent.ProbeToken
+		for _, r := range rows {
+			if r.UsedAt.IsZero() {
+				active = append(active, r)
+			}
+		}
+		return probeTokensLoadedMsg{rows: active}
+	}
+}
+
+func loadProbeHistoryCmd(svc *service.Services) tea.Cmd {
+	if svc == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		rows, _ := svc.Probe.History(context.Background(), 20)
+		var used []*ent.ProbeToken
+		for _, r := range rows {
+			if !r.UsedAt.IsZero() {
+				used = append(used, r)
+			}
+		}
+		return probeHistoryLoadedMsg{rows: used}
+	}
 }
 
 // startAllCmd issues Start for every server name via the controller.

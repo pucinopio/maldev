@@ -134,7 +134,7 @@ func New(services *service.Services, bundle *httpsrv.Bundle, sess SessionState) 
 		audit:      newAuditModel(services),
 		settings:   newSettingsModel(services),
 
-		servers:   newServersModel(bundleAsController(bundle)),
+		servers:   newServersModel(services, bundleAsController(bundle)),
 		eventRing: make([]httpsrv.Event, 0, eventRingCap),
 	}
 	return m
