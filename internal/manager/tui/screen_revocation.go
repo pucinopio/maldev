@@ -167,10 +167,22 @@ func (m revocationModel) View() string {
 	tilesRow := lipgloss.JoinHorizontal(lipgloss.Top,
 		entriesTile, " ", pushedTile, " ", exportTile)
 
-	body := m.table.View()
-	if hint := emptyTableHint(len(m.rows), m.width, "aucune révocation — la CRL est vide"); hint != "" {
-		body = lipgloss.JoinVertical(lipgloss.Left, body, "", hint)
+	intro := Dim.Render(" La ") + GlowCyan.Render("CRL") +
+		Dim.Render(" (Certificate Revocation List) liste les licences révoquées. Le serveur revocation l'expose en HTTPS pour que les clients vérifient la validité d'une licence.")
+
+	titleLabel := fmt.Sprintf("Revocations (%d)", len(m.rows))
+	hint := HintKey.Render("[n]") + Dim.Render(" ajouter ") +
+		Mute.Render("· ") + HintKey.Render("[x]") + Dim.Render(" retirer ") +
+		Mute.Render("· ") + HintKey.Render("[d]") + Dim.Render(" détail ") +
+		Mute.Render("· ") + HintKey.Render("[r]") + Dim.Render(" rafraîchir")
+	title := titledBoxRow(titleLabel, hint, m.width-4)
+
+	tableBody := m.table.View()
+	if h := emptyTableHint(len(m.rows), m.width, "aucune révocation — la CRL est vide"); h != "" {
+		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", h)
 	}
+	body := BoxStyle.Width(m.width - 2).Render(title + "\n" + tableBody)
+	body = lipgloss.JoinVertical(lipgloss.Left, "", intro, "", body)
 	if m.err != nil {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
 	}
