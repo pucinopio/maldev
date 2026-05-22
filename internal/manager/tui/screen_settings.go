@@ -110,6 +110,26 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 			return m, func() tea.Msg { return settingsActionMsg{kind: "vacuum"} }
 		case "B":
 			return m, func() tea.Msg { return settingsActionMsg{kind: "backup"} }
+		// Argon preset hotkeys
+		case "1":
+			return m, func() tea.Msg { return settingsSetArgonMsg{preset: setting.DefaultArgonPresetFast} }
+		case "2":
+			return m, func() tea.Msg { return settingsSetArgonMsg{preset: setting.DefaultArgonPresetDefault} }
+		case "3":
+			return m, func() tea.Msg { return settingsSetArgonMsg{preset: setting.DefaultArgonPresetParanoid} }
+		// Theme hotkeys — capital N/M/O to avoid colliding with lower-case
+		// shortcuts already claimed by other screens.
+		case "N":
+			return m, func() tea.Msg { return settingsSetThemeMsg{idx: 1} }
+		case "M":
+			return m, func() tea.Msg { return settingsSetThemeMsg{idx: 2} }
+		case "O":
+			return m, func() tea.Msg { return settingsSetThemeMsg{idx: 3} }
+		// Toggle hotkeys
+		case "Q":
+			return m, func() tea.Msg { return settingsToggleMsg{key: "confirm_quit_with_servers"} }
+		case "U":
+			return m, func() tea.Msg { return settingsToggleMsg{key: "auto_start_servers"} }
 		}
 	}
 	return m, nil

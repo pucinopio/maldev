@@ -18,6 +18,9 @@ type serverEventMsg struct{ ev httpsrv.Event }
 // serverLogClearMsg tells the log widget to discard its entries.
 type serverLogClearMsg struct{}
 
+// serverLogAutoScrollMsg toggles tail-follow (stick-to-bottom) on the log.
+type serverLogAutoScrollMsg struct{}
+
 // serverLogFilterMsg sets the active server name filter ("" = all).
 type serverLogFilterMsg struct{ server string }
 
@@ -67,6 +70,16 @@ func (sl *serverLog) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 	case serverLogFilterMsg:
 		sl.filter = m.server
 		sl.vp.SetContent(sl.render())
+		return sl, nil
+
+	case serverLogAutoScrollMsg:
+		sl.autoScroll = !sl.autoScroll
+		if sl.autoScroll {
+			// Re-rendering snaps the viewport to the latest content; the
+			// WrappedViewport keeps its scroll at the bottom when content
+			// grows, so this is enough to resume tail-follow.
+			sl.vp.SetContent(sl.render())
+		}
 		return sl, nil
 
 	case tea.MouseMsg:

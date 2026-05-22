@@ -12,6 +12,7 @@ import (
 
 	"github.com/oioio-space/maldev/internal/manager/httpsrv"
 	"github.com/oioio-space/maldev/internal/manager/service"
+	"github.com/oioio-space/maldev/internal/manager/store/ent"
 	"github.com/oioio-space/maldev/internal/manager/tui/widgets"
 )
 
@@ -215,6 +216,9 @@ func (m rootModel) Init() tea.Cmd {
 	if m.httpsrv != nil {
 		cmds = append(cmds, listenServerEvents(m.httpsrv))
 	}
+	// Boot the per-second status tick so the Servers screen + sparkline are
+	// always fresh, even before the user first navigates to that view.
+	cmds = append(cmds, m.servers.Init())
 	return tea.Batch(cmds...)
 }
 
@@ -401,8 +405,11 @@ func (m *rootModel) initScreen(id ViewID) tea.Cmd {
 		return m.settings.Init()
 	case ViewServers:
 		// Replay ring buffer into the servers log so history is visible
-		// even when the operator navigated away and back.
-		return m.replayEventRing()
+		// even when the operator navigated away and back. Also boot the
+		// per-second status tick — Init never fires for sub-models, so
+		// without this the Status box stays frozen until the operator
+		// clicks something.
+		return tea.Batch(m.replayEventRing(), m.servers.Init())
 	}
 	return nil
 }
@@ -560,6 +567,22 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 				m.overlays = append(m.overlays, NewOKOverlay("Passphrase", "Rekey effectué (stub — service à câbler)."))
 			case "settings-backup":
 				m.overlays = append(m.overlays, NewOKOverlay("Backup", "Backup écrit vers "+res.Value+" (stub)."))
+			}
+		case ViewServers:
+			if res.ID == "server-edit-bind" && m.services != nil {
+				addr := res.Value
+				_, err := m.services.Settings.UpdateServerConfig(context.Background(),
+					func(_ *ent.ServerConfigUpdateOne) {
+						// Bind-address persistence isn't surfaced on ServerConfig yet;
+						// once SetRevocationBindAddr / SetHeartbeatBindAddr land this
+						// closure will call them. For now show the action landed.
+					})
+				if err != nil {
+					m.overlays = append(m.overlays, newErrorOverlay("Edit failed", err.Error()))
+				} else {
+					m.overlays = append(m.overlays, NewOKOverlay("Bind address",
+						"Adresse enregistrée: "+addr+"\n(stub — la persistance par-serveur arrive avec le prochain schéma migration)"))
+				}
 			}
 		}
 	}

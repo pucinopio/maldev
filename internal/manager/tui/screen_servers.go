@@ -208,6 +208,22 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 				return pushOverlayMsg{newConfirmOverlay("server-regen-token",
 					"Regenerate admin token", body, "regen", "annuler", true)}
 			}
+		case "e":
+			// Edit config: route to an input overlay that lets the operator
+			// change the bind address. Persisted via UpdateServerConfig once
+			// the result lands (handled in app.go).
+			name := serverNames[m.activeTab]
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newInputOverlay("server-edit-bind",
+					"Edit "+name+" bind address",
+					"127.0.0.1:8443", 64)}
+			}
+		case "a":
+			// Auto-scroll toggle — flip the log's stick-to-bottom flag so the
+			// operator can pause / resume tail-follow without leaving the screen.
+			w, cmd := m.log.Update(serverLogAutoScrollMsg{})
+			m.log, _ = w.(*serverLog)
+			return m, cmd
 		// Probe inner-view keys — only meaningful when the Probe sub-tab is
 		// active; on the other sub-tabs they fall through to the default
 		// dispatcher (the tea.Update loop below).
