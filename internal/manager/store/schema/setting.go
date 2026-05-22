@@ -17,6 +17,7 @@ func (Setting) Fields() []ent.Field {
 		field.String("operator_name").Optional(),
 		field.Bool("auto_start_servers").Default(false),
 		field.Bool("confirm_quit_with_servers").Default(true),
+		field.Enum("theme").Values("neon", "mono", "nord-soft").Default("neon"),
 		field.Bytes("kek_salt"),
 		field.Bytes("kek_canary"),
 	}

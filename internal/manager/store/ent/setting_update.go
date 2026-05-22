@@ -149,6 +149,20 @@ func (_u *SettingUpdate) SetNillableConfirmQuitWithServers(v *bool) *SettingUpda
 	return _u
 }
 
+// SetTheme sets the "theme" field.
+func (_u *SettingUpdate) SetTheme(v setting.Theme) *SettingUpdate {
+	_u.mutation.SetTheme(v)
+	return _u
+}
+
+// SetNillableTheme sets the "theme" field if the given value is not nil.
+func (_u *SettingUpdate) SetNillableTheme(v *setting.Theme) *SettingUpdate {
+	if v != nil {
+		_u.SetTheme(*v)
+	}
+	return _u
+}
+
 // SetKekSalt sets the "kek_salt" field.
 func (_u *SettingUpdate) SetKekSalt(v []byte) *SettingUpdate {
 	_u.mutation.SetKekSalt(v)
@@ -198,6 +212,11 @@ func (_u *SettingUpdate) check() error {
 	if v, ok := _u.mutation.DefaultArgonPreset(); ok {
 		if err := setting.DefaultArgonPresetValidator(v); err != nil {
 			return &ValidationError{Name: "default_argon_preset", err: fmt.Errorf(`ent: validator failed for field "Setting.default_argon_preset": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Theme(); ok {
+		if err := setting.ThemeValidator(v); err != nil {
+			return &ValidationError{Name: "theme", err: fmt.Errorf(`ent: validator failed for field "Setting.theme": %w`, err)}
 		}
 	}
 	return nil
@@ -252,6 +271,9 @@ func (_u *SettingUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.ConfirmQuitWithServers(); ok {
 		_spec.SetField(setting.FieldConfirmQuitWithServers, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Theme(); ok {
+		_spec.SetField(setting.FieldTheme, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.KekSalt(); ok {
 		_spec.SetField(setting.FieldKekSalt, field.TypeBytes, value)
@@ -400,6 +422,20 @@ func (_u *SettingUpdateOne) SetNillableConfirmQuitWithServers(v *bool) *SettingU
 	return _u
 }
 
+// SetTheme sets the "theme" field.
+func (_u *SettingUpdateOne) SetTheme(v setting.Theme) *SettingUpdateOne {
+	_u.mutation.SetTheme(v)
+	return _u
+}
+
+// SetNillableTheme sets the "theme" field if the given value is not nil.
+func (_u *SettingUpdateOne) SetNillableTheme(v *setting.Theme) *SettingUpdateOne {
+	if v != nil {
+		_u.SetTheme(*v)
+	}
+	return _u
+}
+
 // SetKekSalt sets the "kek_salt" field.
 func (_u *SettingUpdateOne) SetKekSalt(v []byte) *SettingUpdateOne {
 	_u.mutation.SetKekSalt(v)
@@ -462,6 +498,11 @@ func (_u *SettingUpdateOne) check() error {
 	if v, ok := _u.mutation.DefaultArgonPreset(); ok {
 		if err := setting.DefaultArgonPresetValidator(v); err != nil {
 			return &ValidationError{Name: "default_argon_preset", err: fmt.Errorf(`ent: validator failed for field "Setting.default_argon_preset": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Theme(); ok {
+		if err := setting.ThemeValidator(v); err != nil {
+			return &ValidationError{Name: "theme", err: fmt.Errorf(`ent: validator failed for field "Setting.theme": %w`, err)}
 		}
 	}
 	return nil
@@ -533,6 +574,9 @@ func (_u *SettingUpdateOne) sqlSave(ctx context.Context) (_node *Setting, err er
 	}
 	if value, ok := _u.mutation.ConfirmQuitWithServers(); ok {
 		_spec.SetField(setting.FieldConfirmQuitWithServers, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Theme(); ok {
+		_spec.SetField(setting.FieldTheme, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.KekSalt(); ok {
 		_spec.SetField(setting.FieldKekSalt, field.TypeBytes, value)

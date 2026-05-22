@@ -27,6 +27,8 @@ const (
 	FieldAutoStartServers = "auto_start_servers"
 	// FieldConfirmQuitWithServers holds the string denoting the confirm_quit_with_servers field in the database.
 	FieldConfirmQuitWithServers = "confirm_quit_with_servers"
+	// FieldTheme holds the string denoting the theme field in the database.
+	FieldTheme = "theme"
 	// FieldKekSalt holds the string denoting the kek_salt field in the database.
 	FieldKekSalt = "kek_salt"
 	// FieldKekCanary holds the string denoting the kek_canary field in the database.
@@ -45,6 +47,7 @@ var Columns = []string{
 	FieldOperatorName,
 	FieldAutoStartServers,
 	FieldConfirmQuitWithServers,
+	FieldTheme,
 	FieldKekSalt,
 	FieldKekCanary,
 }
@@ -95,6 +98,33 @@ func DefaultArgonPresetValidator(dap DefaultArgonPreset) error {
 	}
 }
 
+// Theme defines the type for the "theme" enum field.
+type Theme string
+
+// ThemeNeon is the default value of the Theme enum.
+const DefaultTheme = ThemeNeon
+
+// Theme values.
+const (
+	ThemeNeon     Theme = "neon"
+	ThemeMono     Theme = "mono"
+	ThemeNordSoft Theme = "nord-soft"
+)
+
+func (t Theme) String() string {
+	return string(t)
+}
+
+// ThemeValidator is a validator for the "theme" field enum values. It is called by the builders before save.
+func ThemeValidator(t Theme) error {
+	switch t {
+	case ThemeNeon, ThemeMono, ThemeNordSoft:
+		return nil
+	default:
+		return fmt.Errorf("setting: invalid enum value for theme field: %q", t)
+	}
+}
+
 // OrderOption defines the ordering options for the Setting queries.
 type OrderOption func(*sql.Selector)
 
@@ -131,4 +161,9 @@ func ByAutoStartServers(opts ...sql.OrderTermOption) OrderOption {
 // ByConfirmQuitWithServers orders the results by the confirm_quit_with_servers field.
 func ByConfirmQuitWithServers(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldConfirmQuitWithServers, opts...).ToFunc()
+}
+
+// ByTheme orders the results by the theme field.
+func ByTheme(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTheme, opts...).ToFunc()
 }

@@ -46,6 +46,25 @@ func (s *StepTOTP) SetIssuerID(id string) { s.issuerID = id }
 func (s *StepTOTP) Layout(b core.Rect) { s.bounds = b }
 func (s *StepTOTP) Bounds() core.Rect  { return s.bounds }
 
+// OnClick is called by the wizard mouse router with body-local coords.
+// Toggle row lives at Y=4 (header=3 lines + blank at 3 + toggle at 4); when
+// the toggle is on, secret rows start at Y=8 ("Select TOTP secret:" at Y=6,
+// blank at 7, list from Y=8 down). Mutates state directly via pointer
+// receiver — no Cmd round-trip needed.
+func (s *StepTOTP) OnClick(_, y int) tea.Cmd {
+	if y == 4 {
+		s.requireOn = !s.requireOn
+		return nil
+	}
+	if s.requireOn && y >= 8 {
+		row := y - 8
+		if row >= 0 && row < len(s.rows) {
+			s.cursor = row
+		}
+	}
+	return nil
+}
+
 func (s *StepTOTP) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 	switch msg := msg.(type) {
 	case TOTPSecretsLoadedMsg:

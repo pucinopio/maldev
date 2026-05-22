@@ -6618,6 +6618,7 @@ type SettingMutation struct {
 	operator_name             *string
 	auto_start_servers        *bool
 	confirm_quit_with_servers *bool
+	theme                     *setting.Theme
 	kek_salt                  *[]byte
 	kek_canary                *[]byte
 	clearedFields             map[string]struct{}
@@ -7057,6 +7058,42 @@ func (m *SettingMutation) ResetConfirmQuitWithServers() {
 	m.confirm_quit_with_servers = nil
 }
 
+// SetTheme sets the "theme" field.
+func (m *SettingMutation) SetTheme(s setting.Theme) {
+	m.theme = &s
+}
+
+// Theme returns the value of the "theme" field in the mutation.
+func (m *SettingMutation) Theme() (r setting.Theme, exists bool) {
+	v := m.theme
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTheme returns the old "theme" field's value of the Setting entity.
+// If the Setting object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SettingMutation) OldTheme(ctx context.Context) (v setting.Theme, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTheme is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTheme requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTheme: %w", err)
+	}
+	return oldValue.Theme, nil
+}
+
+// ResetTheme resets all changes to the "theme" field.
+func (m *SettingMutation) ResetTheme() {
+	m.theme = nil
+}
+
 // SetKekSalt sets the "kek_salt" field.
 func (m *SettingMutation) SetKekSalt(b []byte) {
 	m.kek_salt = &b
@@ -7163,7 +7200,7 @@ func (m *SettingMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SettingMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.default_issuer_name != nil {
 		fields = append(fields, setting.FieldDefaultIssuerName)
 	}
@@ -7184,6 +7221,9 @@ func (m *SettingMutation) Fields() []string {
 	}
 	if m.confirm_quit_with_servers != nil {
 		fields = append(fields, setting.FieldConfirmQuitWithServers)
+	}
+	if m.theme != nil {
+		fields = append(fields, setting.FieldTheme)
 	}
 	if m.kek_salt != nil {
 		fields = append(fields, setting.FieldKekSalt)
@@ -7213,6 +7253,8 @@ func (m *SettingMutation) Field(name string) (ent.Value, bool) {
 		return m.AutoStartServers()
 	case setting.FieldConfirmQuitWithServers:
 		return m.ConfirmQuitWithServers()
+	case setting.FieldTheme:
+		return m.Theme()
 	case setting.FieldKekSalt:
 		return m.KekSalt()
 	case setting.FieldKekCanary:
@@ -7240,6 +7282,8 @@ func (m *SettingMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldAutoStartServers(ctx)
 	case setting.FieldConfirmQuitWithServers:
 		return m.OldConfirmQuitWithServers(ctx)
+	case setting.FieldTheme:
+		return m.OldTheme(ctx)
 	case setting.FieldKekSalt:
 		return m.OldKekSalt(ctx)
 	case setting.FieldKekCanary:
@@ -7301,6 +7345,13 @@ func (m *SettingMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetConfirmQuitWithServers(v)
+		return nil
+	case setting.FieldTheme:
+		v, ok := value.(setting.Theme)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTheme(v)
 		return nil
 	case setting.FieldKekSalt:
 		v, ok := value.([]byte)
@@ -7421,6 +7472,9 @@ func (m *SettingMutation) ResetField(name string) error {
 		return nil
 	case setting.FieldConfirmQuitWithServers:
 		m.ResetConfirmQuitWithServers()
+		return nil
+	case setting.FieldTheme:
+		m.ResetTheme()
 		return nil
 	case setting.FieldKekSalt:
 		m.ResetKekSalt()

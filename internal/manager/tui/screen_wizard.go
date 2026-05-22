@@ -169,10 +169,11 @@ func (m wizardModel) Update(msg tea.Msg) (wizardModel, tea.Cmd) {
 	// Global back / discard navigation.
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "ctrl+q":
+		case "ctrl+c", "ctrl+q", "ctrl+x":
 			// Universal discard — drops everything entered so far and closes
-			// the wizard overlay. Useful when the operator changes their mind
-			// mid-flow and Back-stepping would be too tedious.
+			// the wizard overlay. ctrl+x is the friendlier alias for users who
+			// expect a "cancel" shortcut that doesn't double as the terminal
+			// SIGINT key.
 			return m, func() tea.Msg { return WizardDoneMsg{Issued: nil} }
 		case "esc":
 			if m.step > wizStepIdentity {
@@ -180,6 +181,20 @@ func (m wizardModel) Update(msg tea.Msg) (wizardModel, tea.Cmd) {
 			}
 			// On step 1 (no progress yet) esc discards.
 			return m, func() tea.Msg { return WizardDoneMsg{Issued: nil} }
+		case "ctrl+right", "ctrl+n":
+			// Explicit "next step" — skip the current step with whatever
+			// optional state has already been entered. Mandatory steps (1, 2)
+			// require Enter via the step's own handler so they're not skipped
+			// here.
+			if m.step < wizStepReview {
+				return m.advance(m.step + 1)
+			}
+			return m, nil
+		case "ctrl+left", "ctrl+p":
+			// Explicit "previous step" — equivalent to esc but works even when
+			// the step has a textinput focused (where esc would otherwise be
+			// caught by the input).
+			return m.retreat()
 		}
 		return m.routeKeyToStep(msg)
 	}
@@ -258,7 +273,28 @@ func (m wizardModel) initStep(s wizardStep) tea.Cmd {
 		m.stepTOTP.Focus()
 		return m.stepTOTP.LoadCmd()
 	case wizStepReview:
+		// Refresh the snapshot the review screen displays so it stays
+		// in sync whenever the user lands here — via the natural
+		// step-7→step-8 advance OR via a direct sidebar click that
+		// skipped intermediate SetState calls.
+		m.stepReview.SetState(m.state)
 		m.stepReview.Focus()
+	}
+	return nil
+}
+
+// routeBodyClick dispatches a wizard-body click (already in step-local coords)
+// to whichever step exposes an OnClick. Only steps with click affordances
+// need to participate; others return nil and the click is ignored.
+func (m wizardModel) routeBodyClick(x, y int) tea.Cmd {
+	type clickable interface {
+		OnClick(x, y int) tea.Cmd
+	}
+	switch m.step {
+	case wizStepTOTP:
+		if c, ok := any(m.stepTOTP).(clickable); ok {
+			return c.OnClick(x, y)
+		}
 	}
 	return nil
 }
@@ -510,6 +546,15 @@ func (o *wizardOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 			updated, cmd := o.model.gotoStep(target)
 			o.model = updated
 			return o, cmd
+		}
+		// Body click → translate into step-local coords (sidebar=28 cols, top
+		// progress strip = 2 rows) and let the active step react.
+		if mm.X >= 28 {
+			localX := mm.X - 28
+			localY := mm.Y - 2
+			if cmd := o.model.routeBodyClick(localX, localY); cmd != nil {
+				return o, cmd
+			}
 		}
 	}
 	updated, cmd := o.model.Update(msg)

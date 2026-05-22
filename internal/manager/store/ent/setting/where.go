@@ -327,6 +327,26 @@ func ConfirmQuitWithServersNEQ(v bool) predicate.Setting {
 	return predicate.Setting(sql.FieldNEQ(FieldConfirmQuitWithServers, v))
 }
 
+// ThemeEQ applies the EQ predicate on the "theme" field.
+func ThemeEQ(v Theme) predicate.Setting {
+	return predicate.Setting(sql.FieldEQ(FieldTheme, v))
+}
+
+// ThemeNEQ applies the NEQ predicate on the "theme" field.
+func ThemeNEQ(v Theme) predicate.Setting {
+	return predicate.Setting(sql.FieldNEQ(FieldTheme, v))
+}
+
+// ThemeIn applies the In predicate on the "theme" field.
+func ThemeIn(vs ...Theme) predicate.Setting {
+	return predicate.Setting(sql.FieldIn(FieldTheme, vs...))
+}
+
+// ThemeNotIn applies the NotIn predicate on the "theme" field.
+func ThemeNotIn(vs ...Theme) predicate.Setting {
+	return predicate.Setting(sql.FieldNotIn(FieldTheme, vs...))
+}
+
 // KekSaltEQ applies the EQ predicate on the "kek_salt" field.
 func KekSaltEQ(v []byte) predicate.Setting {
 	return predicate.Setting(sql.FieldEQ(FieldKekSalt, v))

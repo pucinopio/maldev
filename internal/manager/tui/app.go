@@ -472,6 +472,15 @@ func (m *rootModel) replayEventRing() tea.Cmd {
 }
 
 func (m rootModel) updateOverlay(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// pushOverlayMsg always stacks a NEW overlay on top, even when one is
+	// already open (file picker on top of wizard, error overlay on top of
+	// confirm, etc.). Without this intercept the message gets routed to
+	// whichever overlay is on top, which generally drops it on the floor.
+	if push, ok := msg.(pushOverlayMsg); ok {
+		ov, _ := push.overlay.Update(tea.WindowSizeMsg{Width: m.width, Height: m.hgt})
+		m.overlays = append(m.overlays, ov)
+		return m, ov.Init()
+	}
 	top := m.overlays[len(m.overlays)-1]
 	// Translate absolute mouse coords into overlay-relative coords so the
 	// overlay's Update can hit-test its button row without knowing where

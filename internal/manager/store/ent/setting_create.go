@@ -109,6 +109,20 @@ func (_c *SettingCreate) SetNillableConfirmQuitWithServers(v *bool) *SettingCrea
 	return _c
 }
 
+// SetTheme sets the "theme" field.
+func (_c *SettingCreate) SetTheme(v setting.Theme) *SettingCreate {
+	_c.mutation.SetTheme(v)
+	return _c
+}
+
+// SetNillableTheme sets the "theme" field if the given value is not nil.
+func (_c *SettingCreate) SetNillableTheme(v *setting.Theme) *SettingCreate {
+	if v != nil {
+		_c.SetTheme(*v)
+	}
+	return _c
+}
+
 // SetKekSalt sets the "kek_salt" field.
 func (_c *SettingCreate) SetKekSalt(v []byte) *SettingCreate {
 	_c.mutation.SetKekSalt(v)
@@ -178,6 +192,10 @@ func (_c *SettingCreate) defaults() {
 		v := setting.DefaultConfirmQuitWithServers
 		_c.mutation.SetConfirmQuitWithServers(v)
 	}
+	if _, ok := _c.mutation.Theme(); !ok {
+		v := setting.DefaultTheme
+		_c.mutation.SetTheme(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -198,6 +216,14 @@ func (_c *SettingCreate) check() error {
 	}
 	if _, ok := _c.mutation.ConfirmQuitWithServers(); !ok {
 		return &ValidationError{Name: "confirm_quit_with_servers", err: errors.New(`ent: missing required field "Setting.confirm_quit_with_servers"`)}
+	}
+	if _, ok := _c.mutation.Theme(); !ok {
+		return &ValidationError{Name: "theme", err: errors.New(`ent: missing required field "Setting.theme"`)}
+	}
+	if v, ok := _c.mutation.Theme(); ok {
+		if err := setting.ThemeValidator(v); err != nil {
+			return &ValidationError{Name: "theme", err: fmt.Errorf(`ent: validator failed for field "Setting.theme": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.KekSalt(); !ok {
 		return &ValidationError{Name: "kek_salt", err: errors.New(`ent: missing required field "Setting.kek_salt"`)}
@@ -264,6 +290,10 @@ func (_c *SettingCreate) createSpec() (*Setting, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ConfirmQuitWithServers(); ok {
 		_spec.SetField(setting.FieldConfirmQuitWithServers, field.TypeBool, value)
 		_node.ConfirmQuitWithServers = value
+	}
+	if value, ok := _c.mutation.Theme(); ok {
+		_spec.SetField(setting.FieldTheme, field.TypeEnum, value)
+		_node.Theme = value
 	}
 	if value, ok := _c.mutation.KekSalt(); ok {
 		_spec.SetField(setting.FieldKekSalt, field.TypeBytes, value)

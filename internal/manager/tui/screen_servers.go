@@ -147,6 +147,16 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 		m.probeHistory = msg.rows
 		return m, nil
 
+	case probeViewSwitchMsg:
+		m.probeView = msg.view
+		switch msg.view {
+		case probeViewTokens:
+			return m, loadProbeTokensCmd(m.svc)
+		case probeViewHistory:
+			return m, loadProbeHistoryCmd(m.svc)
+		}
+		return m, nil
+
 	case serverSubTabClickMsg:
 		m.activeTab = msg.tab
 		w, cmd := m.log.Update(serverLogFilterMsg{server: msg.srv})
@@ -764,6 +774,29 @@ func serverCountLabel(statuses map[string]httpsrv.Status) string {
 // Inside the status box: row 0=top border, row 1=title row, row 2=blank,
 // row 3=●/port line, row 4=stopped hint OR url, etc.
 func (m serversModel) OnClick(x, y, _ int) tea.Cmd {
+	// Probe inner-tab strip on the active Probe sub-tab: lives at Y=5 (top
+	// row of the right column, just below the outer sub-tab bar at Y=4).
+	if m.activeTab == serverTabProbe && y == 5 {
+		leftColW := m.width/2 - 1
+		localX := x - leftColW
+		// Fixed widths track renderRightColumn's Padding(0,1) layout.
+		hits := []struct {
+			view probeInnerView
+			w    int
+		}{
+			{probeViewTokens, 21},
+			{probeViewHistory, 17},
+			{probeViewLive, 12},
+		}
+		cursor := 0
+		for _, h := range hits {
+			if localX >= cursor && localX < cursor+h.w {
+				target := h.view
+				return func() tea.Msg { return probeViewSwitchMsg{view: target} }
+			}
+			cursor += h.w
+		}
+	}
 	// Action bar lives at m.hgt - 2 (one above the global status bar).
 	if y == m.height-2 {
 		switch m.actionBarHit(x) {
@@ -832,3 +865,7 @@ type serverSubTabClickMsg struct {
 	tab serverSubTab
 	srv string
 }
+
+// probeViewSwitchMsg signals a Probe inner-tab (T/H/L) click; handled in
+// Update to mutate probeView + fire the matching load command.
+type probeViewSwitchMsg struct{ view probeInnerView }

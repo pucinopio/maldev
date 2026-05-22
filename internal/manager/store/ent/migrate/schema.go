@@ -232,6 +232,7 @@ var (
 		{Name: "operator_name", Type: field.TypeString, Nullable: true},
 		{Name: "auto_start_servers", Type: field.TypeBool, Default: false},
 		{Name: "confirm_quit_with_servers", Type: field.TypeBool, Default: true},
+		{Name: "theme", Type: field.TypeEnum, Enums: []string{"neon", "mono", "nord-soft"}, Default: "neon"},
 		{Name: "kek_salt", Type: field.TypeBytes},
 		{Name: "kek_canary", Type: field.TypeBytes},
 	}

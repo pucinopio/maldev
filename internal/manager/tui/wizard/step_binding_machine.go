@@ -116,10 +116,10 @@ func (s *StepBindingMachine) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 		case "enter":
 			switch s.mode {
 			case machinePaste:
+				// Enter on empty paste field = skip the binding entirely so the
+				// operator can press their way through this optional step
+				// without having to remember the ctrl+s shortcut.
 				val := strings.TrimSpace(s.pasteIn.Value())
-				if val == "" {
-					return s, nil
-				}
 				return s, func() tea.Msg { return MachineBindingMsg{MachineID: val} }
 			case machineProbe:
 				return s, func() tea.Msg { return OpenProbeDrawerMsg{} }

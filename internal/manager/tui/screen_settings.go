@@ -54,13 +54,25 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 		m.row = msg.Row
 		return m, nil
 	case settingsSetThemeMsg:
-		// Echo the theme choice via an OK overlay so the user sees that the
-		// click landed. Persistence (svc.Settings.SetTheme) is a follow-up.
-		themeName := []string{"neon", "mono", "nord-soft"}[max(0, min(2, msg.idx-1))]
-		return m, func() tea.Msg {
-			return pushOverlayMsg{NewOKOverlay("Thème",
-				"Thème '"+themeName+"' sélectionné (stub — persistence à câbler).")}
+		themeMap := []setting.Theme{
+			setting.ThemeNeon,
+			setting.ThemeMono,
+			setting.ThemeNordSoft,
 		}
+		idx := msg.idx - 1
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= len(themeMap) {
+			idx = len(themeMap) - 1
+		}
+		t := themeMap[idx]
+		if m.row != nil {
+			m.row.Theme = t
+		}
+		return m, settingsPersistCmd(m.svc, func(q *ent.SettingUpdateOne) {
+			q.SetTheme(t)
+		})
 
 	case settingsToggleMsg:
 		// Toggle in-memory first so the UI updates immediately, then persist

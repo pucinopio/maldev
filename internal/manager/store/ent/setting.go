@@ -31,6 +31,8 @@ type Setting struct {
 	AutoStartServers bool `json:"auto_start_servers,omitempty"`
 	// ConfirmQuitWithServers holds the value of the "confirm_quit_with_servers" field.
 	ConfirmQuitWithServers bool `json:"confirm_quit_with_servers,omitempty"`
+	// Theme holds the value of the "theme" field.
+	Theme setting.Theme `json:"theme,omitempty"`
 	// KekSalt holds the value of the "kek_salt" field.
 	KekSalt []byte `json:"kek_salt,omitempty"`
 	// KekCanary holds the value of the "kek_canary" field.
@@ -49,7 +51,7 @@ func (*Setting) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case setting.FieldID, setting.FieldDefaultTTLSeconds:
 			values[i] = new(sql.NullInt64)
-		case setting.FieldDefaultIssuerName, setting.FieldDefaultArgonPreset, setting.FieldOperatorName:
+		case setting.FieldDefaultIssuerName, setting.FieldDefaultArgonPreset, setting.FieldOperatorName, setting.FieldTheme:
 			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -115,6 +117,12 @@ func (_m *Setting) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field confirm_quit_with_servers", values[i])
 			} else if value.Valid {
 				_m.ConfirmQuitWithServers = value.Bool
+			}
+		case setting.FieldTheme:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field theme", values[i])
+			} else if value.Valid {
+				_m.Theme = setting.Theme(value.String)
 			}
 		case setting.FieldKekSalt:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -184,6 +192,9 @@ func (_m *Setting) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("confirm_quit_with_servers=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ConfirmQuitWithServers))
+	builder.WriteString(", ")
+	builder.WriteString("theme=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Theme))
 	builder.WriteString(", ")
 	builder.WriteString("kek_salt=")
 	builder.WriteString(fmt.Sprintf("%v", _m.KekSalt))
