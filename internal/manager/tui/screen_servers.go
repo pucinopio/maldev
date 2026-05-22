@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -19,6 +20,16 @@ const (
 	serverTabProbe
 )
 
+// probeInnerView identifies which inner panel is active inside the Probe
+// sub-tab. T = active tokens, H = history (consumed/expired), L = live log.
+type probeInnerView int
+
+const (
+	probeViewTokens probeInnerView = iota
+	probeViewHistory
+	probeViewLive
+)
+
 // serversModel is the root model for the Servers screen (ViewServers).
 // It renders prototype sub-tabs (R/H/P) with a 2-column status+log layout.
 type serversModel struct {
@@ -27,7 +38,8 @@ type serversModel struct {
 	cards [3]*ServerCard
 	log   *serverLog
 
-	activeTab serverSubTab // R / H / P sub-tab
+	activeTab     serverSubTab   // R / H / P sub-tab
+	probeView     probeInnerView // Probe inner T / H / L view
 	width, height int
 }
 
@@ -145,6 +157,24 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 			w, cmd := m.log.Update(serverLogClearMsg{})
 			m.log, _ = w.(*serverLog)
 			return m, cmd
+		// Probe inner-view keys — only meaningful when the Probe sub-tab is
+		// active; on the other sub-tabs they fall through to the default
+		// dispatcher (the tea.Update loop below).
+		case "t":
+			if m.activeTab == serverTabProbe {
+				m.probeView = probeViewTokens
+				return m, nil
+			}
+		case "h":
+			if m.activeTab == serverTabProbe {
+				m.probeView = probeViewHistory
+				return m, nil
+			}
+		case "l":
+			if m.activeTab == serverTabProbe {
+				m.probeView = probeViewLive
+				return m, nil
+			}
 		}
 	}
 
@@ -342,12 +372,8 @@ func (m serversModel) View() string {
 	)
 	leftCol := lipgloss.JoinVertical(lipgloss.Left, statusBox, configBox)
 
-	// ── Right column: live log ────────────────────────────────────────────
-	logFilter := serverNames[m.activeTab]
-	logTitle := GlowCyan.Render(fmt.Sprintf("Live log · filter %s", logFilter)) +
-		"  " + Mute.Render("[c] clear · [a] auto-scroll")
-	logBody := m.log.View()
-	rightCol := lipgloss.JoinVertical(lipgloss.Left, logTitle, logBody)
+	// ── Right column: live log (or Probe-specific inner view) ────────────
+	rightCol := m.renderRightColumn()
 
 	// ── 2-column body ─────────────────────────────────────────────────────
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "  ", rightCol)
@@ -355,6 +381,82 @@ func (m serversModel) View() string {
 	// Status bar is rendered by the root chrome (viewReady picks up Hints()
 	// via the ScreenWithHints interface) — don't duplicate it here.
 	return lipgloss.JoinVertical(lipgloss.Left, subTabBar, body)
+}
+
+// renderRightColumn renders the right-side panel of the Servers screen.
+// For the Revocation + Heartbeat sub-tabs it shows the live log only.
+// For Probe it additionally shows an inner-tab strip with three views:
+// [T] Tokens actifs · [H] History · [L] Live log.
+func (m serversModel) renderRightColumn() string {
+	if m.activeTab != serverTabProbe {
+		return m.renderLogPanel()
+	}
+	// Probe inner-tab strip — active view gets a cyan underline matching the
+	// outer sub-tab styling. Counts come from the merged event log for now
+	// (real svc.Probe.History would feed them; this is a stub layout).
+	tabDefs := []struct {
+		key   string
+		view  probeInnerView
+		label string
+	}{
+		{"t", probeViewTokens, fmt.Sprintf("Tokens actifs (%d)", 0)},
+		{"h", probeViewHistory, fmt.Sprintf("History (%d)", 0)},
+		{"l", probeViewLive, "Live log"},
+	}
+	var parts []string
+	for _, td := range tabDefs {
+		key := fmt.Sprintf("[%s]", strings.ToUpper(td.key))
+		var s string
+		if m.probeView == td.view {
+			s = lipgloss.NewStyle().Padding(0, 1).
+				Border(lipgloss.NormalBorder(), false, false, true, false).
+				BorderForeground(Palette.Cyan).
+				Render(GlowCyan.Render(key) + " " + Base.Render(td.label))
+		} else {
+			s = lipgloss.NewStyle().Padding(0, 1).
+				Render(Mute.Render(key) + " " + Dim.Render(td.label))
+		}
+		parts = append(parts, s)
+	}
+	tabBar := lipgloss.JoinHorizontal(lipgloss.Top, parts...)
+
+	var content string
+	switch m.probeView {
+	case probeViewTokens:
+		content = m.renderProbeTokens()
+	case probeViewHistory:
+		content = m.renderProbeHistory()
+	case probeViewLive:
+		content = m.renderLogPanel()
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content)
+}
+
+// renderLogPanel produces the Live log title + viewport.
+func (m serversModel) renderLogPanel() string {
+	logFilter := serverNames[m.activeTab]
+	title := GlowCyan.Render(fmt.Sprintf("Live log · filter %s", logFilter)) +
+		"  " + Mute.Render("[c] clear · [a] auto-scroll")
+	return lipgloss.JoinVertical(lipgloss.Left, title, m.log.View())
+}
+
+// renderProbeTokens is a placeholder Tokens-actifs table — once
+// svc.Probe.ListActiveTokens exists, populate it with real rows. The columns
+// match the prototype (TOKEN / LABEL / ISSUED / TTL / STATE).
+func (m serversModel) renderProbeTokens() string {
+	hint := Mute.Render("[n] générer · [q] QR · [x] révoquer")
+	title := GlowCyan.Render("Tokens actifs (0)")
+	header := title + "  " + hint
+	body := Dim.Render("\n  aucun token actif — [n] pour en générer un\n")
+	return lipgloss.JoinVertical(lipgloss.Left, header, body)
+}
+
+// renderProbeHistory placeholder for consumed/expired tokens.
+func (m serversModel) renderProbeHistory() string {
+	title := GlowCyan.Render("Fingerprints history (0)")
+	hint := Mute.Render("[d] détail · [↵] créer licence depuis…")
+	body := Dim.Render("\n  aucun fingerprint reçu — démarre un agent pour voir la liste ici\n")
+	return lipgloss.JoinVertical(lipgloss.Left, title+"  "+hint, body)
 }
 
 // startAllCmd issues Start for every server name via the controller.
