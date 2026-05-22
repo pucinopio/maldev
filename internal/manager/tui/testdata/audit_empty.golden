@@ -7,16 +7,16 @@ Audit    0 Settings
  Les secrets TOTP créés ici sont réutilisables — la liste apparaît dans le wizard step 7. Suppression libère le secret  
 mais n'invalide pas les licences qui en dépendent.                                                                      
                                                                                                                         
-┌───────────────────────────────────────────────────────────────┐  ┌───────────────────────────────────────────────────┐
-│ TOTP secrets (0)                             [n]  générer ·   │  │ QR code · aucune sélection                        │
-│ [E]  export QR PNG ·  [x]  supprimer ·  [r]  rafraîchir       │  │                                                   │
-│  LABEL                             ID            CREATED      │  │ crée un secret avec  [n]  ou sélectionne une      │
-│ BOUND TO                                                      │  │ ligne.                                            │
-│                                                               │  └───────────────────────────────────────────────────┘
-│                                                               │                                                       
-│                                       aucun secret TOTP — n   │                                                       
-│ pour créer le premier                                         │                                                       
-└───────────────────────────────────────────────────────────────┘                                                       
+┌──────────────────────────────────────────────────────────────┐  ┌────────────────────────────────────────────────────┐
+│ TOTP secrets (0)                             [n]  générer ·  │  │ QR code · aucune sélection                         │
+│ [E]  export QR PNG ·  [x]  supprimer ·  [r]  rafraîchir      │  │                                                    │
+│  LABEL                             ID            CREATED     │  │ crée un secret avec  [n]  ou sélectionne une       │
+│ BOUND TO                                                     │  │ ligne.                                             │
+│                                                              │  └────────────────────────────────────────────────────┘
+│                                                              │                                                        
+│                                       aucun secret TOTP — n  │                                                        
+│ pour créer le premier                                        │                                                        
+└──────────────────────────────────────────────────────────────┘                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

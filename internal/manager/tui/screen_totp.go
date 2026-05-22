@@ -235,20 +235,29 @@ func (m totpModel) View() string {
 	if h := emptyTableHint(len(m.rows), m.width, "aucun secret TOTP — n pour créer le premier"); h != "" {
 		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", h)
 	}
-	// 2-column body: list on the left (~55% width), QR detail on the right.
-	leftW := (m.width - 4) * 55 / 100
-	rightW := m.width - 4 - leftW - 2 // -2 for the horizontal gap
-	if leftW < 40 {
-		leftW = 40
+	// 2-column body when there is enough horizontal room: list on the left,
+	// QR detail on the right. Falls back to a stacked layout on narrow
+	// terminals so neither column overflows the screen.
+	totalW := m.width - 4
+	// Detail panel needs ~35 cells for the half-block QR + box chrome.
+	const minDetailW = 36
+	const minListW = 50
+	var body string
+	if totalW >= minListW+2+minDetailW {
+		rightW := minDetailW
+		if rightW < totalW*45/100 {
+			rightW = totalW * 45 / 100
+		}
+		leftW := totalW - rightW - 2 // 2-cell gap
+		listBox := BoxStyle.Width(leftW).Render(title + "\n" + tableBody)
+		detailBox := m.renderDetailSide(rightW)
+		twoCol := lipgloss.JoinHorizontal(lipgloss.Top, listBox, "  ", detailBox)
+		body = lipgloss.JoinVertical(lipgloss.Left, "", intro, "", twoCol)
+	} else {
+		listBox := BoxStyle.Width(m.width - 2).Render(title + "\n" + tableBody)
+		detailBox := m.renderDetailSide(m.width - 2)
+		body = lipgloss.JoinVertical(lipgloss.Left, "", intro, "", listBox, detailBox)
 	}
-	if rightW < 40 {
-		rightW = 40
-	}
-	listBox := BoxStyle.Width(leftW).Render(title + "\n" + tableBody)
-	detailBox := m.renderDetailSide(rightW)
-
-	twoCol := lipgloss.JoinHorizontal(lipgloss.Top, listBox, "  ", detailBox)
-	body := lipgloss.JoinVertical(lipgloss.Left, "", intro, "", twoCol)
 	if m.err != nil {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
 	}

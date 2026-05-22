@@ -567,14 +567,17 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 		case ViewIssuers:
 			// Retire confirm — no service call for retire yet (Phase 3 will add it).
 		case ViewRecipients:
-			updated, _ := m.recipients.handleRecipientConfirmResult(res)
+			updated, c := m.recipients.handleRecipientConfirmResult(res)
 			m.recipients = updated
+			m.pendingCmd = c
 		case ViewIdentities:
-			updated, _ := m.identities.handleIdentityConfirmResult(res)
+			updated, c := m.identities.handleIdentityConfirmResult(res)
 			m.identities = updated
+			m.pendingCmd = c
 		case ViewRevocation:
-			updated, _ := m.revocation.handleRevocationConfirmResult(res)
+			updated, c := m.revocation.handleRevocationConfirmResult(res)
 			m.revocation = updated
+			m.pendingCmd = c
 		case ViewTOTP:
 			updated, c := m.totp.handleTOTPConfirmResult(res)
 			m.totp = updated
@@ -600,20 +603,25 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 	case InputResultMsg:
 		switch m.active {
 		case ViewIssuers:
-			updated, _ := m.issuers.handleIssuerInputResult(res)
+			updated, c := m.issuers.handleIssuerInputResult(res)
 			m.issuers = updated
+			m.pendingCmd = c
 		case ViewRecipients:
-			updated, _ := m.recipients.handleRecipientInputResult(res)
+			updated, c := m.recipients.handleRecipientInputResult(res)
 			m.recipients = updated
+			m.pendingCmd = c
 		case ViewIdentities:
-			updated, _ := m.identities.handleIdentityInputResult(res)
+			updated, c := m.identities.handleIdentityInputResult(res)
 			m.identities = updated
+			m.pendingCmd = c
 		case ViewRevocation:
-			updated, _ := m.revocation.handleRevocationInputResult(res)
+			updated, c := m.revocation.handleRevocationInputResult(res)
 			m.revocation = updated
+			m.pendingCmd = c
 		case ViewAudit:
-			updated, _ := m.audit.handleAuditInputResult(res)
+			updated, c := m.audit.handleAuditInputResult(res)
 			m.audit = updated
+			m.pendingCmd = c
 		case ViewTOTP:
 			updated, c := m.totp.handleTOTPInputResult(res)
 			m.totp = updated

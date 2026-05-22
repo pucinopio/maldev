@@ -540,20 +540,26 @@ func (o *wizardOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 			return OverlayDoneMsg{Result: issued}
 		}
 	}
+	// Modal frame offsets: border(1) + padding(1,2) → content starts at
+	// X=3, Y=2 inside the overlay's reported coords.
+	const frameX, frameY = 3, 2
 	// Sidebar step click: Y=0,1 are progress strip, Y=2..17 are 8×2-line
-	// step rows. Compute which step the click landed on and jump there.
+	// step rows (in body-local coords). Compute which step the click landed
+	// on and jump there.
 	if mm, ok := msg.(tea.MouseMsg); ok && mm.Button == tea.MouseButtonLeft && mm.Action == tea.MouseActionPress {
-		if mm.X < 28 && mm.Y >= 2 && mm.Y < 2+2*len(wizardStepMetas) {
-			target := wizardStep((mm.Y - 2) / 2)
+		bodyX := mm.X - frameX
+		bodyY := mm.Y - frameY
+		if bodyX < 28 && bodyY >= 2 && bodyY < 2+2*len(wizardStepMetas) {
+			target := wizardStep((bodyY - 2) / 2)
 			updated, cmd := o.model.gotoStep(target)
 			o.model = updated
 			return o, cmd
 		}
 		// Body click → translate into step-local coords (sidebar=28 cols, top
 		// progress strip = 2 rows) and let the active step react.
-		if mm.X >= 28 {
-			localX := mm.X - 28
-			localY := mm.Y - 2
+		if bodyX >= 28 {
+			localX := bodyX - 28
+			localY := bodyY - 2
 			if cmd := o.model.routeBodyClick(localX, localY); cmd != nil {
 				return o, cmd
 			}
@@ -565,6 +571,13 @@ func (o *wizardOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 }
 
 func (o *wizardOverlay) View() string {
-	return o.model.View()
+	// Wrap the wizard body in a bordered modal so it visually pops over the
+	// underlying screen instead of bleeding into it. Width tracks the model's
+	// stored width with a small margin; height is left to lipgloss.
+	w := o.model.width - 6
+	if w < 60 {
+		w = 60
+	}
+	return Modal.Width(w).Render(o.model.View())
 }
 
