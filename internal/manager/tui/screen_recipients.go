@@ -132,7 +132,7 @@ func (m *recipientsModel) rebuildTable() {
 		created := r.CreatedAt.Format("2006-01-02")
 		rows = append(rows, table.Row{keyID, r.Name, created, "—"})
 	}
-	tableH := m.hgt - 6
+	tableH := m.hgt - 11 // chrome+intro+box+statusbar overhead
 	if m.detail {
 		tableH = tableH / 2
 	}

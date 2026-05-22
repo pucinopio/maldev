@@ -163,7 +163,8 @@ func (m *issuersModel) rebuildTable() {
 			r.KeyID, r.Name, status, created, "—",
 		})
 	}
-	tableH := m.hgt - 6
+	// chrome(4) + intro+blank(3) + box border(2) + box title(1) + statusbar(1) = 11
+	tableH := m.hgt - 11
 	if m.detail {
 		tableH = tableH / 2
 	}

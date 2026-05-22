@@ -87,8 +87,15 @@ func (s *StepFreeFields) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 		if !s.activeInput().Focused() {
 			return s, func() tea.Msg { return FreeFieldsMsg{Fields: s.collect()} }
 		}
+		// Enter while typing: if the row is empty, treat it as "I'm done,
+		// submit." Otherwise blur the current input so the next Enter submits.
+		if s.activeInput().Value() == "" {
+			return s, func() tea.Msg { return FreeFieldsMsg{Fields: s.collect()} }
+		}
+		s.activeInput().Blur()
+		return s, nil
 
-	case "esc":
+	case "ctrl+s", "esc":
 		return s, func() tea.Msg { return FreeFieldsMsg{Fields: s.collect()} }
 	}
 

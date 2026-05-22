@@ -89,7 +89,9 @@ func newLicensesModel(svc *service.Services) licensesModel {
 	ti.CharLimit = 100
 	ti.Width = 30
 
-	return licensesModel{svc: svc, table: t, search: ti}
+	// Default detail panel open (prototype shows it always-visible);
+	// the operator can collapse it with [d].
+	return licensesModel{svc: svc, table: t, search: ti, detail: true}
 }
 
 // stretchLastColumn resizes a table's trailing column so the row spans the

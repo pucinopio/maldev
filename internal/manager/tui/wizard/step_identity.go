@@ -83,7 +83,13 @@ func (s *StepIdentity) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 		case identityBrowse:
 			return s, s.handleBrowseKey(msg)
 		case identityCreate:
-			return s, s.handleCreateKey(msg)
+			// Only intercept the navigation keys; everything else falls through
+			// to the textinput forwarder below so the operator can actually
+			// type into the name + keyID fields.
+			switch msg.String() {
+			case "tab", "enter", "esc":
+				return s, s.handleCreateKey(msg)
+			}
 		}
 	}
 	// Forward to active text-input in create mode.

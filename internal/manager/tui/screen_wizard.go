@@ -166,10 +166,20 @@ func (m wizardModel) Update(msg tea.Msg) (wizardModel, tea.Cmd) {
 		issued := msg.Issued
 		return m, func() tea.Msg { return WizardDoneMsg{Issued: issued} }
 
-	// Global back navigation.
+	// Global back / discard navigation.
 	case tea.KeyMsg:
-		if msg.String() == "esc" && m.step > wizStepIdentity {
-			return m.retreat()
+		switch msg.String() {
+		case "ctrl+c", "ctrl+q":
+			// Universal discard — drops everything entered so far and closes
+			// the wizard overlay. Useful when the operator changes their mind
+			// mid-flow and Back-stepping would be too tedious.
+			return m, func() tea.Msg { return WizardDoneMsg{Issued: nil} }
+		case "esc":
+			if m.step > wizStepIdentity {
+				return m.retreat()
+			}
+			// On step 1 (no progress yet) esc discards.
+			return m, func() tea.Msg { return WizardDoneMsg{Issued: nil} }
 		}
 		return m.routeKeyToStep(msg)
 	}
@@ -350,7 +360,8 @@ func (m wizardModel) View() string {
 		HintKey.Render("Tab"), HintText.Render(" suivant  "),
 		HintKey.Render("⇧Tab"), HintText.Render(" précédent  "),
 		HintKey.Render("1-8"), HintText.Render(" aller à  "),
-		HintKey.Render("esc"), HintText.Render(" annuler"),
+		HintKey.Render("esc"), HintText.Render(" précédent / annuler "),
+		HintKey.Render("ctrl+c"), HintText.Render(" discarder"),
 	)
 	strip := lipgloss.JoinHorizontal(lipgloss.Top,
 		stripLeft,

@@ -122,7 +122,7 @@ func (m *revocationModel) rebuildTable() {
 		}
 		rows = append(rows, table.Row{subject, r.KeyID, at, reason})
 	}
-	tableH := m.hgt - 6
+	tableH := m.hgt - 11 // chrome+intro+box+statusbar overhead
 	if tableH < 3 {
 		tableH = 3
 	}

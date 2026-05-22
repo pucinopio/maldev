@@ -1649,16 +1649,16 @@ func TestE2E_LicensesFilterCycles(t *testing.T) {
 // panel boolean.
 func TestE2E_LicensesDetailToggles(t *testing.T) {
 	lm := newLicensesModel(nil)
-	if lm.detail {
-		t.Fatal("detail must start false")
+	if !lm.detail {
+		t.Fatal("detail must default true (always-visible per prototype)")
 	}
 	lm, _ = lm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
-	if !lm.detail {
-		t.Fatal("after 'd', detail must be true")
+	if lm.detail {
+		t.Fatal("after 'd', detail must be false")
 	}
 	lm, _ = lm.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if lm.detail {
-		t.Fatal("after Enter, detail must be false")
+	if !lm.detail {
+		t.Fatal("after Enter, detail must be true again")
 	}
 }
 

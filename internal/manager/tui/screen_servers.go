@@ -60,7 +60,16 @@ func newServersModel(svc *service.Services, ctrl httpsrv.Controller) serversMode
 	return m
 }
 
-func (m serversModel) Init() tea.Cmd { return nil }
+func (m serversModel) Init() tea.Cmd { return serverStatusTick() }
+
+// serverStatusTickMsg is emitted every second so the Status box (uptime,
+// req/s) re-renders without waiting for a user event or an httpsrv event.
+type serverStatusTickMsg struct{}
+
+// serverStatusTick schedules the next refresh tick.
+func serverStatusTick() tea.Cmd {
+	return tea.Tick(time.Second, func(time.Time) tea.Msg { return serverStatusTickMsg{} })
+}
 
 func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -113,6 +122,13 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 		w, cmd := m.log.Update(serverEventMsg{ev: errEv})
 		m.log, _ = w.(*serverLog)
 		return m, cmd
+
+	case serverStatusTickMsg:
+		// Re-arm the tick so we get refreshed every second. refreshStatuses
+		// pulls a fresh Statuses snapshot so uptime, req tot, req/s update
+		// without any user input.
+		m.refreshStatuses()
+		return m, serverStatusTick()
 
 	case probeTokensLoadedMsg:
 		m.probeTokens = msg.rows
@@ -172,6 +188,17 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 			w, cmd := m.log.Update(serverLogClearMsg{})
 			m.log, _ = w.(*serverLog)
 			return m, cmd
+		case "g":
+			// Regenerate admin token for the active server. Stub for now —
+			// surface a confirm overlay so the user sees the action landed.
+			name := serverNames[m.activeTab]
+			return m, func() tea.Msg {
+				body := fmt.Sprintf("Régénérer l'admin token de %s ?\n"+
+					"L'ancien token sera invalidé immédiatement. Tous les clients\n"+
+					"qui s'authentifient avec doivent être mis à jour.", name)
+				return pushOverlayMsg{newConfirmOverlay("server-regen-token",
+					"Regenerate admin token", body, "regen", "annuler", true)}
+			}
 		// Probe inner-view keys — only meaningful when the Probe sub-tab is
 		// active; on the other sub-tabs they fall through to the default
 		// dispatcher (the tea.Update loop below).
