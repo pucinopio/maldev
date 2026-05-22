@@ -23,13 +23,13 @@
                                                        │                                                              │ 
 ┌────────────────────────────────────────────────────┐ │                                                              │ 
 │ Serveurs HTTP         [7] détail · [s] start/stop  │ └──────────────────────────────────────────────────────────────┘ 
-│ ○ Revocation                                 OFF   │                                                                  
+│ ○ Revocation                               [OFF]   │                                                                  
 │   arrêté · démarrer via onglet [7]                 │ ┌──────────────────────────────────────────────────────────────┐ 
 │ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌   │ │ Raccourcis                                   touche → écran  │ 
-│ ○ Heartbeat                                  OFF   │ │  [n]  nouvelle                                               │ 
+│ ○ Heartbeat                                [OFF]   │ │  [n]  nouvelle                                               │ 
 │   arrêté · démarrer via onglet [7]                 │ │ licence            │ [/]  rechercher   │ [x]  révoquer       │ 
 │ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌   │ │ ───────────────────┼───────────────────┼───────────────────  │ 
-│ ○ Probe                                      OFF   │ │  [k]  clés                                                   │ 
+│ ○ Probe                                    [OFF]   │ │  [k]  clés                                                   │ 
 │   arrêté · démarrer via onglet [7]                 │ │ d'émission         │ [i]  identity.bin │ [?]  aide           │ 
 └────────────────────────────────────────────────────┘ │ contextuelle                                                 │ 
                                                        └──────────────────────────────────────────────────────────────┘ 

@@ -237,8 +237,9 @@ func (m dashboardModel) keyCardContent(textW int) string {
 	)
 }
 
-// serverPillOn/Off are flat (no border) so they can be embedded mid-string.
-// The bordered PillOn/PillOff styles used in tables are 3 lines tall.
+// serverPillOn/Off mirror the prototype StatusPill: a single-line padded chip
+// with a 1-cell coloured border. Cf .dev/license-manager-2026/design/prototype/
+// primitives.jsx (StatusPill).
 var (
 	serverPillOn  = GlowGreen
 	serverPillOff = lipgloss.NewStyle().Foreground(Palette.FgMute).Bold(true)
@@ -251,11 +252,14 @@ var (
 //
 // The ON/OFF tag is right-aligned to colW on the first line.
 func serverRow(name, addr, url string, on bool, reqs uint64, uptime string, colW int) string {
+	// Bullet uses green for ON to mirror the prototype Dot kind="green"; tag
+	// wraps the label in brackets so it reads as a chip even without a real
+	// border (terminal rows don't have side-borders mid-line).
 	bullet := Mute.Render("○")
-	tag := serverPillOff.Render("OFF")
+	tag := serverPillOff.Render("[OFF]")
 	if on {
-		bullet = Mute.Render("●")
-		tag = serverPillOn.Render("ON")
+		bullet = GlowGreen.Render("●")
+		tag = serverPillOn.Render("[ON]")
 	}
 
 	nameAddr := GlowCyan.Render(name) + "  " + Dim.Render(addr)
