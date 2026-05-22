@@ -249,7 +249,7 @@ func (svc *LicenseService) Issue(ctx context.Context, req IssueRequest) (*Issued
 				Save(ctx); e != nil {
 				return e
 			}
-			ascii, _ := totp.QRImageASCII(p.secret, p.accountLabel, issRow.Name)
+			ascii, _ := totp.QRImageASCIICompact(p.secret, p.accountLabel, issRow.Name)
 			png, _ := totp.QRImagePNG(p.secret, p.accountLabel, issRow.Name, 256)
 			provs = append(provs, TOTPProvisioning{
 				BindingIndex: p.idx,

@@ -7,18 +7,18 @@ Audit    0 Settings
  Les secrets TOTP créés ici sont réutilisables — la liste apparaît dans le wizard step 7. Suppression libère le secret  
 mais n'invalide pas les licences qui en dépendent.                                                                      
                                                                                                                         
-┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ TOTP secrets (0)                             [n]  générer ·  [E]  export QR PNG ·  [x]  supprimer ·  [r]  rafraîchir │
-│  LABEL                             ID            CREATED       BOUND TO                                              │
-│                                                                                                                      │
-│                                                                                                                      │
-│                                       aucun secret TOTP — n pour créer le premier                                    │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ QR code · aucune sélection                                                                                           │
-│                                                                                                                      │
-│ crée un secret avec  [n]  ou clique une ligne pour voir le QR code.                                                  │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐  ┌───────────────────────────────────────────────────┐
+│ TOTP secrets (0)                             [n]  générer ·   │  │ QR code · aucune sélection                        │
+│ [E]  export QR PNG ·  [x]  supprimer ·  [r]  rafraîchir       │  │                                                   │
+│  LABEL                             ID            CREATED      │  │ crée un secret avec  [n]  ou sélectionne une      │
+│ BOUND TO                                                      │  │ ligne.                                            │
+│                                                               │  └───────────────────────────────────────────────────┘
+│                                                               │                                                       
+│                                       aucun secret TOTP — n   │                                                       
+│ pour créer le premier                                         │                                                       
+└───────────────────────────────────────────────────────────────┘                                                       
+                                                                                                                        
+                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

@@ -198,6 +198,16 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 		m.rebuildTable()
 		return m, nil
 
+	case licenseDetailTabClickMsg:
+		m.detailTab = msg.tab
+		// Audit tab loads lazily — same path as the keyboard 'A' shortcut.
+		if msg.tab == 3 {
+			if row := m.selectedRow(); row != nil {
+				return m, loadLicenseAuditCmd(m.svc, row)
+			}
+		}
+		return m, nil
+
 	case licenseAuditLoadedMsg:
 		m.detailAuditRows = msg.rows
 		return m, nil
@@ -446,15 +456,45 @@ func (m licensesModel) OnClick(x, y, _ int) tea.Cmd {
 
 	// Table rows: header at Y=7, data at Y=8+.
 	const tableHeaderY = 7
-	if y > tableHeaderY {
+	tableEndY := tableHeaderY + m.table.Height() + 1 // +1 for the box bottom border
+	if y > tableHeaderY && y < tableEndY {
 		row := y - tableHeaderY - 1
 		if row >= 0 && row < len(m.rows) {
 			target := row
 			return func() tea.Msg { return tableSelectRowMsg{row: target} }
 		}
+		return nil
+	}
+	// Detail [I/B/P/A/C] tab strip: lives at Y = tableEndY + 2 (top box border
+	// at tableEndY+1, then the tab strip is the title row's second line).
+	if m.detail && m.selectedRow() != nil {
+		tabStripY := tableEndY + 2
+		if y == tabStripY {
+			// Layout mirrors renderDetail's tabStrip: "[I]dent  [B]ind  [P]EM  [A]udit  [C]haîne"
+			// Each cell = 3 (key) + label + 2 (spacing). Walk by widths.
+			cursor := 0
+			cells := []struct {
+				tab   int
+				label string
+			}{
+				{0, "[I]dent"}, {1, "[B]ind"}, {2, "[P]EM"}, {3, "[A]udit"}, {4, "[C]haîne"},
+			}
+			for _, c := range cells {
+				w := lipgloss.Width(c.label) + 2 // 2-cell gap between cells
+				if x >= cursor && x < cursor+w {
+					target := c.tab
+					return func() tea.Msg { return licenseDetailTabClickMsg{tab: target} }
+				}
+				cursor += w
+			}
+		}
 	}
 	return nil
 }
+
+// licenseDetailTabClickMsg is dispatched when the operator clicks the
+// [I/B/P/A/C] tab strip in the license detail panel.
+type licenseDetailTabClickMsg struct{ tab int }
 
 // licenseFilterClickMsg is dispatched from OnClick when the operator clicks a
 // filter chip; the licenses model handles it in Update.
@@ -557,9 +597,15 @@ func (m licensesModel) renderDetailBody(row *ent.License) string {
 	}
 	statusPill := licStatusPill(row.Status)
 
-	// Validity health bar: 100 % at issue, 0 % at expiry. Width tracks the
-	// detail box inner width minus padding + the "validity" label gutter.
-	barW := m.width - 4 - 16
+	// valueW is the cell budget for the right-hand value column (m.width minus
+	// box border+padding minus the 14-cell label gutter).
+	valueW := m.width - 4 - 14
+	if valueW < 12 {
+		valueW = 12
+	}
+
+	// Validity health bar: 100 % at issue, 0 % at expiry.
+	barW := valueW
 	if barW < 8 {
 		barW = 8
 	}
@@ -573,15 +619,29 @@ func (m licensesModel) renderDetailBody(row *ent.License) string {
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		kvRow("status", statusPill, 14),
-		kvRow("subject", row.Subject, 14),
-		kvRow("issuer", row.IssuerName, 14),
-		kvRow("audience", strings.Join(row.Audience, ", "), 14),
-		kvRow("features", strings.Join(row.Features, ", "), 14),
+		kvRow("subject", truncate(row.Subject, valueW), 14),
+		kvRow("issuer", truncate(row.IssuerName, valueW), 14),
+		kvRow("audience", truncate(strings.Join(row.Audience, ", "), valueW), 14),
+		kvRow("features", truncate(strings.Join(row.Features, ", "), valueW), 14),
 		kvRow("not-before", row.NotBefore.Format("2006-01-02"), 14),
 		kvRow("not-after", row.NotAfter.Format("2006-01-02"), 14),
 		kvRow("validity", bar, 14),
-		kvRow("uuid", GlowCyan.Render(row.LicenseUUID), 14),
+		kvRow("uuid", GlowCyan.Render(truncate(row.LicenseUUID, valueW)), 14),
 	)
+}
+
+// truncate clips s to maxW visible cells, appending "…" when it had to cut.
+// Operates on display width via lipgloss.Width so ANSI-wrapped strings still
+// measure correctly. Pure ASCII assumed for slicing — fine for the values
+// fed here (subject/issuer/audience/UUID are all single-byte char).
+func truncate(s string, maxW int) string {
+	if lipgloss.Width(s) <= maxW {
+		return s
+	}
+	if maxW <= 1 {
+		return "…"
+	}
+	return s[:maxW-1] + "…"
 }
 
 // renderDetailBindings shows the licence's bindings (machine fingerprint,

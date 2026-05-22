@@ -231,6 +231,17 @@ func (m rootModel) Init() tea.Cmd {
 }
 
 func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Data-loaded messages always need to reach their owning screen — even
+	// when an overlay is currently on top — so the underlying list stays
+	// fresh while a modal (wizard → QR, confirm, etc.) is open.
+	switch dmsg := msg.(type) {
+	case LicensesLoadedMsg:
+		m.licenses, _ = m.licenses.Update(dmsg)
+	case IssuersLoadedMsg:
+		m.issuers, _ = m.issuers.Update(dmsg)
+	case TOTPLoadedMsg:
+		m.totp, _ = m.totp.Update(dmsg)
+	}
 	// Overlay stack takes priority.
 	if len(m.overlays) > 0 {
 		return m.updateOverlay(msg)
@@ -547,8 +558,9 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 		return m
 
 	case RevokeConfirmedMsg:
-		updated, _ := m.licenses.handleRevokeResult(res)
+		updated, c := m.licenses.handleRevokeResult(res)
 		m.licenses = updated
+		m.pendingCmd = c
 
 	case ConfirmResultMsg:
 		switch m.active {

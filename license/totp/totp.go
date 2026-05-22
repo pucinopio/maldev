@@ -132,6 +132,41 @@ func QRImageASCII(secret, account, issuer string) (string, error) {
 	return b.String(), nil
 }
 
+// QRImageASCIICompact returns a half-height QR rendering using Unicode
+// half-block characters (▀ ▄ █  ). Each line encodes TWO QR rows so the
+// result is roughly square in a fixed-width terminal cell (which is twice as
+// tall as wide). Use this in TUIs where vertical space is tight; pair with
+// QRImageASCII when you need the wider double-cell form for screenshots.
+func QRImageASCIICompact(secret, account, issuer string) (string, error) {
+	q, err := qrcode.New(URI(secret, account, issuer), qrcode.Medium)
+	if err != nil {
+		return "", err
+	}
+	bm := q.Bitmap()
+	var b strings.Builder
+	for y := 0; y < len(bm); y += 2 {
+		for x := 0; x < len(bm[y]); x++ {
+			top := bm[y][x]
+			var bot bool
+			if y+1 < len(bm) {
+				bot = bm[y+1][x]
+			}
+			switch {
+			case top && bot:
+				b.WriteString("█")
+			case top:
+				b.WriteString("▀")
+			case bot:
+				b.WriteString("▄")
+			default:
+				b.WriteString(" ")
+			}
+		}
+		b.WriteByte('\n')
+	}
+	return b.String(), nil
+}
+
 // WriteQRImagePNG is a convenience wrapper that writes the PNG to path.
 func WriteQRImagePNG(path, secret, account, issuer string, size int) error {
 	png, err := QRImagePNG(secret, account, issuer, size)

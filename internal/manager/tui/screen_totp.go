@@ -235,31 +235,43 @@ func (m totpModel) View() string {
 	if h := emptyTableHint(len(m.rows), m.width, "aucun secret TOTP — n pour créer le premier"); h != "" {
 		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", h)
 	}
-	listBox := BoxStyle.Width(m.width - 2).Render(title + "\n" + tableBody)
+	// 2-column body: list on the left (~55% width), QR detail on the right.
+	leftW := (m.width - 4) * 55 / 100
+	rightW := m.width - 4 - leftW - 2 // -2 for the horizontal gap
+	if leftW < 40 {
+		leftW = 40
+	}
+	if rightW < 40 {
+		rightW = 40
+	}
+	listBox := BoxStyle.Width(leftW).Render(title + "\n" + tableBody)
+	detailBox := m.renderDetailSide(rightW)
 
-	detailBox := m.renderDetail()
-
-	body := lipgloss.JoinVertical(lipgloss.Left, "", intro, "", listBox, detailBox)
+	twoCol := lipgloss.JoinHorizontal(lipgloss.Top, listBox, "  ", detailBox)
+	body := lipgloss.JoinVertical(lipgloss.Left, "", intro, "", twoCol)
 	if m.err != nil {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
 	}
 	return body
 }
 
-func (m totpModel) renderDetail() string {
+func (m totpModel) renderDetailSide(w int) string {
 	if m.view == nil {
 		title := Dim.Render("QR code · ") + Dim.Render("aucune sélection")
 		hint := Dim.Render("crée un secret avec ") + HintKey.Render("[n]") +
-			Dim.Render(" ou clique une ligne pour voir le QR code.")
-		return BoxStyle.Width(m.width - 2).Render(
+			Dim.Render(" ou sélectionne une ligne.")
+		return BoxStyle.Width(w).Render(
 			lipgloss.JoinVertical(lipgloss.Left, title, "", hint),
 		)
 	}
-	title := Dim.Render("QR code · ") + GlowCyan.Render(m.view.AccountLabel)
-	hint := HintKey.Render("[E]") + Dim.Render(" exporter en PNG  ·  ") +
+	title := Dim.Render("QR · ") + GlowCyan.Render(m.view.AccountLabel)
+	// Inline the QR ASCII so the side panel doesn't depend on the viewport
+	// width — keeps the half-block grid intact.
+	qr := m.view.QRImageASCII
+	hint := HintKey.Render("[E]") + Dim.Render(" PNG  ·  ") +
 		Dim.Render("secret: ") + Mute.Render(m.view.Secret)
-	return BoxFocused.Width(m.width - 2).Render(
-		lipgloss.JoinVertical(lipgloss.Left, title, "", m.vp.View(), "", hint),
+	return BoxFocused.Width(w).Render(
+		lipgloss.JoinVertical(lipgloss.Left, title, "", qr, "", hint),
 	)
 }
 

@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -87,13 +89,33 @@ func (o *revokeOverlay) View() string {
 	suggestions := []string{
 		"key_compromised", "offboarding", "leak", "decommissioned", "abuse",
 	}
-	chips := make([]string, len(suggestions))
-	for i, s := range suggestions {
-		chips[i] = revokeChipStyle.Render(s)
-	}
-	chipLine := lipgloss.JoinHorizontal(lipgloss.Top, chips...)
-
+	// The modal is 62 cells wide with a 3-cell border+padding on each side
+	// → 56 cells of usable inner width. Pack chips into rows that fit, with
+	// 1-cell gaps; spill to a second row when a chip would overflow.
 	const innerW = 56
+	var rows []string
+	var row strings.Builder
+	rowW := 0
+	for _, s := range suggestions {
+		chip := revokeChipStyle.Render(s)
+		cw := lipgloss.Width(chip)
+		if rowW > 0 && rowW+1+cw > innerW {
+			rows = append(rows, row.String())
+			row.Reset()
+			rowW = 0
+		}
+		if rowW > 0 {
+			row.WriteString(" ")
+			rowW++
+		}
+		row.WriteString(chip)
+		rowW += cw
+	}
+	if row.Len() > 0 {
+		rows = append(rows, row.String())
+	}
+	chipLines := strings.Join(rows, "\n")
+
 	footer := renderButtons(innerW,
 		button{label: "Annuler", hotkey: "esc", kind: btnNeutral},
 		button{label: "Révoquer", hotkey: "↵", kind: btnDanger, focused: true},
@@ -103,7 +125,13 @@ func (o *revokeOverlay) View() string {
 		Dim.Render("subject ") + Base.Render(o.subject) + "\n\n" +
 		Dim.Render("raison :") + "\n" +
 		o.input.View() + "\n\n" +
-		Dim.Render("Suggestions : ") + chipLine + "\n\n" + footer
+		Dim.Render("Suggestions :") + "\n" + chipLines + "\n\n" + footer
 
-	return lipgloss.Place(62, 18, lipgloss.Center, lipgloss.Center, ModalDanger.Render(content))
+	// Height grows by the number of chip rows; clamp the Place height so
+	// the modal never gets clipped under the global status bar.
+	height := 18 + len(rows) - 1
+	if height < 18 {
+		height = 18
+	}
+	return lipgloss.Place(62, height, lipgloss.Center, lipgloss.Center, ModalDanger.Render(content))
 }

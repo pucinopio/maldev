@@ -55,7 +55,7 @@ func (svc *TOTPService) Get(ctx context.Context, licenseID uuid.UUID, issuerName
 		return nil, err
 	}
 	uri := totp.URI(string(secret), r.AccountLabel, issuerName)
-	ascii, _ := totp.QRImageASCII(string(secret), r.AccountLabel, issuerName)
+	ascii, _ := totp.QRImageASCIICompact(string(secret), r.AccountLabel, issuerName)
 	png, _ := totp.QRImagePNG(string(secret), r.AccountLabel, issuerName, 256)
 	return &TOTPSecretView{
 		Secret:       string(secret),
@@ -118,7 +118,7 @@ func (svc *TOTPService) ByID(ctx context.Context, id uuid.UUID, issuerName strin
 		return nil, err
 	}
 	uri := totp.URI(string(secret), r.AccountLabel, issuerName)
-	ascii, _ := totp.QRImageASCII(string(secret), r.AccountLabel, issuerName)
+	ascii, _ := totp.QRImageASCIICompact(string(secret), r.AccountLabel, issuerName)
 	png, _ := totp.QRImagePNG(string(secret), r.AccountLabel, issuerName, 256)
 	return &TOTPSecretView{
 		Secret:       string(secret),
