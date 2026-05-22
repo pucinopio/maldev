@@ -153,7 +153,7 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 		m.log, _ = w.(*serverLog)
 		return m, cmd
 
-	case serverLogClearMsg, serverLogFilterMsg:
+	case serverLogClearMsg, serverLogFilterMsg, serverLogAutoScrollMsg:
 		w, cmd := m.log.Update(msg)
 		m.log, _ = w.(*serverLog)
 		return m, cmd
@@ -488,9 +488,51 @@ func (m serversModel) View() string {
 	// ── 2-column body ─────────────────────────────────────────────────────
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "  ", rightCol)
 
+	// ── Action bar (clickable) ───────────────────────────────────────────
+	// Pinned to a known Y so OnClick can hit-test each chip without having
+	// to know the variable-height status/config boxes above.
+	actionBar := m.renderActionBar()
+
 	// Status bar is rendered by the root chrome (viewReady picks up Hints()
 	// via the ScreenWithHints interface) — don't duplicate it here.
-	return lipgloss.JoinVertical(lipgloss.Left, subTabBar, body)
+	return lipgloss.JoinVertical(lipgloss.Left, subTabBar, body, "", actionBar)
+}
+
+// serverActionChips is the ordered list of action chips rendered in the
+// action bar. Each chip is hit-tested by X-range in OnClick.
+var serverActionChips = []struct {
+	key, label string
+}{
+	{"s", "start/stop"},
+	{"e", "edit bind"},
+	{"g", "regen token"},
+	{"c", "clear log"},
+	{"a", "auto-scroll"},
+}
+
+// renderActionBar emits a horizontal strip of [key] label chips. Mouse clicks
+// on these chips are routed by m.OnClick using the same chip layout.
+func (m serversModel) renderActionBar() string {
+	var parts []string
+	for _, c := range serverActionChips {
+		parts = append(parts, HintKey.Render("["+c.key+"]")+" "+Dim.Render(c.label))
+	}
+	return " " + lipgloss.JoinHorizontal(lipgloss.Top, parts...)
+}
+
+// actionBarHit returns the action key for a click at (x,y), or "" if no
+// chip was hit. Mirrors renderActionBar's layout exactly.
+func (m serversModel) actionBarHit(x int) string {
+	cursor := 1 // matches the leading " " in renderActionBar
+	for _, c := range serverActionChips {
+		chip := HintKey.Render("["+c.key+"]") + " " + Dim.Render(c.label)
+		w := lipgloss.Width(chip)
+		if x >= cursor && x < cursor+w {
+			return c.key
+		}
+		cursor += w
+	}
+	return ""
 }
 
 // renderRightColumn renders the right-side panel of the Servers screen.
@@ -722,6 +764,36 @@ func serverCountLabel(statuses map[string]httpsrv.Status) string {
 // Inside the status box: row 0=top border, row 1=title row, row 2=blank,
 // row 3=●/port line, row 4=stopped hint OR url, etc.
 func (m serversModel) OnClick(x, y, _ int) tea.Cmd {
+	// Action bar lives at m.hgt - 2 (one above the global status bar).
+	if y == m.height-2 {
+		switch m.actionBarHit(x) {
+		case "s":
+			name := serverNames[m.activeTab]
+			if m.cards[m.activeTab].status.Running {
+				return func() tea.Msg { return serverStopMsg{name: name} }
+			}
+			return func() tea.Msg { return serverStartMsg{name: name} }
+		case "e":
+			name := serverNames[m.activeTab]
+			return func() tea.Msg {
+				return pushOverlayMsg{newInputOverlay("server-edit-bind",
+					"Edit "+name+" bind address", "127.0.0.1:8443", 64)}
+			}
+		case "g":
+			name := serverNames[m.activeTab]
+			return func() tea.Msg {
+				body := fmt.Sprintf("Régénérer l'admin token de %s ?\n"+
+					"L'ancien token sera invalidé immédiatement.", name)
+				return pushOverlayMsg{newConfirmOverlay("server-regen-token",
+					"Regenerate admin token", body, "regen", "annuler", true)}
+			}
+		case "c":
+			return func() tea.Msg { return serverLogClearMsg{} }
+		case "a":
+			return func() tea.Msg { return serverLogAutoScrollMsg{} }
+		}
+		return nil
+	}
 	// Click on the OFF/ON pill area or the [s] start hint toggles the active
 	// server. Pill renders inside the status box at row 3 (X≈3..10).
 	if y == 7 || y == 9 {

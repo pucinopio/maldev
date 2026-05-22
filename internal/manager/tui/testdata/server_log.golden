@@ -34,7 +34,7 @@ use
                                                                                                                         
                                                                                                                         
                                                                                                                         
-                                                                                                                        
+  [s]  start/stop [e]  edit bind [g]  regen token [c]  clear log [a]  auto-scroll                                       
                                                                                                                         
                                                                                                                         
 s start/stop  A tout démarrer  Z tout arrêter  g regen token  q quitter                                          ~ tour 

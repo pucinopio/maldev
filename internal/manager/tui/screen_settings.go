@@ -63,23 +63,44 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 		}
 
 	case settingsToggleMsg:
-		// Toggle the in-memory row so the UI feedback proves the click landed.
-		// Persistence is a no-op until svc.Settings setters land.
+		// Toggle in-memory first so the UI updates immediately, then persist
+		// via the async svc.Settings.Update path.
 		if m.row != nil {
 			switch msg.key {
 			case "confirm_quit_with_servers":
 				m.row.ConfirmQuitWithServers = !m.row.ConfirmQuitWithServers
+				v := m.row.ConfirmQuitWithServers
+				return m, settingsPersistCmd(m.svc, func(q *ent.SettingUpdateOne) {
+					q.SetConfirmQuitWithServers(v)
+				})
 			case "auto_start_servers":
 				m.row.AutoStartServers = !m.row.AutoStartServers
+				v := m.row.AutoStartServers
+				return m, settingsPersistCmd(m.svc, func(q *ent.SettingUpdateOne) {
+					q.SetAutoStartServers(v)
+				})
 			}
 		}
 		return m, nil
 
 	case settingsSetArgonMsg:
-		// Mutate the in-memory row so the click reflects in the UI immediately.
-		// Persistence (svc.Settings.SetArgonPreset) is a follow-up.
+		// Mutate in-memory + persist.
 		if m.row != nil {
 			m.row.DefaultArgonPreset = msg.preset
+			p := msg.preset
+			return m, settingsPersistCmd(m.svc, func(q *ent.SettingUpdateOne) {
+				q.SetDefaultArgonPreset(p)
+			})
+		}
+		return m, nil
+
+	case settingsPersistedMsg:
+		// Persistence completed. On error, surface via OK overlay; otherwise
+		// the in-memory row already reflects the new value.
+		if msg.err != nil {
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newErrorOverlay("Persist failed", msg.err.Error())}
+			}
 		}
 		return m, nil
 
@@ -138,6 +159,21 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 // settingsActionMsg is dispatched by both key handlers and OnClick so the
 // keyboard and mouse paths converge in one place.
 type settingsActionMsg struct{ kind string }
+
+// settingsPersistedMsg carries the result of an async Settings update.
+type settingsPersistedMsg struct{ err error }
+
+// settingsPersistCmd builds a Cmd that applies mut() to the singleton Setting
+// row and reports the result via settingsPersistedMsg.
+func settingsPersistCmd(svc *service.Services, mut func(*ent.SettingUpdateOne)) tea.Cmd {
+	return func() tea.Msg {
+		if svc == nil {
+			return settingsPersistedMsg{}
+		}
+		_, err := svc.Settings.Update(context.Background(), mut)
+		return settingsPersistedMsg{err: err}
+	}
+}
 
 // settingsSetThemeMsg / settingsSetArgonMsg dispatch theme / argon-preset
 // changes from clicks; the model handles them in Update.
