@@ -1,12 +1,16 @@
 package wizard
 
 import (
+	"context"
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/oioio-space/maldev/internal/manager/service"
+	"github.com/oioio-space/maldev/internal/manager/store/ent"
 	"github.com/oioio-space/maldev/internal/manager/tui/core"
 )
 
@@ -26,28 +30,66 @@ const (
 
 // StepBindingMachine is step 3 of the wizard: optional machine-ID binding.
 type StepBindingMachine struct {
+	svc     *service.Services
 	mode    machineBMode
 	pasteIn textinput.Model
+	probed  []*ent.ProbeToken // recent probed machines, populated on Focus
 	focused bool
 	bounds  core.Rect
 }
 
 // NewStepBindingMachine constructs step 3.
-func NewStepBindingMachine() *StepBindingMachine {
+func NewStepBindingMachine(svc *service.Services) *StepBindingMachine {
 	ti := textinput.New()
 	ti.Placeholder = "paste machine-id hex string…"
 	ti.CharLimit = 256
-	return &StepBindingMachine{pasteIn: ti}
+	return &StepBindingMachine{svc: svc, pasteIn: ti}
 }
+
+// loadProbedCmd fetches the most recent probed machines so the operator can
+// pick one instead of pasting the CompositeHex by hand.
+func (s *StepBindingMachine) loadProbedCmd() tea.Cmd {
+	svc := s.svc
+	return func() tea.Msg {
+		if svc == nil {
+			return probedMachinesMsg{}
+		}
+		rows, _ := svc.Probe.History(context.Background(), 5)
+		// Only entries that actually resolved a CompositeHex are useful — the
+		// rest are pending tokens with no hostid yet.
+		var out []*ent.ProbeToken
+		for _, r := range rows {
+			if r.CompositeHex != "" {
+				out = append(out, r)
+			}
+		}
+		return probedMachinesMsg{Rows: out}
+	}
+}
+
+// probedMachinesMsg carries the recent-probe-token slice into Update.
+type probedMachinesMsg struct{ Rows []*ent.ProbeToken }
 
 func (s *StepBindingMachine) Layout(b core.Rect) { s.bounds = b }
 func (s *StepBindingMachine) Bounds() core.Rect  { return s.bounds }
 
 func (s *StepBindingMachine) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
+	if m, ok := msg.(probedMachinesMsg); ok {
+		s.probed = m.Rows
+		return s, nil
+	}
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if !s.focused {
 			return s, nil
+		}
+		// Digits 1..5 → pick the corresponding probed machine.
+		if len(msg.Runes) == 1 && msg.Runes[0] >= '1' && msg.Runes[0] <= '5' {
+			idx := int(msg.Runes[0] - '1')
+			if idx < len(s.probed) {
+				mid := s.probed[idx].CompositeHex
+				return s, func() tea.Msg { return MachineBindingMsg{MachineID: mid} }
+			}
 		}
 		switch msg.String() {
 		case "tab":
@@ -117,13 +159,34 @@ func (s *StepBindingMachine) View() string {
 
 	var body string
 	if s.mode == machinePaste {
+		var probedSection string
+		if len(s.probed) > 0 {
+			lines := []string{lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true).Render("  Machines probées récentes (1..5):")}
+			for i, p := range s.probed {
+				if i >= 5 {
+					break
+				}
+				host := p.Hostname
+				if host == "" {
+					host = "(unknown)"
+				}
+				short := p.CompositeHex
+				if len(short) > 16 {
+					short = short[:16] + "…"
+				}
+				key := lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true).Render(fmt.Sprintf("  [%d]", i+1))
+				lines = append(lines, key+" "+fgDim.Render(host+"  ")+lipgloss.NewStyle().Foreground(core.Colors.Fg).Render(short))
+			}
+			probedSection = lipgloss.JoinVertical(lipgloss.Left, lines...) + "\n"
+		}
 		body = lipgloss.JoinVertical(lipgloss.Left,
 			pasteStyle.Render("  [Paste]  "),
 			"",
-			fgDim.Render("  Machine-ID hex:"),
+			probedSection,
+			fgDim.Render("  Machine-ID hex (ou colle):"),
 			"  "+s.pasteIn.View(),
 			"",
-			renderHints("enter confirm", "TAB probe mode", "ctrl+s/esc skip"),
+			renderHints("enter confirm", "1-5 pick probed", "TAB probe mode", "ctrl+s/esc skip"),
 		)
 	} else {
 		body = lipgloss.JoinVertical(lipgloss.Left,
@@ -145,5 +208,9 @@ func (s *StepBindingMachine) Focus() {
 		s.pasteIn.Focus()
 	}
 }
+
+// FocusCmd is called by wizardModel.initStep when this step becomes active.
+// Returns the cmd that loads probed machines for the suggestion list.
+func (s *StepBindingMachine) FocusCmd() tea.Cmd { return s.loadProbedCmd() }
 func (s *StepBindingMachine) Blur()         { s.focused = false; s.pasteIn.Blur() }
 func (s *StepBindingMachine) Focused() bool { return s.focused }

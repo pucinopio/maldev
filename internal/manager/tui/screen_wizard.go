@@ -59,7 +59,7 @@ func newWizardModel(svc *service.Services) wizardModel {
 		step:           wizStepIdentity,
 		stepIdentity:   wizard.NewStepIdentity(svc),
 		stepRecipient:  wizard.NewStepRecipient(svc),
-		stepMachine:    wizard.NewStepBindingMachine(),
+		stepMachine:    wizard.NewStepBindingMachine(svc),
 		stepBinary:     wizard.NewStepBindingBinary(),
 		stepValidity:   wizard.NewStepValidity(),
 		stepFreeFields: wizard.NewStepFreeFields(),
@@ -237,6 +237,7 @@ func (m wizardModel) initStep(s wizardStep) tea.Cmd {
 		return m.stepRecipient.LoadCmd()
 	case wizStepMachine:
 		m.stepMachine.Focus()
+		return m.stepMachine.FocusCmd()
 	case wizStepBinary:
 		m.stepBinary.Focus()
 	case wizStepValidity:
