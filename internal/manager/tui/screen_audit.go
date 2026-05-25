@@ -175,12 +175,12 @@ func (m auditModel) Update(msg tea.Msg) (auditModel, tea.Cmd) {
 
 		case "E":
 			return m, func() tea.Msg {
-				return pushOverlayMsg{newInputOverlay("audit-export-csv", "Export CSV", "/path/to/audit.csv", 256)}
+				return pushOverlayMsg{newInputOverlay(OverlayIDAuditExportCSV, "Export CSV", "/path/to/audit.csv", 256)}
 			}
 
 		case "J":
 			return m, func() tea.Msg {
-				return pushOverlayMsg{newInputOverlay("audit-export-json", "Export JSON", "/path/to/audit.json", 256)}
+				return pushOverlayMsg{newInputOverlay(OverlayIDAuditExportJSON, "Export JSON", "/path/to/audit.json", 256)}
 			}
 		}
 	}
@@ -361,7 +361,7 @@ func (m auditModel) View() string {
 // handleAuditInputResult processes input overlay results for the audit screen.
 func (m auditModel) handleAuditInputResult(res InputResultMsg) (auditModel, tea.Cmd) {
 	switch res.ID {
-	case "audit-export-csv":
+	case OverlayIDAuditExportCSV:
 		rows := m.visibleRows()
 		path := res.Value
 		return m, func() tea.Msg {
@@ -371,7 +371,7 @@ func (m auditModel) handleAuditInputResult(res InputResultMsg) (auditModel, tea.
 			return nil
 		}
 
-	case "audit-export-json":
+	case OverlayIDAuditExportJSON:
 		rows := m.visibleRows()
 		path := res.Value
 		return m, func() tea.Msg {

@@ -258,11 +258,12 @@ var (
 	// lipgloss.NewStyle() 91+ times per dashboard frame (7 rows × 13 cols).
 	// heatEmpty/heatOutOfRange are alias of Mute (theme); heatBorder/Green/Red
 	// stay local because they have no plain-color theme equivalent.
-	heatEmpty      = Mute
-	heatBorder     = lipgloss.NewStyle().Foreground(Palette.BorderBright)
-	heatGreen      = lipgloss.NewStyle().Foreground(Palette.Green)
-	heatRed        = lipgloss.NewStyle().Foreground(Palette.Red)
-	heatOutOfRange = Mute
+	heatEmpty       = Mute
+	heatBorder      = lipgloss.NewStyle().Foreground(Palette.BorderBright)
+	heatGreen       = lipgloss.NewStyle().Foreground(Palette.Green)
+	heatGreenStrong = GlowGreen // dense weeks (3+ issuances) — bold green
+	heatRed         = lipgloss.NewStyle().Foreground(Palette.Red)
+	heatOutOfRange  = Mute
 )
 
 // serverRow builds two lines for one server entry matching the reference layout:
@@ -452,7 +453,9 @@ func (m dashboardModel) renderHeatmap() string {
 			switch {
 			case exp > issue && exp > 0:
 				cell = heatRed
-			case issue >= 3, issue >= 1:
+			case issue >= 3:
+				cell = heatGreenStrong // dense weeks pop in bold
+			case issue >= 1:
 				cell = heatGreen
 			case offset < 0 || offset >= 91:
 				cell = heatOutOfRange

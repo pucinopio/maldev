@@ -119,20 +119,24 @@ func keyCmd(key string) func() tea.Cmd {
 }
 
 // wrappedHeight returns the number of lines `s` occupies when soft-wrapped
-// to `width` cells. Used to compute the Y offset of a box title that sits
-// below an introductory paragraph of unknown wrapped height. Returns 1 for
-// the degenerate cases (empty, zero/negative width).
+// to `width` cells. Honours existing newlines in `s` (each \n counts as a
+// hard break that adds at least one extra row regardless of width). Returns
+// 1 for the degenerate cases (empty, zero/negative width).
 func wrappedHeight(s string, width int) int {
 	if s == "" || width <= 0 {
 		return 1
 	}
-	w := lipgloss.Width(s)
-	if w <= width {
+	total := 0
+	for _, line := range strings.Split(s, "\n") {
+		w := lipgloss.Width(line)
+		if w == 0 {
+			total++
+			continue
+		}
+		total += (w + width - 1) / width
+	}
+	if total < 1 {
 		return 1
 	}
-	h := (w + width - 1) / width
-	if h < 1 {
-		return 1
-	}
-	return h
+	return total
 }

@@ -613,11 +613,11 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 			m.totp = updated
 			m.pendingCmd = c
 		case ViewSettings:
-			if res.ID == "settings-vacuum" && res.Confirm {
+			if res.ID == OverlayIDSettingsVacuum && res.Confirm {
 				m.overlays = append(m.overlays, NewOKOverlay("VACUUM", "VACUUM + ANALYZE terminé (stub — pas encore relié au service)."))
 			}
 		case ViewServers:
-			if res.ID == "server-regen-token" && res.Confirm && m.services != nil {
+			if res.ID == OverlayIDServerRegenTok && res.Confirm && m.services != nil {
 				token, err := m.services.Settings.RegenerateAdminToken(context.Background(), "revocation")
 				if err != nil {
 					m.overlays = append(m.overlays, newErrorOverlay("Regen failed", err.Error()))
@@ -658,13 +658,13 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 			m.pendingCmd = c
 		case ViewSettings:
 			switch res.ID {
-			case "settings-rekey":
+			case OverlayIDSettingsRekey:
 				m.overlays = append(m.overlays, NewOKOverlay("Passphrase", "Rekey effectué (stub — service à câbler)."))
-			case "settings-backup":
+			case OverlayIDSettingsBackup:
 				m.overlays = append(m.overlays, NewOKOverlay("Backup", "Backup écrit vers "+res.Value+" (stub)."))
 			}
 		case ViewServers:
-			if res.ID == "server-edit-bind" && m.services != nil {
+			if res.ID == OverlayIDServerEditBind && m.services != nil {
 				addr := res.Value
 				_, err := m.services.Settings.UpdateServerConfig(context.Background(),
 					func(_ *ent.ServerConfigUpdateOne) {

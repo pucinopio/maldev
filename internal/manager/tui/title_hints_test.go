@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -32,6 +33,31 @@ func TestTitleBar_Hit(t *testing.T) {
 	secondX := row.startX + row.segWs[0] + 3 + 1
 	if cmd := row.hit(secondX, 7); cmd == nil {
 		t.Errorf("hit inside second segment must dispatch x, got nil")
+	}
+}
+
+// TestWrappedHeight covers the soft-wrap arithmetic + the multi-line case
+// (\n acts as a hard break that adds at least one row).
+func TestWrappedHeight(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		width int
+		want  int
+	}{
+		{"empty", "", 80, 1},
+		{"zero-width", "abc", 0, 1},
+		{"fits", "short line", 80, 1},
+		{"wraps once", strings.Repeat("a", 90), 80, 2},
+		{"hard breaks", "one\ntwo\nthree", 80, 3},
+		{"hard break + wrap", "short\n" + strings.Repeat("b", 90), 80, 3},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := wrappedHeight(tc.input, tc.width); got != tc.want {
+				t.Errorf("wrappedHeight(%q, %d) = %d, want %d", tc.input, tc.width, got, tc.want)
+			}
+		})
 	}
 }
 

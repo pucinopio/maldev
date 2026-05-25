@@ -215,7 +215,7 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 				body := fmt.Sprintf("Régénérer l'admin token de %s ?\n"+
 					"L'ancien token sera invalidé immédiatement. Tous les clients\n"+
 					"qui s'authentifient avec doivent être mis à jour.", name)
-				return pushOverlayMsg{newConfirmOverlay("server-regen-token",
+				return pushOverlayMsg{newConfirmOverlay(OverlayIDServerRegenTok,
 					"Regenerate admin token", body, "regen", "annuler", true)}
 			}
 		case "e":
@@ -224,7 +224,7 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 			// the result lands (handled in app.go).
 			name := serverNames[m.activeTab]
 			return m, func() tea.Msg {
-				return pushOverlayMsg{newInputOverlay("server-edit-bind",
+				return pushOverlayMsg{newInputOverlay(OverlayIDServerEditBind,
 					"Edit "+name+" bind address",
 					"127.0.0.1:8443", 64)}
 			}
@@ -809,7 +809,7 @@ func (m serversModel) OnClick(x, y, _ int) tea.Cmd {
 		case "e":
 			name := serverNames[m.activeTab]
 			return func() tea.Msg {
-				return pushOverlayMsg{newInputOverlay("server-edit-bind",
+				return pushOverlayMsg{newInputOverlay(OverlayIDServerEditBind,
 					"Edit "+name+" bind address", "127.0.0.1:8443", 64)}
 			}
 		case "g":
@@ -817,7 +817,7 @@ func (m serversModel) OnClick(x, y, _ int) tea.Cmd {
 			return func() tea.Msg {
 				body := fmt.Sprintf("Régénérer l'admin token de %s ?\n"+
 					"L'ancien token sera invalidé immédiatement.", name)
-				return pushOverlayMsg{newConfirmOverlay("server-regen-token",
+				return pushOverlayMsg{newConfirmOverlay(OverlayIDServerRegenTok,
 					"Regenerate admin token", body, "regen", "annuler", true)}
 			}
 		case "c":

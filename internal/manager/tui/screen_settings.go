@@ -130,15 +130,15 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 		switch msg.kind {
 		case "rekey":
 			return m, func() tea.Msg {
-				return pushOverlayMsg{newInputOverlay("settings-rekey", "Changer la passphrase de la DB", "nouvelle passphrase…", 200)}
+				return pushOverlayMsg{newInputOverlay(OverlayIDSettingsRekey, "Changer la passphrase de la DB", "nouvelle passphrase…", 200)}
 			}
 		case "vacuum":
 			return m, func() tea.Msg {
-				return pushOverlayMsg{newConfirmOverlay("settings-vacuum", "VACUUM + ANALYZE", "Lancer VACUUM puis ANALYZE sur la base ?", "lancer", "annuler", false)}
+				return pushOverlayMsg{newConfirmOverlay(OverlayIDSettingsVacuum, "VACUUM + ANALYZE", "Lancer VACUUM puis ANALYZE sur la base ?", "lancer", "annuler", false)}
 			}
 		case "backup":
 			return m, func() tea.Msg {
-				return pushOverlayMsg{newInputOverlay("settings-backup", "Backup chiffré", "/path/to/backup.tar.gz.enc", 256)}
+				return pushOverlayMsg{newInputOverlay(OverlayIDSettingsBackup, "Backup chiffré", "/path/to/backup.tar.gz.enc", 256)}
 			}
 		}
 	case tea.KeyMsg:
