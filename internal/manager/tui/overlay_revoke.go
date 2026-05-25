@@ -20,6 +20,18 @@ type revokeOverlay struct {
 	licenseID uuid.UUID
 	subject   string
 	input     textinput.Model
+
+	// chipRects is the overlay-relative bounding boxes of the suggestion
+	// chips, populated by View() so OnClick can hit-test them without
+	// re-parsing the rendered string. Reset on every View() call because
+	// the chip layout depends on overlay width (single vs two-row spill).
+	chipRects []chipRect
+	footerY   int // overlay-relative Y of the action button row
+}
+
+type chipRect struct {
+	x1, x2, y int
+	reason    string
 }
 
 // NewRevokeOverlay is exported for use by cmd/tui-snap.
@@ -58,10 +70,19 @@ func (o *revokeOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 		if m.Button != tea.MouseButtonLeft || m.Action != tea.MouseActionPress {
 			break
 		}
-		// 62x18 modal; footer is the last content line. Modal content ≈ 10 rows,
-		// rendered with border+padding = 14 rows total. Centered in 18 → starts at
-		// Y=2. Footer at content row 9 → overlay Y = 2 + 1 (border) + 1 (pad) + 9 = 13.
-		if m.Y != 13 {
+		// Suggestion chips take priority — clicking one populates the input
+		// without confirming, so the operator can edit before submitting.
+		for _, c := range o.chipRects {
+			if m.Y == c.y && m.X >= c.x1 && m.X < c.x2 {
+				o.input.SetValue(c.reason)
+				o.input.CursorEnd()
+				return o, nil
+			}
+		}
+		// Footer row: hit-test the Annuler / Révoquer buttons. footerY is
+		// populated by View() because its position depends on the chip
+		// layout (one vs two rows).
+		if m.Y != o.footerY {
 			break
 		}
 		if m.X < 31 {
@@ -92,10 +113,21 @@ func (o *revokeOverlay) View() string {
 	// The modal is 62 cells wide with a 3-cell border+padding on each side
 	// → 56 cells of usable inner width. Pack chips into rows that fit, with
 	// 1-cell gaps; spill to a second row when a chip would overflow.
+	//
+	// Record the overlay-relative bounding box of each chip so OnClick can
+	// hit-test it. lipgloss places the modal centered; we know:
+	//   border(1) + padding(1) = 2 cells offset at the start of each row.
+	// The chip strip is rendered after 8 content lines (title=1, blank=1,
+	// lic_id=1, subject=1, blank=1, "raison :"=1, input=1, blank=1,
+	// "Suggestions :"=1) → chip first row Y = 2 + 9 = 11.
 	const innerW = 56
+	const chipStartY = 11
+	const chipStartX = 3 // border(1) + padding(2)
+	o.chipRects = o.chipRects[:0]
 	var rows []string
 	var row strings.Builder
 	rowW := 0
+	rowIdx := 0
 	for _, s := range suggestions {
 		chip := revokeChipStyle.Render(s)
 		cw := lipgloss.Width(chip)
@@ -103,18 +135,25 @@ func (o *revokeOverlay) View() string {
 			rows = append(rows, row.String())
 			row.Reset()
 			rowW = 0
+			rowIdx++
 		}
 		if rowW > 0 {
 			row.WriteString(" ")
 			rowW++
 		}
+		x1 := chipStartX + rowW
 		row.WriteString(chip)
 		rowW += cw
+		o.chipRects = append(o.chipRects, chipRect{
+			x1: x1, x2: x1 + cw, y: chipStartY + rowIdx, reason: s,
+		})
 	}
 	if row.Len() > 0 {
 		rows = append(rows, row.String())
 	}
 	chipLines := strings.Join(rows, "\n")
+	// Footer Y = first chip row Y + (chip rows - 1) + 2 blank lines below.
+	o.footerY = chipStartY + len(rows) - 1 + 2
 
 	footer := renderButtons(innerW,
 		button{label: "Annuler", hotkey: "esc", kind: btnNeutral},

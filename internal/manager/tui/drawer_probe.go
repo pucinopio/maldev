@@ -86,6 +86,17 @@ func (o *probeDrawerOverlay) subscribeCmd(tokenID string) tea.Cmd {
 	}
 }
 
+// cancelCmd revokes any in-flight probe token then dismisses the drawer.
+// Shared by the esc key path and the mouse "annuler/fermer" hit.
+func (o *probeDrawerOverlay) cancelCmd() tea.Cmd {
+	if o.token != nil && o.state == probeStateWaiting {
+		svc := o.svc
+		id := o.token.ID
+		go func() { _ = svc.Probe.Revoke(context.Background(), id, "operator") }()
+	}
+	return func() tea.Msg { return OverlayDoneMsg{Result: nil} }
+}
+
 func (o *probeDrawerOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 	switch msg := msg.(type) {
 	case ProbeTokenIssuedMsg:
@@ -129,13 +140,38 @@ func (o *probeDrawerOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 				)
 			}
 		case "esc":
-			if o.token != nil && o.state == probeStateWaiting {
-				svc := o.svc
-				id := o.token.ID
-				go func() { _ = svc.Probe.Revoke(context.Background(), id, "operator") }()
-			}
-			return o, func() tea.Msg { return OverlayDoneMsg{Result: nil} }
+			return o, o.cancelCmd()
 		}
+
+	case tea.MouseMsg:
+		if msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
+			return o, nil
+		}
+		// Hit-test by hint substring on the clicked overlay line. The drawer
+		// always renders its key-hint footer last (see View bottom block).
+		lines := strings.Split(o.View(), "\n")
+		if msg.Y < 0 || msg.Y >= len(lines) {
+			return o, o.cancelCmd()
+		}
+		line := lines[msg.Y]
+		switch {
+		case strings.Contains(line, "copier") && o.state == probeStateWaiting && o.token != nil:
+			_ = clipboard.WriteAll(o.curlCommand())
+			return o, nil
+		case strings.Contains(line, "confirmer") && o.state == probeStateReceived && o.token != nil:
+			machineID := o.token.CompositeHex
+			var resultCmd tea.Cmd
+			if o.onResult != nil {
+				resultCmd = o.onResult(machineID)
+			}
+			return o, tea.Batch(
+				resultCmd,
+				func() tea.Msg { return OverlayDoneMsg{Result: nil} },
+			)
+		case strings.Contains(line, "annuler"), strings.Contains(line, "fermer"):
+			return o, o.cancelCmd()
+		}
+		return o, nil
 	}
 	return o, nil
 }

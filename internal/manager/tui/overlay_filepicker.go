@@ -87,6 +87,25 @@ func (o *filePickerOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 		case "esc":
 			return o, func() tea.Msg { return OverlayDoneMsg{Result: nil} }
 		}
+
+	case tea.MouseMsg:
+		if msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
+			return o, nil
+		}
+		// Layout (overlay-relative): border(1) + padding(1) + header(1) +
+		// keyHints(1) + blank(1) = 5. Entry rows start at Y=5.
+		const entryStartY = 5
+		row := msg.Y - entryStartY
+		if row < 0 || row >= filePickerHeight {
+			return o, nil
+		}
+		start, end := o.visibleRange(filePickerHeight)
+		idx := start + row
+		if idx < 0 || idx >= end {
+			return o, nil
+		}
+		o.cursor = idx
+		return o.handleEnter()
 	}
 	return o, nil
 }

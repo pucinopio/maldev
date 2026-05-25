@@ -75,8 +75,43 @@ func (o *qrOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 				o.pemOff++
 			}
 		}
+
+	case tea.MouseMsg:
+		// Coords are already overlay-relative (translated by updateOverlay).
+		// The footer hint reads "s save   c copy PEM   esc/enter close" so
+		// hit-test on its three regions; any other click closes the overlay.
+		if msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
+			return o, nil
+		}
+		return o, o.handleMouse(msg.X, msg.Y)
 	}
 	return o, nil
+}
+
+// handleMouse dispatches a click inside the QR overlay. The footer "hint
+// strip" sits at the last rendered line and reads
+//
+//	s save   c copy PEM   esc/enter close
+//
+// We accept clicks anywhere on the matching substring; clicks outside the
+// strip dismiss the overlay (parity with overlay_ok / overlay_error).
+func (o *qrOverlay) handleMouse(_ int, y int) tea.Cmd {
+	lines := strings.Split(o.View(), "\n")
+	if y < 0 || y >= len(lines) {
+		return func() tea.Msg { return OverlayDoneMsg{Result: nil} }
+	}
+	line := lines[y]
+	switch {
+	case strings.Contains(line, "save") && !strings.Contains(line, "saved"):
+		return o.saveCmd()
+	case strings.Contains(line, "copy PEM"):
+		if o.issued != nil {
+			_ = clipboard.WriteAll(string(o.issued.PEM))
+		}
+		return nil
+	default:
+		return func() tea.Msg { return OverlayDoneMsg{Result: nil} }
+	}
 }
 
 func (o *qrOverlay) pemLines() []string {
