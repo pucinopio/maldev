@@ -20,13 +20,14 @@ type IdentitiesLoadedMsg struct {
 }
 
 type identitiesModel struct {
-	svc    *service.Services
-	rows   []*ent.Identity
-	err    error
-	table  table.Model
-	detail bool
-	width  int
-	hgt    int
+	svc        *service.Services
+	rows       []*ent.Identity
+	err        error
+	table      table.Model
+	detail     bool
+	width      int
+	hgt        int
+	titleHints *titleHintRow
 }
 
 func newIdentitiesModel(svc *service.Services) identitiesModel {
@@ -42,7 +43,7 @@ func newIdentitiesModel(svc *service.Services) identitiesModel {
 		table.WithHeight(15),
 		table.WithStyles(licTableStyles()),
 	)
-	return identitiesModel{svc: svc, table: t}
+	return identitiesModel{svc: svc, table: t, titleHints: &titleHintRow{}}
 }
 
 func listIdentitiesCmd(svc *service.Services) tea.Cmd {
@@ -177,10 +178,12 @@ func (m *identitiesModel) rebuildTable() {
 	stretchLastColumn(&m.table, BoxedInner(m.width))
 }
 
-// OnClick selects the clicked table row. Chrome occupies Y=0..3; data rows
-// start at Y=5.
+// OnClick handles title-bar hint chips + table-row selection.
 func (m identitiesModel) OnClick(x, y, _ int) tea.Cmd {
-	const headerY = 4
+	if cmd := m.titleHints.hit(x, y); cmd != nil {
+		return cmd
+	}
+	headerY := m.titleHints.y + 1
 	if y <= headerY {
 		return nil
 	}
@@ -202,11 +205,15 @@ func (m identitiesModel) View() string {
 	// Bordered titled box with right-aligned action chips, matching the
 	// prototype "Identities (N)  [n] créer · [E] export .bin · [R] régénérer · [x] supprimer".
 	titleLabel := fmt.Sprintf("Identities (%d)", len(m.rows))
-	hint := HintKey.Render("[n]") + Dim.Render(" créer ") +
-		Mute.Render("· ") + HintKey.Render("[E]") + Dim.Render(" export .bin ") +
-		Mute.Render("· ") + HintKey.Render("[R]") + Dim.Render(" régénérer ") + GlowYellow.Render("⚠ ") +
-		Mute.Render("· ") + HintKey.Render("[x]") + Dim.Render(" supprimer")
-	title := titledBoxRow(titleLabel, hint, BoxedInner(m.width))
+	regenLabel := " régénérer " + GlowYellow.Render("⚠")
+	title := titleBar(m.titleHints, titleLabel, []titleHint{
+		{Key: "n", Label: " créer ", Cmd: keyCmd("n")},
+		{Key: "E", Label: " export .bin ", Cmd: keyCmd("E")},
+		{Key: "R", Label: regenLabel, Cmd: keyCmd("R")},
+		{Key: "x", Label: " supprimer", Cmd: keyCmd("x")},
+	}, 0, BoxedInner(m.width))
+	introH := wrappedHeight(intro, m.width)
+	m.titleHints.SetY(3 + 1 + introH + 1 + 1)
 
 	tableBody := m.table.View()
 	if h := emptyTableHint(len(m.rows), m.width, "aucune identité — émets une licence pour en créer une"); h != "" {

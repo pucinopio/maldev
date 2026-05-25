@@ -34,14 +34,15 @@ type totpQRExportedMsg struct {
 }
 
 type totpModel struct {
-	svc    *service.Services
-	rows   []*ent.TOTPSecret
-	view   *service.TOTPSecretView // decrypted view of the cursor row
-	err    error
-	table  table.Model
-	vp     viewport.Model
-	width  int
-	hgt    int
+	svc        *service.Services
+	rows       []*ent.TOTPSecret
+	view       *service.TOTPSecretView // decrypted view of the cursor row
+	err        error
+	table      table.Model
+	vp         viewport.Model
+	width      int
+	hgt        int
+	titleHints *titleHintRow
 }
 
 func newTOTPModel(svc *service.Services) totpModel {
@@ -58,7 +59,7 @@ func newTOTPModel(svc *service.Services) totpModel {
 		table.WithStyles(licTableStyles()),
 	)
 	vp := viewport.New(0, 8)
-	return totpModel{svc: svc, table: t, vp: vp}
+	return totpModel{svc: svc, table: t, vp: vp, titleHints: &titleHintRow{}}
 }
 
 func listTOTPCmd(svc *service.Services) tea.Cmd {
@@ -206,9 +207,13 @@ func (m *totpModel) rebuildTable() {
 	}
 }
 
-// OnClick implements ScreenMouseClick — row clicks move the cursor.
-func (m totpModel) OnClick(_, y, _ int) tea.Cmd {
-	const headerY = 4
+// OnClick handles title-bar hint chips + table-row selection. Header row
+// sits one line below the title row recorded by View().
+func (m totpModel) OnClick(x, y, _ int) tea.Cmd {
+	if cmd := m.titleHints.hit(x, y); cmd != nil {
+		return cmd
+	}
+	headerY := m.titleHints.y + 1
 	if y <= headerY {
 		return nil
 	}
@@ -225,11 +230,14 @@ func (m totpModel) View() string {
 		Dim.Render(" créés ici sont réutilisables — la liste apparaît dans le wizard step 7. Suppression libère le secret mais n'invalide pas les licences qui en dépendent.")
 
 	titleLabel := fmt.Sprintf("TOTP secrets (%d)", len(m.rows))
-	hint := HintKey.Render("[n]") + Dim.Render(" générer ") +
-		Mute.Render("· ") + HintKey.Render("[E]") + Dim.Render(" export QR PNG ") +
-		Mute.Render("· ") + HintKey.Render("[x]") + Dim.Render(" supprimer ") +
-		Mute.Render("· ") + HintKey.Render("[r]") + Dim.Render(" rafraîchir")
-	title := titledBoxRow(titleLabel, hint, BoxedInner(m.width))
+	title := titleBar(m.titleHints, titleLabel, []titleHint{
+		{Key: "n", Label: " générer ", Cmd: keyCmd("n")},
+		{Key: "E", Label: " export QR PNG ", Cmd: keyCmd("E")},
+		{Key: "x", Label: " supprimer ", Cmd: keyCmd("x")},
+		{Key: "r", Label: " rafraîchir", Cmd: keyCmd("r")},
+	}, 0, BoxedInner(m.width))
+	introH := wrappedHeight(intro, m.width)
+	m.titleHints.SetY(3 + 1 + introH + 1 + 1)
 
 	tableBody := m.table.View()
 	if h := emptyTableHint(len(m.rows), m.width, "aucun secret TOTP — n pour créer le premier"); h != "" {

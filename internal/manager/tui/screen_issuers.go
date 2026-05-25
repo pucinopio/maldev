@@ -28,6 +28,11 @@ type issuersModel struct {
 	detail bool
 	width  int
 	hgt    int
+
+	// titleHints is shared by reference (pointer) so the layout state View()
+	// stores survives to the next OnClick call — bubbletea passes the model
+	// by value but the pointer points to the same heap struct.
+	titleHints *titleHintRow
 }
 
 func newIssuersModel(svc *service.Services) issuersModel {
@@ -44,7 +49,7 @@ func newIssuersModel(svc *service.Services) issuersModel {
 		table.WithHeight(15),
 		table.WithStyles(licTableStyles()),
 	)
-	return issuersModel{svc: svc, table: t}
+	return issuersModel{svc: svc, table: t, titleHints: &titleHintRow{}}
 }
 
 func listIssuersCmd(svc *service.Services) tea.Cmd {
@@ -182,10 +187,14 @@ func (m *issuersModel) rebuildTable() {
 	stretchLastColumn(&m.table, BoxedInner(m.width))
 }
 
-// OnClick selects the clicked table row. Chrome occupies Y=0..3; table header
-// is at Y=4, data rows start at Y=5.
+// OnClick dispatches title-bar hint clicks (synthesised as KeyMsg) and
+// table-row selection. The title row Y is recorded by View() into
+// m.titleHints; data rows sit two lines below it (border + title).
 func (m issuersModel) OnClick(x, y, _ int) tea.Cmd {
-	const headerY = 4
+	if cmd := m.titleHints.hit(x, y); cmd != nil {
+		return cmd
+	}
+	headerY := m.titleHints.y + 1 // box title at y, table header just below
 	if y <= headerY {
 		return nil
 	}
@@ -227,11 +236,15 @@ func (m issuersModel) View() string {
 		Dim.Render(" sont les clés Ed25519 qui signent tes licences. Une seule clé est active à la fois ; les autres sont retraitées (retired).")
 
 	titleLabel := fmt.Sprintf("Issuer keys Ed25519 (%d)", len(m.rows))
-	hint := HintKey.Render("[n]") + Dim.Render(" générer ") +
-		Mute.Render("· ") + HintKey.Render("[a]") + Dim.Render(" activer ") +
-		Mute.Render("· ") + HintKey.Render("[E]") + Dim.Render(" export .pub ") +
-		Mute.Render("· ") + HintKey.Render("[x]") + Dim.Render(" retraiter")
-	title := titledBoxRow(titleLabel, hint, BoxedInner(m.width))
+	title := titleBar(m.titleHints, titleLabel, []titleHint{
+		{Key: "n", Label: " générer ", Cmd: keyCmd("n")},
+		{Key: "a", Label: " activer ", Cmd: keyCmd("a")},
+		{Key: "E", Label: " export .pub ", Cmd: keyCmd("E")},
+		{Key: "x", Label: " retraiter", Cmd: keyCmd("x")},
+	}, 0, BoxedInner(m.width))
+	// Title row Y = 3 (chrome above) + 1 blank + introH + 1 blank + 1 box border.
+	introH := wrappedHeight(intro, m.width)
+	m.titleHints.SetY(3 + 1 + introH + 1 + 1)
 
 	tableBody := m.table.View()
 	if h := emptyTableHint(len(m.rows), m.width, "aucune clé d'émission — n pour créer la première"); h != "" {

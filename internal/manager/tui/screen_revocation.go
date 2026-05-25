@@ -20,12 +20,13 @@ type RevocationLoadedMsg struct {
 }
 
 type revocationModel struct {
-	svc   *service.Services
-	rows  []service.RevocationView
-	err   error
-	table table.Model
-	width int
-	hgt   int
+	svc        *service.Services
+	rows       []service.RevocationView
+	err        error
+	table      table.Model
+	width      int
+	hgt        int
+	titleHints *titleHintRow
 }
 
 func newRevocationModel(svc *service.Services) revocationModel {
@@ -41,7 +42,7 @@ func newRevocationModel(svc *service.Services) revocationModel {
 		table.WithHeight(15),
 		table.WithStyles(licTableStyles()),
 	)
-	return revocationModel{svc: svc, table: t}
+	return revocationModel{svc: svc, table: t, titleHints: &titleHintRow{}}
 }
 
 func listRevocationCmd(svc *service.Services) tea.Cmd {
@@ -136,9 +137,13 @@ func (m *revocationModel) rebuildTable() {
 }
 
 // OnClick handles row clicks on the revocation table. Chrome=4 rows; the 3
-// summary tiles take 5 rows (one box height) → table header at Y=9.
+// OnClick handles title-bar hint chips + table-row selection. Table header
+// sits one line below the title row recorded by View().
 func (m revocationModel) OnClick(x, y, _ int) tea.Cmd {
-	const headerY = 9
+	if cmd := m.titleHints.hit(x, y); cmd != nil {
+		return cmd
+	}
+	headerY := m.titleHints.y + 1
 	if y <= headerY {
 		return nil
 	}
@@ -172,11 +177,16 @@ func (m revocationModel) View() string {
 		Dim.Render(" (Certificate Revocation List) liste les licences révoquées. Le serveur revocation l'expose en HTTPS pour que les clients vérifient la validité d'une licence.")
 
 	titleLabel := fmt.Sprintf("Revocations (%d)", len(m.rows))
-	hint := HintKey.Render("[n]") + Dim.Render(" ajouter ") +
-		Mute.Render("· ") + HintKey.Render("[x]") + Dim.Render(" retirer ") +
-		Mute.Render("· ") + HintKey.Render("[d]") + Dim.Render(" détail ") +
-		Mute.Render("· ") + HintKey.Render("[r]") + Dim.Render(" rafraîchir")
-	title := titledBoxRow(titleLabel, hint, BoxedInner(m.width))
+	title := titleBar(m.titleHints, titleLabel, []titleHint{
+		{Key: "n", Label: " ajouter ", Cmd: keyCmd("n")},
+		{Key: "x", Label: " retirer ", Cmd: keyCmd("x")},
+		{Key: "d", Label: " détail ", Cmd: keyCmd("d")},
+		{Key: "r", Label: " rafraîchir", Cmd: keyCmd("r")},
+	}, 0, BoxedInner(m.width))
+	// Title Y = chrome(3) + tilesRowH + blank(1) + introH + blank(1) + box border(1).
+	tilesH := lipgloss.Height(tilesRow)
+	introH := wrappedHeight(intro, m.width)
+	m.titleHints.SetY(3 + tilesH + 1 + introH + 1 + 1)
 
 	tableBody := m.table.View()
 	if h := emptyTableHint(len(m.rows), m.width, "aucune révocation — la CRL est vide"); h != "" {

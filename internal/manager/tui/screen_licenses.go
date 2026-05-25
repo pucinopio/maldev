@@ -55,18 +55,19 @@ func (f licenseFilter) String() string {
 
 // licensesModel is the view-model for the Licenses screen.
 type licensesModel struct {
-	svc    *service.Services
-	rows   []*ent.License
-	err    error
-	filter         licenseFilter
-	detailTab         int               // 0=Ident, 1=Bind, 2=PEM, 3=Audit, 4=Chain
-	detailAuditRows   []*ent.AuditEvent // lazy-loaded when A tab opens
-	detailAuditLoading bool             // true between tab-open and loaded msg
-	search textinput.Model
-	table  table.Model
-	detail bool
-	width  int
-	hgt    int
+	svc                *service.Services
+	rows               []*ent.License
+	err                error
+	filter             licenseFilter
+	detailTab          int               // 0=Ident, 1=Bind, 2=PEM, 3=Audit, 4=Chain
+	detailAuditRows    []*ent.AuditEvent // lazy-loaded when A tab opens
+	detailAuditLoading bool              // true between tab-open and loaded msg
+	search             textinput.Model
+	table              table.Model
+	detail             bool
+	width              int
+	hgt                int
+	titleHints         *titleHintRow
 }
 
 func newLicensesModel(svc *service.Services) licensesModel {
@@ -92,7 +93,7 @@ func newLicensesModel(svc *service.Services) licensesModel {
 
 	// Default detail panel open (prototype shows it always-visible);
 	// the operator can collapse it with [d].
-	return licensesModel{svc: svc, table: t, search: ti, detail: true}
+	return licensesModel{svc: svc, table: t, search: ti, detail: true, titleHints: &titleHintRow{}}
 }
 
 // stretchLastColumn resizes a table's trailing column so the row spans the
@@ -418,14 +419,19 @@ func (m licensesModel) View() string {
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top,
 		" ", searchSegment, "  ", Dim.Render(count), "  ", chips)
 
-	// Titled box wrapping the table.
+	// Titled box wrapping the table. [↑↓] is informational (keyboard nav)
+	// and not exposed as a clickable target — its synthesised KeyMsg would
+	// move the cursor on whatever has focus, which isn't the intent.
 	titleLabel := fmt.Sprintf("Licences (%d)", len(m.rows))
-	hint := HintKey.Render("[↑↓]") + Dim.Render(" nav ") +
-		Mute.Render("· ") + HintKey.Render("[d]") + Dim.Render(" détail ") +
-		Mute.Render("· ") + HintKey.Render("[n]") + Dim.Render(" nouvelle ") +
-		Mute.Render("· ") + HintKey.Render("[x]") + Dim.Render(" révoquer ") +
-		Mute.Render("· ") + HintKey.Render("[e]") + Dim.Render(" re-émettre")
-	title := titledBoxRow(titleLabel, hint, BoxedInner(m.width))
+	title := titleBar(m.titleHints, titleLabel, []titleHint{
+		{Key: "↑↓", Label: " nav ", Cmd: func() tea.Cmd { return nil }},
+		{Key: "d", Label: " détail ", Cmd: keyCmd("d")},
+		{Key: "n", Label: " nouvelle ", Cmd: keyCmd("n")},
+		{Key: "x", Label: " révoquer ", Cmd: keyCmd("x")},
+		{Key: "e", Label: " re-émettre", Cmd: keyCmd("e")},
+	}, 0, BoxedInner(m.width))
+	// Title Y = chrome(3) + blank(1) + topRow(1) + blank(1) + box border(1).
+	m.titleHints.SetY(3 + 1 + 1 + 1 + 1)
 	tableBody := m.table.View()
 	if h := emptyTableHint(len(m.rows), m.width, "aucune licence — n pour en émettre une, ? pour l'aide"); h != "" {
 		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", h)
@@ -445,9 +451,13 @@ func (m licensesModel) View() string {
 	return body
 }
 
-// OnClick handles mouse clicks on the licenses screen. Filter chip pills span
-// Y=4..6 (3-row bordered pills); table header is at Y=7, data rows at Y=8+.
+// OnClick handles mouse clicks on the licenses screen. Title bar hint chips
+// take priority, then filter chip pills (Y=4..6 below the search row), then
+// the table rows + detail tab strip.
 func (m licensesModel) OnClick(x, y, _ int) tea.Cmd {
+	if cmd := m.titleHints.hit(x, y); cmd != nil {
+		return cmd
+	}
 	if y >= 4 && y <= 6 {
 		// Hit-test the filter chip bar. Mirror renderFilterBar layout:
 		// 1 PaddingLeft + each pill(label+4 border/padding) + 1 separator space.
