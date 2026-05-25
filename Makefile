@@ -182,8 +182,14 @@ snap-all: tui-snap
 # ── VHS regression tapes ─────────────────────────────────────────────────────
 # Renders a recorded GIF of the TUI under deterministic input. Requires
 # vhs (~/go/bin/vhs), ttyd, ffmpeg. Outputs land under tapes/out/.
-.PHONY: tapes tape-themes tape-wizard-step3 tape-smoke
-tapes: tape-themes tape-wizard-step3 tape-smoke
+.PHONY: tapes tape-themes tape-wizard-step3 tape-smoke tape-screens
+tapes: tape-themes tape-wizard-step3 tape-smoke tape-screens
+
+# Per-screen tapes — one .gif per top-level view under tapes/out/screens/.
+# Script regenerates the .tape files so adding a screen to the list
+# is one-line.
+tape-screens: tui-snap
+	@bash scripts/gen-screen-tapes.sh
 
 tape-themes: tui-snap license-manager
 	@mkdir -p tapes/out
