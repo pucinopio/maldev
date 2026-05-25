@@ -23,6 +23,9 @@ type UnlockResultMsg struct {
 // canary. Returns UnlockResultMsg.
 func TryUnlockCmd(st *store.Store, passphrase string) tea.Cmd {
 	return func() tea.Msg {
+		if st == nil {
+			return UnlockResultMsg{Err: errors.New("store not initialised")}
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
