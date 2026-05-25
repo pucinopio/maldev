@@ -26,8 +26,8 @@ bin/license-manager          # interactive smoke
 | 2 | While agents run: render every screen × multiple widths → spot layout bugs | ✅ |
 | 3 | Apply /simplify findings | ✅ (partial — top items) |
 | 4 | Push coverage on cmds (9% → ≥30%), wizard (27% → ≥40%), tui (64% → ≥70%) | ✅ (wizard 27→33, tui stable, cmds capped without svc mock) |
-| 5 | Snapshot tests per screen state (empty/populated/error/loading) | ⏳ next |
-| 6 | Theme switch live test (assert palette colours change in rendered output) | ⏳ |
+| 5 | Snapshot tests per screen state (empty/populated/error/loading) | 🟡 partial — 40-row no-panic matrix added (`2dea160`), per-state goldens TBD |
+| 6 | Theme switch live test (assert palette colours change in rendered output) | ✅ `a9b0574` — `TestApplyTheme_ReseedsAllGlowStyles` |
 | 7 | Resize behavior test (verify layout survives narrow + wide terminals) | ✅ (fixed during phase 2) |
 | 8 | Final tracker doc update + session-end summary | ⏳ |
 
@@ -35,6 +35,10 @@ bin/license-manager          # interactive smoke
 
 | SHA | Title |
 |---|---|
+| `2dea160` | test(tui): 40-row screens×widths smoke matrix (no-panic + format sanity) |
+| `a9b0574` | test(tui/theme): assert ApplyTheme reseeds every Glow* style var |
+| `5036f9c` | test(tui): full revoke workflow end-to-end (keyboard + click paths) |
+| `350b988` | docs(.dev): session checkpoint — 11 bugs catalogued, 8 fix commits listed |
 | `c850fa3` | test(tui/overlays): exhaustive hotkey + click coverage on all overlays (19 sub-tests) |
 | `03b95e5` | refactor(tui): extract clampTableHeight (simplify pass-3 finding #1) |
 | `0a1f578` | fix(tui/servers): right column wrapping stays within its column budget |
