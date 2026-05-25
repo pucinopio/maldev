@@ -122,7 +122,7 @@ func (m auditModel) Update(msg tea.Msg) (auditModel, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.hgt = msg.Height
-		m.vp.Width = msg.Width - 4
+		m.vp.Width = BoxedInner(msg.Width)
 		m.rebuildTable()
 		return m, nil
 

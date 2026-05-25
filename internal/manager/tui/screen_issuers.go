@@ -179,7 +179,7 @@ func (m *issuersModel) rebuildTable() {
 	}
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
-	stretchLastColumn(&m.table, m.width-4) // -4 = box border(2) + padding(2)
+	stretchLastColumn(&m.table, BoxedInner(m.width))
 }
 
 // OnClick selects the clicked table row. Chrome occupies Y=0..3; table header
@@ -231,13 +231,13 @@ func (m issuersModel) View() string {
 		Mute.Render("· ") + HintKey.Render("[a]") + Dim.Render(" activer ") +
 		Mute.Render("· ") + HintKey.Render("[E]") + Dim.Render(" export .pub ") +
 		Mute.Render("· ") + HintKey.Render("[x]") + Dim.Render(" retraiter")
-	title := titledBoxRow(titleLabel, hint, m.width-4)
+	title := titledBoxRow(titleLabel, hint, BoxedInner(m.width))
 
 	tableBody := m.table.View()
 	if h := emptyTableHint(len(m.rows), m.width, "aucune clé d'émission — n pour créer la première"); h != "" {
 		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", h)
 	}
-	boxed := BoxStyle.Width(m.width - 2).Render(title + "\n" + tableBody)
+	boxed := BoxStyle.Width(BoxedWidth(m.width)).Render(title + "\n" + tableBody)
 
 	body := lipgloss.JoinVertical(lipgloss.Left, "", intro, "", boxed)
 	if m.detail {
@@ -289,12 +289,13 @@ func (m issuersModel) renderDetail() string {
 		GlowRed.Render("[x]")+" "+Dim.Render("retirer (la clé reste vérifiable côté binaire)"),
 	)
 
+	colStyle := lipgloss.NewStyle().Width(colW)
 	cols := lipgloss.JoinHorizontal(lipgloss.Top,
-		lipgloss.NewStyle().Width(colW).Render(meta),
+		colStyle.Render(meta),
 		"  ",
-		lipgloss.NewStyle().Width(colW).Render(actions),
+		colStyle.Render(actions),
 	)
-	return BoxStyle.Width(m.width - 2).Render(cols)
+	return BoxStyle.Width(BoxedWidth(m.width)).Render(cols)
 }
 
 // handleIssuerInputResult processes overlay results for the issuers screen.

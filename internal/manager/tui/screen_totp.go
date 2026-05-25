@@ -198,8 +198,8 @@ func (m *totpModel) rebuildTable() {
 	}
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
-	stretchLastColumn(&m.table, m.width-4)
-	m.vp.Width = m.width - 4
+	stretchLastColumn(&m.table, BoxedInner(m.width))
+	m.vp.Width = BoxedInner(m.width)
 	m.vp.Height = tableH
 	if m.view != nil {
 		m.vp.SetContent(m.renderQR())
@@ -229,7 +229,7 @@ func (m totpModel) View() string {
 		Mute.Render("· ") + HintKey.Render("[E]") + Dim.Render(" export QR PNG ") +
 		Mute.Render("· ") + HintKey.Render("[x]") + Dim.Render(" supprimer ") +
 		Mute.Render("· ") + HintKey.Render("[r]") + Dim.Render(" rafraîchir")
-	title := titledBoxRow(titleLabel, hint, m.width-4)
+	title := titledBoxRow(titleLabel, hint, BoxedInner(m.width))
 
 	tableBody := m.table.View()
 	if h := emptyTableHint(len(m.rows), m.width, "aucun secret TOTP — n pour créer le premier"); h != "" {
@@ -254,8 +254,8 @@ func (m totpModel) View() string {
 		twoCol := lipgloss.JoinHorizontal(lipgloss.Top, listBox, "  ", detailBox)
 		body = lipgloss.JoinVertical(lipgloss.Left, "", intro, "", twoCol)
 	} else {
-		listBox := BoxStyle.Width(m.width - 2).Render(title + "\n" + tableBody)
-		detailBox := m.renderDetailSide(m.width - 2)
+		listBox := BoxStyle.Width(BoxedWidth(m.width)).Render(title + "\n" + tableBody)
+		detailBox := m.renderDetailSide(BoxedWidth(m.width))
 		body = lipgloss.JoinVertical(lipgloss.Left, "", intro, "", listBox, detailBox)
 	}
 	if m.err != nil {

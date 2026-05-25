@@ -132,7 +132,7 @@ func (m *revocationModel) rebuildTable() {
 	}
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
-	stretchLastColumn(&m.table, m.width-4) // -4 = box border(2) + padding(2)
+	stretchLastColumn(&m.table, BoxedInner(m.width))
 }
 
 // OnClick handles row clicks on the revocation table. Chrome=4 rows; the 3
@@ -176,13 +176,13 @@ func (m revocationModel) View() string {
 		Mute.Render("· ") + HintKey.Render("[x]") + Dim.Render(" retirer ") +
 		Mute.Render("· ") + HintKey.Render("[d]") + Dim.Render(" détail ") +
 		Mute.Render("· ") + HintKey.Render("[r]") + Dim.Render(" rafraîchir")
-	title := titledBoxRow(titleLabel, hint, m.width-4)
+	title := titledBoxRow(titleLabel, hint, BoxedInner(m.width))
 
 	tableBody := m.table.View()
 	if h := emptyTableHint(len(m.rows), m.width, "aucune révocation — la CRL est vide"); h != "" {
 		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", h)
 	}
-	body := BoxStyle.Width(m.width - 2).Render(title + "\n" + tableBody)
+	body := BoxStyle.Width(BoxedWidth(m.width)).Render(title + "\n" + tableBody)
 	body = lipgloss.JoinVertical(lipgloss.Left, "", intro, "", body)
 	if m.err != nil {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
