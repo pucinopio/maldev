@@ -217,16 +217,13 @@ func (m settingsModel) buildHits(width int) hits {
 	rightX := colW + 3
 	rightInnerX := rightX + 2 // border(1) + padding(1)
 
-	// Chrome rows: title(1) + tabs(2) + breadcrumb(1) = 4. Content Y=4.
-	const chromeRows = 4
-
 	var h hits
 
 	// Right column box layout (constant heights per content):
 	//   boxArgonPreset  → 8 rows (top, title, blank, p1, p2, p3, footer, bottom)
 	//   boxBaseDeDonnees→ 10 rows (top, title, blank, chemin, passphrase, blank, [P], [V], [B], bottom)
 	//   boxApparence    → 8 rows (top, title, blank, theme, t1, t2, t3, bottom)
-	argonY := chromeRows                       // 4
+	argonY := ChromeRows                       // 4
 	baseY := argonY + 8                        // 12
 	apparenceY := baseY + 10                   // 22
 
@@ -275,7 +272,7 @@ func (m settingsModel) buildHits(width int) hits {
 	// row 8 (auto_start) — rows 5 and 9 are non-persisted prototypes that we
 	// register as hits-with-noop to acknowledge the click without mutating.
 	leftInnerX := 2 // border(1)+padding(1)
-	cycleY := chromeRows + 8 + 6 // = 18
+	cycleY := ChromeRows + 8 + 6 // = 18
 	h.add(leftInnerX, cycleY+4, colW-2, 1, func() tea.Cmd {
 		return func() tea.Msg { return settingsToggleMsg{key: "confirm_quit_with_servers"} }
 	})

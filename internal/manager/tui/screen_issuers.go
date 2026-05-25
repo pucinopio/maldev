@@ -204,8 +204,9 @@ type tableSelectRowMsg struct{ row int }
 // is "intro paragraph + boxed table". Accounts for the intro wrapping on narrow
 // terminals so the box bottom border never overflows into the status bar.
 //
-// chrome=4 (title+tabs+breadcrumb+spacer), intro+blank=introH+2,
-// box border+title+padding=4, status bar=1 → total fixed overhead = 11+introH-1.
+// chrome=ChromeRows (title+tabs+breadcrumb+statusbar), intro+blank=introH+2,
+// box border+title+padding=4, sub-tabs row=1 → total fixed overhead is the sum
+// below; subtracting hits the table cell budget directly.
 func listTableHeight(hgt, width int, intro string) int {
 	introH := 1
 	if width > 1 {
@@ -214,7 +215,7 @@ func listTableHeight(hgt, width int, intro string) int {
 			introH = 1
 		}
 	}
-	h := hgt - (4 + introH + 2 + 2 + 1 + 1)
+	h := hgt - (ChromeRows + introH + 2 + 2 + 1 + 1)
 	if h < 3 {
 		h = 3
 	}

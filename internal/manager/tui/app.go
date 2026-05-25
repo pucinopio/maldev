@@ -936,8 +936,8 @@ func (m rootModel) viewReady() string {
 		content = m.settings.View()
 	}
 
-	// chrome = title(1) + tabs(1) + breadcrumb(1) + statusbar(1) = 4 rows.
-	contentH := m.hgt - 4
+	// chrome = title(1) + tabs(1) + breadcrumb(1) + statusbar(1) = ChromeRows.
+	contentH := m.hgt - ChromeRows
 	if contentH < 0 {
 		contentH = 0
 	}

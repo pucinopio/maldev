@@ -180,9 +180,10 @@ func (m dashboardModel) buildWidgetTree() Widget {
 		FlexChild{W: tilesRow, Min: 6, Max: 6},
 		FlexChild{W: body, Flex: 1},
 	)
-	// Reserve 4 rows for chrome (title + 2-row tabs + breadcrumb) + 1 row for status bar.
-	// Content starts at Y=4 in the rendered terminal, matching viewReady's chrome stack.
-	root.Layout(Rect{X: 0, Y: 4, W: w, H: h - 5})
+	// Reserve ChromeRows for chrome (title+tabs+breadcrumb+statusbar) so the
+	// dashboard widget tree starts at Y=ChromeRows; H subtracts one extra row
+	// because the widget tree includes the tilesRow header above the body.
+	root.Layout(Rect{X: 0, Y: ChromeRows, W: w, H: h - ChromeRows - 1})
 	return root
 }
 
@@ -190,8 +191,8 @@ func (m dashboardModel) View() string {
 	if m.width == 0 {
 		return ""
 	}
-	// Content height = terminal height minus chrome (title+tabs+breadcrumb=3) and status bar (1).
-	contentH := m.height - 4
+	// Content height = terminal height minus chrome (title+tabs+breadcrumb+statusbar).
+	contentH := m.height - ChromeRows
 	if contentH < 1 {
 		contentH = 1
 	}
