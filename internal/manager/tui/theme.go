@@ -79,6 +79,9 @@ var (
 
 	HintKey  lipgloss.Style
 	HintText lipgloss.Style
+
+	ChipActive   lipgloss.Style
+	ChipInactive lipgloss.Style
 )
 
 func init() {
@@ -137,6 +140,13 @@ func reseedStyles() {
 
 	HintKey = lipgloss.NewStyle().Foreground(Palette.Magenta).Bold(true).Padding(0, 1)
 	HintText = lipgloss.NewStyle().Foreground(Palette.FgDim)
+
+	// Filter-chip styling. Pill* uses status colours (green/yellow/red/violet)
+	// and is for record state; Chip* uses Magenta/Border for the active/inactive
+	// distinction in filter rows. Same structural shape — bordered, padded —
+	// so the visual rhythm matches.
+	ChipActive = lipgloss.NewStyle().Foreground(Palette.Magenta).Border(lipgloss.NormalBorder()).BorderForeground(Palette.Magenta).Padding(0, 1)
+	ChipInactive = lipgloss.NewStyle().Foreground(Palette.FgDim).Border(lipgloss.NormalBorder()).BorderForeground(Palette.Border).Padding(0, 1)
 }
 
 func reseedCoreColors() {

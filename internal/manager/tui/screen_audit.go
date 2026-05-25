@@ -298,19 +298,9 @@ func (m auditModel) View() string {
 	for _, f := range allFilters {
 		label := HintKey.Render(f.hotkey()) + Dim.Render(f.label())
 		if f == m.filter {
-			chips = append(chips, lipgloss.NewStyle().
-				Foreground(Palette.Magenta).
-				Border(lipgloss.NormalBorder()).
-				BorderForeground(Palette.Magenta).
-				Padding(0, 1).
-				Render(HintKey.Render(f.hotkey())+Base.Render(f.label())))
+			chips = append(chips, ChipActive.Render(HintKey.Render(f.hotkey())+Base.Render(f.label())))
 		} else {
-			chips = append(chips, lipgloss.NewStyle().
-				Foreground(Palette.FgDim).
-				Border(lipgloss.NormalBorder()).
-				BorderForeground(Palette.Border).
-				Padding(0, 1).
-				Render(label))
+			chips = append(chips, ChipInactive.Render(label))
 		}
 	}
 	exportHints := Dim.Render("E export CSV  J export JSON")
@@ -337,12 +327,13 @@ func (m auditModel) View() string {
 	// Always render the detail card — prototype shows it even with no row
 	// selected so the box position stays stable. When detail mode is on we
 	// show the payload viewport; otherwise a short hint.
+	selected := m.selectedRow() // cache: visibleRows() iterates all rows
 	var detailBox string
 	switch {
 	case m.detail:
 		detailBox = BoxFocused.Width(m.width - 4).Render(m.vp.View())
-	case m.selectedRow() != nil:
-		row := m.selectedRow()
+	case selected != nil:
+		row := selected
 		title := Dim.Render("Detail · ") + GlowCyan.Render(row.Kind) + Dim.Render(" · ") + Base.Render(row.Actor)
 		hint := HintKey.Render("[d]") + Dim.Render(" déplier le payload  ·  ") +
 			HintKey.Render("[E/J]") + Dim.Render(" exporter")

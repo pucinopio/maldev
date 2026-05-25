@@ -144,24 +144,23 @@ func (s *StepBindingMachine) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 type OpenProbeDrawerMsg struct{}
 
 func (s *StepBindingMachine) View() string {
-	fgDim := lipgloss.NewStyle().Foreground(core.Colors.FgDim)
-	title := lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true).Render("Step 3 — Machine Binding (optional)")
-	sub := fgDim.Render("Bind this licence to a specific machine ID. Tab to switch input method.")
+	title := wizSel.Render("Step 3 — Machine Binding (optional)")
+	sub := wizDim.Render("Bind this licence to a specific machine ID. Tab to switch input method.")
 	header := lipgloss.JoinVertical(lipgloss.Left, title, sub, "")
 
-	pasteStyle := fgDim
-	probeStyle := fgDim
+	activeMode := wizFg.Bold(true)
+	pasteStyle, probeStyle := wizDim, wizDim
 	if s.mode == machinePaste {
-		pasteStyle = lipgloss.NewStyle().Foreground(core.Colors.Fg).Bold(true)
+		pasteStyle = activeMode
 	} else {
-		probeStyle = lipgloss.NewStyle().Foreground(core.Colors.Fg).Bold(true)
+		probeStyle = activeMode
 	}
 
 	var body string
 	if s.mode == machinePaste {
 		var probedSection string
 		if len(s.probed) > 0 {
-			lines := []string{lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true).Render("  Machines probées récentes (1..5):")}
+			lines := []string{wizSel.Render("  Machines probées récentes (1..5):")}
 			for i, p := range s.probed {
 				if i >= 5 {
 					break
@@ -174,8 +173,8 @@ func (s *StepBindingMachine) View() string {
 				if len(short) > 16 {
 					short = short[:16] + "…"
 				}
-				key := lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true).Render(fmt.Sprintf("  [%d]", i+1))
-				lines = append(lines, key+" "+fgDim.Render(host+"  ")+lipgloss.NewStyle().Foreground(core.Colors.Fg).Render(short))
+				key := wizSel.Render(fmt.Sprintf("  [%d]", i+1))
+				lines = append(lines, key+" "+wizDim.Render(host+"  ")+wizFg.Render(short))
 			}
 			probedSection = lipgloss.JoinVertical(lipgloss.Left, lines...) + "\n"
 		}
@@ -183,7 +182,7 @@ func (s *StepBindingMachine) View() string {
 			pasteStyle.Render("  [Paste]  "),
 			"",
 			probedSection,
-			fgDim.Render("  Machine-ID hex (ou colle):"),
+			wizDim.Render("  Machine-ID hex (ou colle):"),
 			"  "+s.pasteIn.View(),
 			"",
 			renderHints("enter ok (empty=skip)", "1-5 pick probed", "TAB probe mode", "ctrl+s/esc skip"),
@@ -192,8 +191,8 @@ func (s *StepBindingMachine) View() string {
 		body = lipgloss.JoinVertical(lipgloss.Left,
 			probeStyle.Render("  [Probe target]  "),
 			"",
-			fgDim.Render("  Press enter to open the probe drawer."),
-			fgDim.Render("  A one-time curl command will be shown for the target to run."),
+			wizDim.Render("  Press enter to open the probe drawer."),
+			wizDim.Render("  A one-time curl command will be shown for the target to run."),
 			"",
 			renderHints("enter open drawer", "TAB paste mode", "ctrl+s/esc skip"),
 		)
