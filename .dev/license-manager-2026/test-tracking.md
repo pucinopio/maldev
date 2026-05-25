@@ -3,6 +3,19 @@
 Living document. Every feature, every interaction, every screen has a row.
 A change touching the TUI updates the matching `Last verified` date.
 
+## Coverage progress
+
+| Date | Batch | Tests added | Bugs surfaced + fixed |
+|---|---|---|---|
+| 2026-05-25 | 1 | TitleHintsSynthesiseKey × 24 chips | — |
+| 2026-05-25 | 3 | AuditFilterChips × 6, LicenseFilterChips × 6, LicenseDetailTabs × 5 | screen_licenses tableHeaderY hard-coded (off-by-N) + detail-tab strip Y off-by-1 (fixed in 729376f) |
+| 2026-05-25 | 6 | TopTabBarClicks × 10 | — |
+| 2026-05-25 | 4 | WizardSidebarSteps × 8, WizardReviewButtons (Issue + Cancel) | StepReview.View() recorded button Y as slice index instead of rendered row (fixed in d017f75) |
+| 2026-05-25 | 5 | ServersSubTabBar × 3, ServersActionChips × 5 | — |
+| 2026-05-25 | 2 | DashboardTiles × 5 | — |
+
+**Total: ~72 interactions covered by auto:click tests this session. 2 layout bugs caught + fixed.**
+
 ## Legend
 
 | Symbol | Meaning |

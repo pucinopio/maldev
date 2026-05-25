@@ -6,8 +6,10 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/oioio-space/maldev/internal/manager/store/ent"
+	"github.com/oioio-space/maldev/internal/manager/tui/cmds"
 	"github.com/oioio-space/maldev/internal/manager/tui/widgets"
 	"github.com/oioio-space/maldev/internal/manager/tui/wizard"
 )
@@ -19,6 +21,157 @@ func truncateLines(s string, n int) string {
 		lines = lines[:n]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Batch 2 — Dashboard widget tree dispatch. The dashboard is built from a
+// Flex(Tiles, Box × 2, Box × 2, Shortcuts) tree laid out at Y=TopChromeRows.
+// We render once + dispatchClick on the tree at each tile's centre,
+// asserting the right SwitchToLicensesMsg / SwitchViewMsg comes out.
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestInteractions_DashboardTiles(t *testing.T) {
+	m := newDashboardModel(nil, nil)
+	root := New(nil, nil, SessionReady)
+	root.active = ViewDashboard
+	root.dashboard = m
+	var rm tea.Model = root
+	rm, _ = rm.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
+	root = rm.(rootModel)
+	// Send a snapshot msg so dashboard is loaded + cache invalidated.
+	rm, _ = rm.Update(cmds.DashboardSnapshotMsg{
+		Active: 3, Revoked: 1, Expired: 0, ExpiringSoon: 0, Superseded: 0,
+	})
+	root = rm.(rootModel)
+	tree := root.dashboard.widgetTree()
+
+	// Tile layout: 5 tiles in a row from X=0 horizontally. Each ≈28 cells
+	// wide. We click middle of tile 0 (Actives → filter=active).
+	wantTileToFilter := map[int]string{0: "active", 1: "revoked", 2: "expired", 3: "expiring", 4: "superseded"}
+	for i, want := range wantTileToFilter {
+		// Tile bounds: compute approximate center based on tree layout.
+		// Easier: walk tree.Children() for the first Flex (tiles row).
+		tileCenters := dashTileCenters(tree)
+		if i >= len(tileCenters) {
+			t.Errorf("tile #%d: layout produced only %d tiles", i, len(tileCenters))
+			continue
+		}
+		pt := tileCenters[i]
+		px, py := pt[0], pt[1]
+		cmd := dispatchClick(tree, px, py)
+		if cmd == nil {
+			t.Errorf("tile #%d: dispatchClick(%d,%d) returned nil", i, px, py)
+			continue
+		}
+		msg := cmd()
+		sw, ok := msg.(SwitchToLicensesMsg)
+		if !ok {
+			t.Errorf("tile #%d: cmd produced %T, want SwitchToLicensesMsg", i, msg)
+			continue
+		}
+		if sw.Filter != want {
+			t.Errorf("tile #%d: filter = %q, want %q", i, sw.Filter, want)
+		}
+	}
+}
+
+// dashTileCenters returns the (X, Y) centre of each tile in the dashboard's
+// top tiles row. Walks the first Flex child of the root and reads each
+// tile's Bounds().
+func dashTileCenters(tree Widget) [][2]int {
+	type childer interface{ Children() []Widget }
+	root, ok := tree.(childer)
+	if !ok {
+		return nil
+	}
+	for _, c := range root.Children() {
+		row, isFlex := c.(childer)
+		if !isFlex {
+			continue
+		}
+		grand := row.Children()
+		if len(grand) < 5 {
+			continue
+		}
+		centers := make([][2]int, 0, len(grand))
+		for _, g := range grand {
+			b := g.Bounds()
+			centers = append(centers, [2]int{b.X + b.W/2, b.Y + b.H/2})
+		}
+		return centers
+	}
+	return nil
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Batch 5 — Servers screen interactions: sub-tab bar clicks (R/H/P),
+// Probe inner tabs (T/H/L), and action chips (s/e/g/c/a).
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestInteractions_ServersSubTabBar(t *testing.T) {
+	m := newServersModel(nil, nil)
+	m.width, m.height = 144, 44
+	// Sub-tab labels rendered by View() at Y=4 (chrome=4 rows above).
+	// Click middle of each tab and expect serverSubTabClickMsg.
+	wantTabs := []struct {
+		tab serverSubTab
+		srv string
+		hit int // approximate middle-X of the tab in the rendered strip
+	}{
+		{serverTabRevocation, "revocation", 8},
+		{serverTabHeartbeat, "heartbeat", 27},
+		{serverTabProbe, "probe", 55},
+	}
+	for _, tc := range wantTabs {
+		cmd := m.OnClick(tc.hit, 4, 144)
+		if cmd == nil {
+			t.Errorf("sub-tab %s: OnClick(%d, 4) returned nil", tc.srv, tc.hit)
+			continue
+		}
+		msg := cmd()
+		st, ok := msg.(serverSubTabClickMsg)
+		if !ok {
+			t.Errorf("sub-tab %s: cmd produced %T, want serverSubTabClickMsg", tc.srv, msg)
+		} else if st.tab != tc.tab || st.srv != tc.srv {
+			t.Errorf("sub-tab %s: got %+v, want tab=%v srv=%q", tc.srv, st, tc.tab, tc.srv)
+		}
+	}
+}
+
+func TestInteractions_ServersActionChips(t *testing.T) {
+	m := newServersModel(nil, nil)
+	m.width, m.height = 144, 44
+	actionBarY := m.height - 2 // OnClick math
+	// Walk actionBarHit reverse: query each chip via its hotkey in the
+	// pre-built serverActionChips slice. We don't depend on exact X — we
+	// pass the X of the chip's hint key, which is `[k]`.
+	for _, c := range serverActionChips {
+		hitX := actionBarChipX(c.key)
+		cmd := m.OnClick(hitX, actionBarY, 144)
+		if cmd == nil {
+			t.Errorf("action chip [%s]: OnClick(%d, %d) returned nil", c.key, hitX, actionBarY)
+			continue
+		}
+		// Each chip's Cmd shape differs; we just assert non-nil — the
+		// production code's switch decides what message to emit (start,
+		// stop, push overlay, clear, autoscroll). Per-message asserts
+		// would couple this test to msg layouts.
+		_ = cmd
+	}
+}
+
+// actionBarChipX returns the X where the [key] glyph of the named chip
+// starts in the action bar, mirroring actionBarHit's cursor walk.
+func actionBarChipX(key string) int {
+	cursor := 0
+	for _, c := range serverActionChips {
+		w := lipgloss.Width(HintKey.Render("["+c.key+"]") + " " + Dim.Render(c.label))
+		if c.key == key {
+			return cursor + 1 // middle of the "[k]" glyph
+		}
+		cursor += w
+	}
+	return -1
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
