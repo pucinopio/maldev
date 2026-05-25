@@ -225,9 +225,8 @@ func (s *StepIdentity) View() string {
 		w = 20
 	}
 
-	title := lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true).Render("Step 1 — Signing Identity")
-	sub := lipgloss.NewStyle().Foreground(core.Colors.FgDim).Render("Pick an existing issuer or create a new Ed25519 signing key.")
-	header := lipgloss.JoinVertical(lipgloss.Left, title, sub, "")
+	header := stepHeader("Step 1 — Signing Identity",
+		"Pick an existing issuer or create a new Ed25519 signing key.")
 
 	if s.mode == identityCreate {
 		return lipgloss.JoinVertical(lipgloss.Left,
@@ -241,58 +240,51 @@ func (s *StepIdentity) View() string {
 	)
 }
 
-func (s *StepIdentity) renderList(w int) string {
-	fgDim := lipgloss.NewStyle().Foreground(core.Colors.FgDim)
-	fg := lipgloss.NewStyle().Foreground(core.Colors.Fg)
-	sel := lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true)
-
+func (s *StepIdentity) renderList(_ int) string {
 	var lines []string
 	for i, r := range s.rows {
 		label := fmt.Sprintf("  %-28s  %s", r.Name, r.KeyID)
 		if i == s.cursor {
-			lines = append(lines, sel.Render("> "+label))
+			lines = append(lines, wizSel.Render("> "+label))
 		} else {
-			lines = append(lines, fg.Render("  "+label))
+			lines = append(lines, wizFg.Render("  "+label))
 		}
 	}
-	// "create new" entry
 	createLabel := "  + Create new issuer"
 	if s.cursor == len(s.rows) {
-		lines = append(lines, sel.Render(">"+createLabel))
+		lines = append(lines, wizSel.Render(">"+createLabel))
 	} else {
-		lines = append(lines, fgDim.Render(" "+createLabel))
+		lines = append(lines, wizDim.Render(" "+createLabel))
 	}
 
 	if len(lines) == 0 {
-		lines = []string{fgDim.Render("  (no issuers yet)")}
+		lines = []string{wizDim.Render("  (no issuers yet)")}
 	}
 
 	list := lipgloss.JoinVertical(lipgloss.Left, lines...)
-	hints := fgDim.Render("\n  ↑/↓ navigate   enter select   n create new")
+	hints := wizDim.Render("\n  ↑/↓ navigate   enter select   n create new")
 	if s.err != "" {
 		return lipgloss.JoinVertical(lipgloss.Left,
 			list,
-			lipgloss.NewStyle().Foreground(core.Colors.Red).Render("  error: "+s.err),
+			wizRed.Render("  error: "+s.err),
 			hints,
 		)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, list, hints)
 }
 
-func (s *StepIdentity) renderCreateForm(w int) string {
-	fgDim := lipgloss.NewStyle().Foreground(core.Colors.FgDim)
-	_ = w
+func (s *StepIdentity) renderCreateForm(_ int) string {
 	lines := []string{
-		fgDim.Render("  Name:"),
+		wizDim.Render("  Name:"),
 		"  " + s.nameIn.View(),
 		"",
-		fgDim.Render("  Key-ID:"),
+		wizDim.Render("  Key-ID:"),
 		"  " + s.keyIDIn.View(),
 	}
 	if s.err != "" {
-		lines = append(lines, lipgloss.NewStyle().Foreground(core.Colors.Red).Render("  "+s.err))
+		lines = append(lines, wizRed.Render("  "+s.err))
 	}
-	lines = append(lines, "", fgDim.Render("  tab next field   enter confirm   esc cancel"))
+	lines = append(lines, "", wizDim.Render("  tab next field   enter confirm   esc cancel"))
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 

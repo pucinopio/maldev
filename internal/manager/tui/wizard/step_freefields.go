@@ -237,40 +237,35 @@ func (s *StepFreeFields) collect() map[string]string {
 }
 
 func (s *StepFreeFields) View() string {
-	fgDim := lipgloss.NewStyle().Foreground(core.Colors.FgDim)
-	fg := lipgloss.NewStyle().Foreground(core.Colors.Fg)
-	sel := lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true)
+	header := stepHeader("Step 6 — Subject, Audience & Free Fields",
+		"Identify the licence holder + audience tags, plus optional metadata.")
 
-	title := lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true).Render("Step 6 — Subject, Audience & Free Fields")
-	sub := fgDim.Render("Identify the licence holder + audience tags, plus optional metadata.")
-	header := lipgloss.JoinVertical(lipgloss.Left, title, sub, "")
-
-	subjectPrefix := fg.Render("  Subject  :  ")
-	audiencePrefix := fg.Render("  Audience :  ")
+	subjectPrefix := wizFg.Render("  Subject  :  ")
+	audiencePrefix := wizFg.Render("  Audience :  ")
 	if s.fixedField == 0 {
-		subjectPrefix = sel.Render("> Subject  :  ")
+		subjectPrefix = wizSel.Render("> Subject  :  ")
 	}
 	if s.fixedField == 1 {
-		audiencePrefix = sel.Render("> Audience :  ")
+		audiencePrefix = wizSel.Render("> Audience :  ")
 	}
 	lines := []string{
 		header,
 		subjectPrefix + s.subjectIn.View(),
 		audiencePrefix + s.audienceIn.View(),
 		"",
-		fgDim.Render("  Free fields (key / value):"),
+		wizDim.Render("  Free fields (key / value):"),
 	}
 	for i, r := range s.rows {
-		prefix := fg.Render("  ")
+		prefix := wizFg.Render("  ")
 		if s.fixedField == -1 && i == s.rowIdx {
-			prefix = sel.Render("> ")
+			prefix = wizSel.Render("> ")
 		}
 		line := prefix + r.keyIn.View() + "  =  " + r.valIn.View()
 		lines = append(lines, line)
 	}
 
 	lines = append(lines, "",
-		fgDim.Render("  tab next field   a add row   d delete row   enter/ctrl+s/esc confirm"),
+		wizDim.Render("  tab next field   a add row   d delete row   enter/ctrl+s/esc confirm"),
 	)
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }

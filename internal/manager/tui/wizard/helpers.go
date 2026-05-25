@@ -21,10 +21,22 @@ func parseUUID(s string) (uuid.UUID, error) {
 // the wizard will keep its boot-time look until restart (same limitation
 // as widgets/, deliberate).
 var (
-	wizSel = lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true)
-	wizFg  = lipgloss.NewStyle().Foreground(core.Colors.Fg)
-	wizDim = lipgloss.NewStyle().Foreground(core.Colors.FgDim)
+	wizSel   = lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true)
+	wizFg    = lipgloss.NewStyle().Foreground(core.Colors.Fg)
+	wizDim   = lipgloss.NewStyle().Foreground(core.Colors.FgDim)
+	wizGreen = lipgloss.NewStyle().Foreground(core.Colors.Green)
+	wizRed   = lipgloss.NewStyle().Foreground(core.Colors.Red)
 )
+
+// stepHeader renders the standard wizard step header: magenta-bold title,
+// dim subtitle, blank trailing row. Used by every step's View().
+func stepHeader(title, sub string) string {
+	return lipgloss.JoinVertical(lipgloss.Left,
+		wizSel.Render(title),
+		wizDim.Render(sub),
+		"",
+	)
+}
 
 // renderHints joins a set of "key  meaning" pairs separated by " · " with the
 // key in magenta and the meaning in dim. Wizard steps use it to surface their

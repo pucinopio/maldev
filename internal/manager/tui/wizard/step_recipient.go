@@ -189,9 +189,8 @@ func (s *StepRecipient) handleCreateKey(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (s *StepRecipient) View() string {
-	title := lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true).Render("Step 2 — Recipient")
-	sub := lipgloss.NewStyle().Foreground(core.Colors.FgDim).Render("Pick or create the X25519 recipient key for sealed payload delivery.")
-	header := lipgloss.JoinVertical(lipgloss.Left, title, sub, "")
+	header := stepHeader("Step 2 — Recipient",
+		"Pick or create the X25519 recipient key for sealed payload delivery.")
 
 	if s.mode == recipientCreate {
 		return lipgloss.JoinVertical(lipgloss.Left, header, s.renderCreateForm())
@@ -200,17 +199,13 @@ func (s *StepRecipient) View() string {
 }
 
 func (s *StepRecipient) renderList() string {
-	fgDim := lipgloss.NewStyle().Foreground(core.Colors.FgDim)
-	fg := lipgloss.NewStyle().Foreground(core.Colors.Fg)
-	sel := lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true)
-
 	var lines []string
 	for i, r := range s.rows {
 		label := fmt.Sprintf("  %-30s", r.Name)
 		if i == s.cursor {
-			lines = append(lines, sel.Render("> "+label))
+			lines = append(lines, wizSel.Render("> "+label))
 		} else {
-			lines = append(lines, fg.Render("  "+label))
+			lines = append(lines, wizFg.Render("  "+label))
 		}
 	}
 
@@ -219,22 +214,22 @@ func (s *StepRecipient) renderList() string {
 
 	skipLabel := "  — Skip (no sealed payload)"
 	if s.cursor == skipIdx {
-		lines = append(lines, sel.Render(">"+skipLabel))
+		lines = append(lines, wizSel.Render(">"+skipLabel))
 	} else {
-		lines = append(lines, fgDim.Render(" "+skipLabel))
+		lines = append(lines, wizDim.Render(" "+skipLabel))
 	}
 
 	createLabel := "  + Create new recipient"
 	if s.cursor == createIdx {
-		lines = append(lines, sel.Render(">"+createLabel))
+		lines = append(lines, wizSel.Render(">"+createLabel))
 	} else {
-		lines = append(lines, fgDim.Render(" "+createLabel))
+		lines = append(lines, wizDim.Render(" "+createLabel))
 	}
 
 	// When there are no rows the list only has the two sentinel entries.
 	if len(s.rows) == 0 {
 		lines = []string{
-			fgDim.Render("  (no recipients yet)"),
+			wizDim.Render("  (no recipients yet)"),
 			lines[0], // skip sentinel
 			lines[1], // create sentinel
 		}
@@ -244,22 +239,21 @@ func (s *StepRecipient) renderList() string {
 	if s.err != "" {
 		return lipgloss.JoinVertical(lipgloss.Left,
 			body,
-			lipgloss.NewStyle().Foreground(core.Colors.Red).Render("  error: "+s.err),
+			wizRed.Render("  error: "+s.err),
 		)
 	}
 	return body
 }
 
 func (s *StepRecipient) renderCreateForm() string {
-	fgDim := lipgloss.NewStyle().Foreground(core.Colors.FgDim)
 	lines := []string{
-		fgDim.Render("  Recipient name:"),
+		wizDim.Render("  Recipient name:"),
 		"  " + s.nameIn.View(),
 	}
 	if s.err != "" {
-		lines = append(lines, lipgloss.NewStyle().Foreground(core.Colors.Red).Render("  "+s.err))
+		lines = append(lines, wizRed.Render("  "+s.err))
 	}
-	lines = append(lines, "", fgDim.Render("  enter confirm   esc cancel"))
+	lines = append(lines, "", wizDim.Render("  enter confirm   esc cancel"))
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 

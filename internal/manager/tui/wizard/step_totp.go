@@ -110,45 +110,38 @@ func (s *StepTOTP) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 }
 
 func (s *StepTOTP) View() string {
-	fgDim := lipgloss.NewStyle().Foreground(core.Colors.FgDim)
-	fg := lipgloss.NewStyle().Foreground(core.Colors.Fg)
-	sel := lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true)
-	green := lipgloss.NewStyle().Foreground(core.Colors.Green)
-	red := lipgloss.NewStyle().Foreground(core.Colors.Red)
-
-	title := lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true).Render("Step 7 — TOTP Requirement")
-	sub := fgDim.Render("Require a time-based one-time password at validation time.")
-	header := lipgloss.JoinVertical(lipgloss.Left, title, sub, "")
+	header := stepHeader("Step 7 — TOTP Requirement",
+		"Require a time-based one-time password at validation time.")
 
 	var toggleLabel string
 	if s.requireOn {
-		toggleLabel = green.Render("  [x] Require TOTP")
+		toggleLabel = wizGreen.Render("  [x] Require TOTP")
 	} else {
-		toggleLabel = fgDim.Render("  [ ] Require TOTP")
+		toggleLabel = wizDim.Render("  [ ] Require TOTP")
 	}
 
 	lines := []string{header, "", toggleLabel, ""}
 
 	if s.requireOn {
-		lines = append(lines, fg.Render("  Select TOTP secret:"))
+		lines = append(lines, wizFg.Render("  Select TOTP secret:"))
 		if len(s.rows) == 0 {
-			lines = append(lines, fgDim.Render("  (no TOTP secrets linked to this issuer)"))
+			lines = append(lines, wizDim.Render("  (no TOTP secrets linked to this issuer)"))
 		} else {
 			for i, r := range s.rows {
 				label := "  " + r.AccountLabel
 				if i == s.cursor {
-					lines = append(lines, sel.Render("> "+label))
+					lines = append(lines, wizSel.Render("> "+label))
 				} else {
-					lines = append(lines, fg.Render("  "+label))
+					lines = append(lines, wizFg.Render("  "+label))
 				}
 			}
 		}
 	}
 
 	if s.err != "" {
-		lines = append(lines, red.Render("  "+s.err))
+		lines = append(lines, wizRed.Render("  "+s.err))
 	}
-	lines = append(lines, "", fgDim.Render("  t toggle   ↑/↓ select secret   enter confirm"))
+	lines = append(lines, "", wizDim.Render("  t toggle   ↑/↓ select secret   enter confirm"))
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 

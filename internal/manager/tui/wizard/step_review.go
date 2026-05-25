@@ -166,16 +166,11 @@ func buildIssueRequest(st WizardState) (service.IssueRequest, error) {
 }
 
 func (s *StepReview) View() string {
-	fgDim := lipgloss.NewStyle().Foreground(core.Colors.FgDim)
-	fg := lipgloss.NewStyle().Foreground(core.Colors.Fg)
-	green := lipgloss.NewStyle().Foreground(core.Colors.Green)
-
-	title := lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true).Render("Step 8 — Review & Issue")
-	sub := fgDim.Render("Confirm all choices and press enter to sign the licence.")
-	header := lipgloss.JoinVertical(lipgloss.Left, title, sub, "")
+	header := stepHeader("Step 8 — Review & Issue",
+		"Confirm all choices and press enter to sign the licence.")
 
 	row := func(label, value string) string {
-		return fg.Render(fmt.Sprintf("  %-20s", label)) + fgDim.Render(value)
+		return wizFg.Render(fmt.Sprintf("  %-20s", label)) + wizDim.Render(value)
 	}
 
 	notAfterStr := s.state.NotAfter.Format("2006-01-02")
@@ -219,13 +214,13 @@ func (s *StepReview) View() string {
 	if s.issuing {
 		s.issueBtnY = len(lines)
 		s.cancelBtnY = -1
-		lines = append(lines, fgDim.Render("  issuing…"))
+		lines = append(lines, wizDim.Render("  issuing…"))
 	} else {
 		s.issueBtnY = len(lines)
 		s.cancelBtnY = s.issueBtnY + 1
 		lines = append(lines,
-			green.Render("  [ enter / i ]  Issue licence"),
-			fgDim.Render("  [ esc ]        Cancel"),
+			wizGreen.Render("  [ enter / i ]  Issue licence"),
+			wizDim.Render("  [ esc ]        Cancel"),
 		)
 	}
 

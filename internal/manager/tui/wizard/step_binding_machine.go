@@ -144,9 +144,8 @@ func (s *StepBindingMachine) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 type OpenProbeDrawerMsg struct{}
 
 func (s *StepBindingMachine) View() string {
-	title := wizSel.Render("Step 3 — Machine Binding (optional)")
-	sub := wizDim.Render("Bind this licence to a specific machine ID. Tab to switch input method.")
-	header := lipgloss.JoinVertical(lipgloss.Left, title, sub, "")
+	header := stepHeader("Step 3 — Machine Binding (optional)",
+		"Bind this licence to a specific machine ID. Tab to switch input method.")
 
 	activeMode := wizFg.Bold(true)
 	pasteStyle, probeStyle := wizDim, wizDim

@@ -110,28 +110,23 @@ type OpenFilePickerMsg struct {
 }
 
 func (s *StepBindingBinary) View() string {
-	fgDim := lipgloss.NewStyle().Foreground(core.Colors.FgDim)
-	green := lipgloss.NewStyle().Foreground(core.Colors.Green)
-	red := lipgloss.NewStyle().Foreground(core.Colors.Red)
-
-	title := lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true).Render("Step 4 — Binary Binding (optional)")
-	sub := fgDim.Render("Bind this licence to a specific binary by SHA-256 hash.")
-	header := lipgloss.JoinVertical(lipgloss.Left, title, sub, "")
+	header := stepHeader("Step 4 — Binary Binding (optional)",
+		"Bind this licence to a specific binary by SHA-256 hash.")
 
 	var statusLine string
 	switch {
 	case s.hashing:
-		statusLine = fgDim.Render("  computing SHA-256…")
+		statusLine = wizDim.Render("  computing SHA-256…")
 	case s.hashErr != "":
-		statusLine = red.Render("  error: " + s.hashErr)
+		statusLine = wizRed.Render("  error: " + s.hashErr)
 	case s.sha256 != "":
-		statusLine = green.Render("  SHA-256: " + s.sha256)
+		statusLine = wizGreen.Render("  SHA-256: " + s.sha256)
 	default:
-		statusLine = fgDim.Render("  no file selected")
+		statusLine = wizDim.Render("  no file selected")
 	}
 
 	body := lipgloss.JoinVertical(lipgloss.Left,
-		fgDim.Render("  Binary path:"),
+		wizDim.Render("  Binary path:"),
 		"  "+s.pathIn.View(),
 		"",
 		statusLine,

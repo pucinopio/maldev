@@ -169,19 +169,16 @@ func (s *StepValidity) parse() (time.Time, time.Time, error) {
 }
 
 func (s *StepValidity) View() string {
-	fgDim := lipgloss.NewStyle().Foreground(core.Colors.FgDim)
-	red := lipgloss.NewStyle().Foreground(core.Colors.Red)
+	header := stepHeader("Step 5 — Validity Window",
+		"Set the not-before / not-after dates for this licence.")
 
-	title := lipgloss.NewStyle().Foreground(core.Colors.Magenta).Bold(true).Render("Step 5 — Validity Window")
-	sub := fgDim.Render("Set the not-before / not-after dates for this licence.")
-	header := lipgloss.JoinVertical(lipgloss.Left, title, sub, "")
-
-	startLabel := fgDim.Render("  Not before:")
-	endLabel := fgDim.Render("  Not after (or 'forever'):")
+	activeLabel := wizFg.Bold(true)
+	startLabel := wizDim.Render("  Not before:")
+	endLabel := wizDim.Render("  Not after (or 'forever'):")
 	if s.active == validityFieldStart {
-		startLabel = lipgloss.NewStyle().Foreground(core.Colors.Fg).Bold(true).Render("  Not before:")
+		startLabel = activeLabel.Render("  Not before:")
 	} else {
-		endLabel = lipgloss.NewStyle().Foreground(core.Colors.Fg).Bold(true).Render("  Not after (or 'forever'):")
+		endLabel = activeLabel.Render("  Not after (or 'forever'):")
 	}
 
 	lines := []string{
@@ -191,11 +188,11 @@ func (s *StepValidity) View() string {
 		endLabel,
 		"  " + s.endIn.View(),
 		"",
-		fgDim.Render("  shortcuts: ctrl+w +7d   ctrl+m +30d   ctrl+y +1y   ctrl+f forever"),
-		fgDim.Render("  tab switch field   enter confirm"),
+		wizDim.Render("  shortcuts: ctrl+w +7d   ctrl+m +30d   ctrl+y +1y   ctrl+f forever"),
+		wizDim.Render("  tab switch field   enter confirm"),
 	}
 	if s.errMsg != "" {
-		lines = append(lines, red.Render("  "+s.errMsg))
+		lines = append(lines, wizRed.Render("  "+s.errMsg))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, append([]string{header}, lines...)...)
 }
