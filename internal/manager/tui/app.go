@@ -794,7 +794,7 @@ func (m rootModel) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	if m.active == ViewDashboard {
-		tree := m.dashboard.buildWidgetTree()
+		tree := m.dashboard.widgetTree()
 		cmd := dispatchClick(tree, msg.X, msg.Y)
 		return m, cmd
 	}

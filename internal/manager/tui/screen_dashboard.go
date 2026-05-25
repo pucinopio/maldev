@@ -38,6 +38,19 @@ type dashboardModel struct {
 	width, height int
 	err           error
 	loading       bool
+
+	// cache holds the constructed widget tree + a validity flag. View() and
+	// the root mouse dispatcher both go through widgetTree() which rebuilds
+	// only when invalidated. Pointer-backed so writes from a copy of m
+	// reach future copies (bubbletea passes models by value).
+	cache *dashboardCache
+}
+
+// dashboardCache wraps the cached widget tree so the dashboardModel can
+// carry it across value-copied Update calls.
+type dashboardCache struct {
+	tree  Widget
+	valid bool
 }
 
 func newDashboardModel(s *service.Services, b *httpsrv.Bundle) dashboardModel {
@@ -50,6 +63,27 @@ func newDashboardModel(s *service.Services, b *httpsrv.Bundle) dashboardModel {
 			{Name: "Heartbeat"},
 			{Name: "Probe"},
 		},
+		cache: &dashboardCache{},
+	}
+}
+
+// widgetTree returns the cached widget tree, rebuilding it from scratch only
+// when the cache has been invalidated by a resize or a fresh snapshot.
+func (m dashboardModel) widgetTree() Widget {
+	if m.cache == nil {
+		// Defensive: tests sometimes instantiate dashboardModel{} directly.
+		return m.buildWidgetTree()
+	}
+	if !m.cache.valid || m.cache.tree == nil {
+		m.cache.tree = m.buildWidgetTree()
+		m.cache.valid = true
+	}
+	return m.cache.tree
+}
+
+func (m *dashboardModel) invalidateCache() {
+	if m.cache != nil {
+		m.cache.valid = false
 	}
 }
 
@@ -63,6 +97,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.invalidateCache()
 
 	case cmds.DashboardSnapshotMsg:
 		m.loading = false
@@ -85,6 +120,7 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 			m.heatIssue = msg.HeatmapIssuance
 			m.heatExpiry = msg.HeatmapExpiry
 		}
+		m.invalidateCache()
 	}
 	return m, nil
 }
@@ -204,7 +240,7 @@ func (m dashboardModel) View() string {
 		return lipgloss.Place(m.width, contentH, lipgloss.Center, lipgloss.Center,
 			GlowRed.Render("Error: "+m.err.Error()))
 	}
-	return m.buildWidgetTree().View()
+	return m.widgetTree().View()
 }
 
 // truncateFingerprint shortens a hex fingerprint (colon-separated or raw) to
