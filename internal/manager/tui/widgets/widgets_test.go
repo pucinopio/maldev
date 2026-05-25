@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -173,6 +175,85 @@ func TestSpacer_NoOpUpdate(t *testing.T) {
 	out := s.View()
 	if out == "" {
 		t.Error("Spacer.View should produce non-empty output (blank fill)")
+	}
+}
+
+// TestWrappedTable_RowClick — clicking row N produces RowClickedMsg{N}.
+// Header sits at relative Y=0; data rows start at Y=1.
+func TestWrappedTable_RowClick(t *testing.T) {
+	cols := []table.Column{{Title: "A", Width: 5}, {Title: "B", Width: 5}}
+	rows := []table.Row{{"r0a", "r0b"}, {"r1a", "r1b"}, {"r2a", "r2b"}}
+	tm := table.New(table.WithColumns(cols), table.WithRows(rows))
+	wt := NewWrappedTable(tm)
+	wt.Layout(core.Rect{X: 0, Y: 0, W: 20, H: 5})
+
+	cases := []struct {
+		y    int
+		want int // -1 = expect nil cmd
+	}{
+		{0, -1}, // header row, no msg
+		{1, 0},
+		{2, 1},
+		{3, 2},
+		{4, -1}, // past last row
+	}
+	for _, c := range cases {
+		cmd := wt.OnClick(0, c.y, tea.MouseButtonLeft)
+		if c.want < 0 {
+			if cmd != nil {
+				t.Errorf("y=%d: got cmd, want nil", c.y)
+			}
+			continue
+		}
+		if cmd == nil {
+			t.Errorf("y=%d: got nil, want RowClickedMsg{%d}", c.y, c.want)
+			continue
+		}
+		m := cmd().(RowClickedMsg)
+		if m.Index != c.want {
+			t.Errorf("y=%d: RowClickedMsg.Index = %d, want %d", c.y, m.Index, c.want)
+		}
+	}
+}
+
+// TestWrappedTextInput_OnClick focuses the input.
+func TestWrappedTextInput_OnClick(t *testing.T) {
+	ti := textinput.New()
+	wti := NewWrappedTextInput(ti)
+	wti.Layout(core.Rect{W: 30, H: 1})
+	if wti.Focused() {
+		t.Fatal("fresh textinput should be unfocused")
+	}
+	wti.OnClick(0, 0, tea.MouseButtonLeft)
+	if !wti.Focused() {
+		t.Error("OnClick should focus the input")
+	}
+	wti.Blur()
+	if wti.Focused() {
+		t.Error("Blur should unfocus")
+	}
+}
+
+// TestWrappedTextInput_Value reads back what's typed.
+func TestWrappedTextInput_Value(t *testing.T) {
+	ti := textinput.New()
+	ti.SetValue("hello")
+	wti := NewWrappedTextInput(ti)
+	if got := wti.Value(); got != "hello" {
+		t.Errorf("Value() = %q, want %q", got, "hello")
+	}
+}
+
+// TestWrappedViewport_SetContent + View() outputs the seeded content.
+func TestWrappedViewport_SetContent(t *testing.T) {
+	wv := NewWrappedViewport("initial content")
+	wv.Layout(core.Rect{W: 40, H: 5})
+	if !strings.Contains(wv.View(), "initial") {
+		t.Errorf("viewport view missing initial content:\n%s", wv.View())
+	}
+	wv.SetContent("replaced text")
+	if !strings.Contains(wv.View(), "replaced") {
+		t.Errorf("viewport view missing replaced content:\n%s", wv.View())
 	}
 }
 
