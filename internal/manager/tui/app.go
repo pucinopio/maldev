@@ -314,7 +314,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.licenses.Init()
 
-	case PassphraseResult:
+	case PassphraseResultMsg:
 		if msg.Passphrase == "" {
 			return m, tea.Quit
 		}

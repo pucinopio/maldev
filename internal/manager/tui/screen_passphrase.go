@@ -27,9 +27,9 @@ type passphraseModel struct {
 	hgt         int
 }
 
-// PassphraseResult carries the resolved passphrase out of a standalone
+// PassphraseResultMsg carries the resolved passphrase out of a standalone
 // tea.Program run (used by main.go for the sub-program flow).
-type PassphraseResult struct {
+type PassphraseResultMsg struct {
 	Passphrase string
 }
 
@@ -93,7 +93,7 @@ func (m passphraseModel) update(msg tea.Msg) (passphraseModel, tea.Cmd) {
 				m.done = true
 				m.result = pass
 				m.pendingPass = ""
-				return m, func() tea.Msg { return PassphraseResult{Passphrase: pass} }
+				return m, func() tea.Msg { return PassphraseResultMsg{Passphrase: pass} }
 			}
 			m.err = "passphrase must not be empty"
 			return m, nil
@@ -113,7 +113,7 @@ func (m passphraseModel) update(msg tea.Msg) (passphraseModel, tea.Cmd) {
 			m.result = m.pendingPass
 			pass := m.pendingPass
 			m.pendingPass = ""
-			passphraseResultCmd := func() tea.Msg { return PassphraseResult{Passphrase: pass} }
+			passphraseResultCmd := func() tea.Msg { return PassphraseResultMsg{Passphrase: pass} }
 			return m, tea.Batch(passphraseResultCmd, tea.Quit)
 		}
 		m.pendingPass = ""

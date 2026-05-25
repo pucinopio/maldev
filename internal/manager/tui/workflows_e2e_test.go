@@ -397,7 +397,7 @@ func TestE2E_RelaunchAfterOnboarding(t *testing.T) {
 // ── Passphrase unlock screen ───────────────────────────────────────────────────
 
 // TestE2E_PassphraseUnlockSuccess — passphraseModel (no store wired) accepts
-// any non-empty passphrase and emits PassphraseResult.
+// any non-empty passphrase and emits PassphraseResultMsg.
 func TestE2E_PassphraseUnlockSuccess(t *testing.T) {
 	var m tea.Model = New(nil, nil, SessionLocked)
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
@@ -410,12 +410,12 @@ func TestE2E_PassphraseUnlockSuccess(t *testing.T) {
 		t.Fatal("expected cmd after Enter, got nil")
 	}
 	msg := cmd()
-	pr, ok := msg.(PassphraseResult)
+	pr, ok := msg.(PassphraseResultMsg)
 	if !ok {
-		t.Fatalf("expected PassphraseResult, got %T", msg)
+		t.Fatalf("expected PassphraseResultMsg, got %T", msg)
 	}
 	if pr.Passphrase != "Str0ngP@ss!" {
-		t.Fatalf("PassphraseResult.Passphrase = %q, want 'Str0ngP@ss!'", pr.Passphrase)
+		t.Fatalf("PassphraseResultMsg.Passphrase = %q, want 'Str0ngP@ss!'", pr.Passphrase)
 	}
 }
 
@@ -1189,7 +1189,7 @@ func TestE2E_QROverlayQRSavedMsgUpdatesState(t *testing.T) {
 // TestE2E_PassphraseSuccessEmitsQuit drives passphraseModel (with a real
 // in-memory store) with the correct passphrase + Enter, dispatches the async
 // UnlockResultMsg, and asserts:
-//   - finalCmd is a tea.BatchMsg containing both PassphraseResult (with the
+//   - finalCmd is a tea.BatchMsg containing both PassphraseResultMsg (with the
 //     correct Passphrase value) and a tea.QuitMsg.
 func TestE2E_PassphraseSuccessEmitsQuit(t *testing.T) {
 	ctx := context.Background()
@@ -1237,14 +1237,14 @@ func TestE2E_PassphraseSuccessEmitsQuit(t *testing.T) {
 		}
 		msg := c()
 		switch v := msg.(type) {
-		case PassphraseResult:
+		case PassphraseResultMsg:
 			gotPassphrase = v.Passphrase
 		case tea.QuitMsg:
 			gotQuit = true
 		}
 	}
 	if gotPassphrase != "right-pass" {
-		t.Fatalf("PassphraseResult.Passphrase = %q, want 'right-pass'", gotPassphrase)
+		t.Fatalf("PassphraseResultMsg.Passphrase = %q, want 'right-pass'", gotPassphrase)
 	}
 	if !gotQuit {
 		t.Fatal("BatchMsg must include tea.QuitMsg so the sub-program exits")
@@ -1310,7 +1310,7 @@ func TestE2E_PassphraseFailureShowsErrorNotQuit(t *testing.T) {
 // TestE2E_PassphraseAfterClearStillProducesValue is the direct Bug B guard.
 // It drives the prompt with the correct passphrase, presses Enter (which clears
 // the input), dispatches the UnlockResultMsg, and asserts the emitted
-// PassphraseResult carries the typed value — not the empty string produced by
+// PassphraseResultMsg carries the typed value — not the empty string produced by
 // the unfixed code that reads m.input.Value() AFTER SetValue("").
 func TestE2E_PassphraseAfterClearStillProducesValue(t *testing.T) {
 	ctx := context.Background()
@@ -1356,12 +1356,12 @@ func TestE2E_PassphraseAfterClearStillProducesValue(t *testing.T) {
 		if c == nil {
 			continue
 		}
-		if pr, ok := c().(PassphraseResult); ok {
+		if pr, ok := c().(PassphraseResultMsg); ok {
 			gotPassphrase = pr.Passphrase
 		}
 	}
 	if gotPassphrase != "correct-pass" {
-		t.Fatalf("PassphraseResult.Passphrase = %q, want 'correct-pass' — Bug B: input was cleared before result was read",
+		t.Fatalf("PassphraseResultMsg.Passphrase = %q, want 'correct-pass' — Bug B: input was cleared before result was read",
 			gotPassphrase)
 	}
 	_ = m
