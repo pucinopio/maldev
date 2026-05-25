@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/progress"
+	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -607,3 +609,76 @@ func (b *boxWidget) renderTitleRow(contentW int) string {
 
 // Children exposes the inner widget for depth-first mouse dispatch.
 func (b *boxWidget) Children() []Widget { return []Widget{b.inner} }
+
+// ── Shared list-screen helpers ──────────────────────────────────────────────
+// These five primitives used to live in screen_licenses.go and
+// screen_settings.go but are called from every list screen. They belong in
+// layout.go alongside BoxedInner/BoxedWidth so a new screen author doesn't
+// have to guess which feature file owns them.
+
+// stretchLastColumn enlarges the rightmost table column so the row highlight
+// spans the available screen width. The bubbles/table package only
+// highlights cells, so without this the selected-row background stops at
+// the natural column sum. Safe to call when width == 0 (no-op).
+func stretchLastColumn(t *table.Model, width int) {
+	if width <= 0 {
+		return
+	}
+	cols := t.Columns()
+	if len(cols) == 0 {
+		return
+	}
+	fixed := 0
+	for i := 0; i < len(cols)-1; i++ {
+		fixed += cols[i].Width
+	}
+	overhead := 2*len(cols) + 2 // padding (1 per col) + outer borders
+	last := width - fixed - overhead
+	if last < cols[len(cols)-1].Width {
+		last = cols[len(cols)-1].Width
+	}
+	cols[len(cols)-1].Width = last
+	t.SetColumns(cols)
+}
+
+// emptyTableHint returns a centered muted line shown under a table that has
+// no rows, hinting at the keybind that creates one. Returns "" when rows > 0.
+func emptyTableHint(rows int, width int, message string) string {
+	if rows > 0 || width <= 0 {
+		return ""
+	}
+	return lipgloss.NewStyle().
+		Width(width).
+		Align(lipgloss.Center).
+		Foreground(Palette.FgMute).
+		Render(message)
+}
+
+// kvRow renders a dim-key / fg-value row with an explicit key field width.
+// Shared by settingsKV and detail-panel helpers across screen files.
+func kvRow(key, value string, keyW int) string {
+	return Dim.Render(fmt.Sprintf("%-*s", keyW, key)) + Base.Render(value)
+}
+
+// detailColW returns the width of each column in a 2-column detail panel
+// given the total screen width. Ensures a minimum of 20 chars so labels
+// are never truncated on narrow terminals.
+func detailColW(totalW int) int {
+	w := totalW/2 - 4
+	if w < 20 {
+		return 20
+	}
+	return w
+}
+
+// tableRowCmd is the shared row-click handler for list screens. headerY is
+// the absolute Y of the table header (1 row above the first data row);
+// rowsLen is the number of rows currently in the model. Returns nil when
+// the click misses the data rows.
+func tableRowCmd(headerY, rowsLen, y int) tea.Cmd {
+	row := y - headerY - 1
+	if row < 0 || row >= rowsLen {
+		return nil
+	}
+	return func() tea.Msg { return tableSelectRowMsg{row: row} }
+}

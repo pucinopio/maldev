@@ -96,43 +96,8 @@ func newLicensesModel(svc *service.Services) licensesModel {
 	return licensesModel{svc: svc, table: t, search: ti, detail: true, titleHints: &titleHintRow{}}
 }
 
-// stretchLastColumn resizes a table's trailing column so the row spans the
-// available screen width. The bubbles/table package only highlights cells, so
-// without this the selected-row background only covers the natural column sum
-// (~50% of a 144-cell terminal). Safe to call when width == 0 (no-op).
-func stretchLastColumn(t *table.Model, width int) {
-	if width <= 0 {
-		return
-	}
-	cols := t.Columns()
-	if len(cols) == 0 {
-		return
-	}
-	fixed := 0
-	for i := 0; i < len(cols)-1; i++ {
-		fixed += cols[i].Width
-	}
-	overhead := 2*len(cols) + 2 // padding (1 per col) + outer borders
-	last := width - fixed - overhead
-	if last < cols[len(cols)-1].Width {
-		last = cols[len(cols)-1].Width
-	}
-	cols[len(cols)-1].Width = last
-	t.SetColumns(cols)
-}
-
-// emptyTableHint returns a centered muted line shown under a table that has
-// no rows, hinting at the keybind that creates one. Returns "" when rows > 0.
-func emptyTableHint(rows int, width int, message string) string {
-	if rows > 0 || width <= 0 {
-		return ""
-	}
-	return lipgloss.NewStyle().
-		Width(width).
-		Align(lipgloss.Center).
-		Foreground(Palette.FgMute).
-		Render(message)
-}
+// stretchLastColumn / emptyTableHint live in layout.go — shared by every
+// list screen.
 
 func licTableStyles() table.Styles {
 	s := table.DefaultStyles()

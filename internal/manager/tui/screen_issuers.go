@@ -194,16 +194,7 @@ func (m issuersModel) OnClick(x, y, _ int) tea.Cmd {
 	if cmd := m.titleHints.hit(x, y); cmd != nil {
 		return cmd
 	}
-	headerY := m.titleHints.y + 1 // box title at y, table header just below
-	if y <= headerY {
-		return nil
-	}
-	row := y - headerY - 1
-	if row < 0 || row >= len(m.rows) {
-		return nil
-	}
-	target := row
-	return func() tea.Msg { return tableSelectRowMsg{row: target} }
+	return tableRowCmd(m.titleHints.y+1, len(m.rows), y)
 }
 
 // tableSelectRowMsg asks the active screen to move its table cursor to row.
