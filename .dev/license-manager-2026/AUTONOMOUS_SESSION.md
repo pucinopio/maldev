@@ -35,6 +35,9 @@ bin/license-manager          # interactive smoke
 
 | SHA | Title |
 |---|---|
+| `89ad799` | test(tui/totp): QR fits within minDetailW=58 for a real secret |
+| `fdda2a5` | test(tui/revocation): tile heights stay equal even with overflowing footer |
+| `8a8f89e` | test(tui/licenses): pill is single-line for every status variant |
 | `2dea160` | test(tui): 40-row screens×widths smoke matrix (no-panic + format sanity) |
 | `a9b0574` | test(tui/theme): assert ApplyTheme reseeds every Glow* style var |
 | `5036f9c` | test(tui): full revoke workflow end-to-end (keyboard + click paths) |
@@ -61,6 +64,17 @@ bin/license-manager          # interactive smoke
 9. **drawer_probe goroutine leak**: subscribeCmd blocks on channel; cancelCmd revoked the token but never unsubscribed → channel + goroutine leaked. Now calls Unsubscribe first.
 10. **3 silent error swallows**: probe history + license audit fetches discarded errors. Now surface via err field on the load msg.
 11. **TestThemeSeparationRule regex too tight**: only matched first method call → chained `.Width(8).Foreground(Palette.Yellow)` slipped through. Tightened regex; fixed 3 violations.
+
+## Regression guards added (this session, post-fix)
+
+| Bug # | Guard test | Mechanism |
+|---|---|---|
+| #1 revoke chips | `TestWorkflow_RevokeChipClickPopulatesInput` + `TestWorkflow_RevokeFromLicensesScreen` | end-to-end: licenses→x→reason→enter→msg |
+| #2 TOTP QR | `TestTOTPQRFitsInMinDetailW` | real QR width vs minDetailW |
+| #3 status pill | `TestLicStatusPill_IsSingleLine` | `lipgloss.Height(pill) == 1` for 5 statuses |
+| #7 revoc tiles | `TestRevocInfoTile_HeightStaysEqual` | short vs long footer → same lipgloss.Height |
+| #11 theme reseed | `TestApplyTheme_ReseedsAllGlowStyles` | every Glow* var foreground matches palette |
+| n/a (layout) | `TestAllScreensRenderAcrossWidths` | 10 views × 4 widths no-panic + format sanity |
 
 ## Open questions for the user
 
