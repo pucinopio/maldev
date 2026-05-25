@@ -115,6 +115,15 @@ func (m onboardingModel) update(msg tea.Msg) (onboardingModel, tea.Cmd) {
 		m.hgt = msg.Height
 		return m, nil
 
+	case tea.MouseMsg:
+		// Welcome step: any left-click synthesises Enter so the operator
+		// can dismiss the banner with the mouse. Later steps are textinput
+		// driven — leaving them keyboard-only avoids accidental submits.
+		if m.step == stepWelcome && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
+			return m.update(tea.KeyMsg{Type: tea.KeyEnter})
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC:
