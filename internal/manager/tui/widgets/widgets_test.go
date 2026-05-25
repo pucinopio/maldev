@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/oioio-space/maldev/internal/manager/tui/core"
 )
@@ -101,6 +102,77 @@ func TestStatusBar_Update_NoOp(t *testing.T) {
 	w, cmd := sb.Update(tea.KeyMsg{})
 	if w != sb || cmd != nil {
 		t.Errorf("Update should be a no-op, got w=%v cmd=%v", w, cmd)
+	}
+}
+
+// TestButton_ClickAndKey: OnClick + hotkey press both invoke OnPress.
+func TestButton_ClickAndKey(t *testing.T) {
+	var pressed int
+	b := NewButton("Save", "s", func() tea.Cmd {
+		pressed++
+		return nil
+	})
+	b.Layout(core.Rect{X: 0, Y: 0, W: 12, H: 3})
+	b.OnClick(2, 1, tea.MouseButtonLeft)
+	if pressed != 1 {
+		t.Errorf("OnClick: pressed = %d, want 1", pressed)
+	}
+	// Hotkey only fires when focused.
+	b.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	if pressed != 1 {
+		t.Errorf("unfocused hotkey: pressed = %d, want 1 (unchanged)", pressed)
+	}
+	b.Focus()
+	if !b.Focused() {
+		t.Error("Focus() did not flip Focused()")
+	}
+	b.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	if pressed != 2 {
+		t.Errorf("focused hotkey: pressed = %d, want 2", pressed)
+	}
+	b.Blur()
+	if b.Focused() {
+		t.Error("Blur() did not flip Focused() off")
+	}
+}
+
+// TestButton_View renders the label + bracketed hotkey.
+func TestButton_View(t *testing.T) {
+	b := NewButton("Save", "s", nil)
+	b.Layout(core.Rect{W: 12, H: 3})
+	out := b.View()
+	if !strings.Contains(out, "[s]") {
+		t.Errorf("Button view missing [s] hotkey:\n%s", out)
+	}
+	if !strings.Contains(out, "Save") {
+		t.Errorf("Button view missing label:\n%s", out)
+	}
+}
+
+// TestText_RenderAndLayout — Text widget echoes its content under the
+// provided style, clipping nothing.
+func TestText_RenderAndLayout(t *testing.T) {
+	tx := NewText("hello world", lipgloss.NewStyle())
+	tx.Layout(core.Rect{X: 0, Y: 0, W: 20, H: 1})
+	if got := tx.Bounds().W; got != 20 {
+		t.Errorf("Bounds.W = %d, want 20", got)
+	}
+	if !strings.Contains(tx.View(), "hello world") {
+		t.Errorf("Text view missing content:\n%s", tx.View())
+	}
+}
+
+// TestSpacer is a no-op widget that fills empty space.
+func TestSpacer_NoOpUpdate(t *testing.T) {
+	s := NewSpacer()
+	s.Layout(core.Rect{X: 0, Y: 0, W: 10, H: 5})
+	w, cmd := s.Update(tea.KeyMsg{})
+	if w != s || cmd != nil {
+		t.Error("Spacer.Update should be a no-op")
+	}
+	out := s.View()
+	if out == "" {
+		t.Error("Spacer.View should produce non-empty output (blank fill)")
 	}
 }
 
