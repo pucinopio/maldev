@@ -254,16 +254,7 @@ func (m *auditModel) rebuildTable() {
 	// the literal but reference ChromeRows so the chrome dependency is
 	// at least documented.
 	const auditFixedOverhead = ChromeRows + 2 // 4 + 2 = 6
-	tableH := m.hgt - auditFixedOverhead
-	if m.detail {
-		tableH = tableH / 2
-	}
-	if tableH < 3 {
-		tableH = 3
-	}
-	if len(rows) == 0 {
-		tableH = 1
-	}
+	tableH := clampTableHeight(m.hgt-auditFixedOverhead, m.detail, len(rows) == 0)
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
 	stretchLastColumn(&m.table, m.width)

@@ -2,6 +2,30 @@ package tui
 
 import "testing"
 
+// TestClampTableHeight covers the three constraints the helper enforces.
+func TestClampTableHeight(t *testing.T) {
+	cases := []struct {
+		name             string
+		in               int
+		detail, empty    bool
+		want             int
+	}{
+		{"plain", 20, false, false, 20},
+		{"halve on detail", 20, true, false, 10},
+		{"min 3", 1, false, false, 3},
+		{"empty collapses to 1", 20, false, true, 1},
+		{"empty wins over detail+min", 1, true, true, 1},
+		{"detail+min", 1, true, false, 3},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := clampTableHeight(c.in, c.detail, c.empty); got != c.want {
+				t.Errorf("clampTableHeight(%d,%v,%v) = %d, want %d", c.in, c.detail, c.empty, got, c.want)
+			}
+		})
+	}
+}
+
 // TestLayoutConstants pins the values returned by the layout helpers so a
 // future tweak to BoxStyle (extra padding, thicker border) shows up here
 // before it propagates silently to every screen that subtracts magic numbers.

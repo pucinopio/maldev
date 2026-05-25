@@ -168,20 +168,13 @@ func (m *issuersModel) rebuildTable() {
 			r.KeyID, r.Name, status, created, "—",
 		})
 	}
-	tableH := listTableHeight(m.hgt, m.width,
-		"Les issuer keys sont les clés Ed25519 qui signent tes licences. Une seule clé est active à la fois ; les autres sont retraitées (retired).")
-	if m.detail {
-		tableH = tableH / 2
-	}
-	if tableH < 3 {
-		tableH = 3
-	}
-	// Collapse the table to its header row when empty so the empty-state hint
-	// added by View() sits directly under the header instead of being pushed
-	// off-screen by a full-height grid of blank rows.
-	if len(rows) == 0 {
-		tableH = 1
-	}
+	// clampTableHeight handles the universal halve-on-detail / min-3 /
+	// collapse-on-empty constraints. The empty-table case shows the
+	// emptyTableHint directly below the header rather than below an
+	// empty grid that pushes the hint off-screen.
+	tableH := clampTableHeight(listTableHeight(m.hgt, m.width,
+		"Les issuer keys sont les clés Ed25519 qui signent tes licences. Une seule clé est active à la fois ; les autres sont retraitées (retired)."),
+		m.detail, len(rows) == 0)
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
 	stretchLastColumn(&m.table, BoxedInner(m.width))

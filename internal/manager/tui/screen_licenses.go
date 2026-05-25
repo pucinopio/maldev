@@ -321,20 +321,9 @@ func (m *licensesModel) rebuildTable() {
 		})
 	}
 
-	// Compute table height: chrome (4) + box vertical frame (2) = 6 rows of
-	// fixed overhead before the table itself; ChromeRows already includes the
-	// status bar, the +2 accounts for the BoxStyle borders above and below.
+	// Fixed overhead = ChromeRows + box vertical frame (border above/below).
 	_, boxV := BoxFrame()
-	tableH := m.hgt - ChromeRows - boxV
-	if m.detail {
-		tableH = tableH / 2
-	}
-	if tableH < 3 {
-		tableH = 3
-	}
-	if len(rows) == 0 {
-		tableH = 1
-	}
+	tableH := clampTableHeight(m.hgt-ChromeRows-boxV, m.detail, len(rows) == 0)
 
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)

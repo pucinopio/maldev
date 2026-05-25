@@ -671,6 +671,24 @@ func detailColW(totalW int) int {
 	return w
 }
 
+// clampTableHeight applies the three universal constraints every list
+// screen's rebuildTable repeats: halve when detail panel is open, clamp
+// to a minimum of 3 rows so the header + 2 data rows are always visible,
+// and collapse to 1 row when there are no entries so an empty-state hint
+// can render directly below the header instead of being pushed off-screen.
+func clampTableHeight(h int, detailOpen, empty bool) int {
+	if detailOpen {
+		h /= 2
+	}
+	if h < 3 {
+		h = 3
+	}
+	if empty {
+		h = 1
+	}
+	return h
+}
+
 // tableRowCmd is the shared row-click handler for list screens. headerY is
 // the absolute Y of the table header (1 row above the first data row);
 // rowsLen is the number of rows currently in the model. Returns nil when
