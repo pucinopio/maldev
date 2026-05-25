@@ -233,9 +233,11 @@ func (m issuersModel) View() string {
 		{Key: "E", Label: " export .pub ", Cmd: keyCmd("E")},
 		{Key: "x", Label: " retraiter", Cmd: keyCmd("x")},
 	}, 0, BoxedInner(m.width))
-	// Title row Y = 3 (chrome above) + 1 blank + introH + 1 blank + 1 box border.
-	introH := wrappedHeight(intro, m.width)
-	m.titleHints.SetY(3 + 1 + introH + 1 + 1)
+	// Title row Y = TopChromeRows + leading blank + introH + trailing blank
+	// + box top border. introH uses the rendered height so wrapped intros and
+	// future multi-line additions stay accurate.
+	introH := lipgloss.Height(lipgloss.NewStyle().Width(m.width).Render(intro))
+	m.titleHints.SetY(TopChromeRows + 1 + introH + 1 + 1)
 
 	tableBody := m.table.View()
 	if h := emptyTableHint(len(m.rows), m.width, "aucune clé d'émission — n pour créer la première"); h != "" {

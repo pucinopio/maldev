@@ -174,10 +174,10 @@ func (m revocationModel) View() string {
 		{Key: "d", Label: " détail ", Cmd: keyCmd("d")},
 		{Key: "r", Label: " rafraîchir", Cmd: keyCmd("r")},
 	}, 0, BoxedInner(m.width))
-	// Title Y = chrome(3) + tilesRowH + blank(1) + introH + blank(1) + box border(1).
+	// Title Y = TopChromeRows + tilesH + blank + introH + blank + box top border.
 	tilesH := lipgloss.Height(tilesRow)
-	introH := wrappedHeight(intro, m.width)
-	m.titleHints.SetY(3 + tilesH + 1 + introH + 1 + 1)
+	introH := lipgloss.Height(lipgloss.NewStyle().Width(m.width).Render(intro))
+	m.titleHints.SetY(TopChromeRows + tilesH + 1 + introH + 1 + 1)
 
 	tableBody := m.table.View()
 	if h := emptyTableHint(len(m.rows), m.width, "aucune révocation — la CRL est vide"); h != "" {

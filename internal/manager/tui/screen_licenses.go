@@ -376,8 +376,11 @@ func (m licensesModel) View() string {
 		{Key: "x", Label: " révoquer ", Cmd: keyCmd("x")},
 		{Key: "e", Label: " re-émettre", Cmd: keyCmd("e")},
 	}, 0, BoxedInner(m.width))
-	// Title Y = chrome(3) + blank(1) + topRow(1) + blank(1) + box border(1).
-	m.titleHints.SetY(3 + 1 + 1 + 1 + 1)
+	// Title Y = TopChromeRows + blank + topRowH + blank + box border. topRow
+	// renders ~3 lines because the filter chips have a bordered pill style;
+	// measure live so a narrower terminal that wraps the row stays accurate.
+	topRowH := lipgloss.Height(topRow)
+	m.titleHints.SetY(TopChromeRows + 1 + topRowH + 1 + 1)
 	tableBody := m.table.View()
 	if h := emptyTableHint(len(m.rows), m.width, "aucune licence — n pour en émettre une, ? pour l'aide"); h != "" {
 		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", h)
@@ -398,13 +401,15 @@ func (m licensesModel) View() string {
 }
 
 // OnClick handles mouse clicks on the licenses screen. Title bar hint chips
-// take priority, then filter chip pills (Y=4..6 below the search row), then
-// the table rows + detail tab strip.
+// take priority, then filter chip pills (3 rows tall under the search row),
+// then the table rows + detail tab strip. Chip-bar Y is derived from
+// TopChromeRows so it follows any future chrome resize.
 func (m licensesModel) OnClick(x, y, _ int) tea.Cmd {
 	if cmd := m.titleHints.hit(x, y); cmd != nil {
 		return cmd
 	}
-	if y >= 4 && y <= 6 {
+	const chipBarTopY = TopChromeRows + 1 // chrome rows + 1 leading blank
+	if y >= chipBarTopY && y <= chipBarTopY+2 {
 		// Hit-test the filter chip bar. Mirror renderFilterBar layout:
 		// 1 PaddingLeft + each pill(label+4 border/padding) + 1 separator space.
 		cursor := 1

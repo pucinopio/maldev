@@ -227,8 +227,8 @@ func (m totpModel) View() string {
 		{Key: "x", Label: " supprimer ", Cmd: keyCmd("x")},
 		{Key: "r", Label: " rafraîchir", Cmd: keyCmd("r")},
 	}, 0, BoxedInner(m.width))
-	introH := wrappedHeight(intro, m.width)
-	m.titleHints.SetY(3 + 1 + introH + 1 + 1)
+	introH := lipgloss.Height(lipgloss.NewStyle().Width(m.width).Render(intro))
+	m.titleHints.SetY(TopChromeRows + 1 + introH + 1 + 1)
 
 	tableBody := m.table.View()
 	if h := emptyTableHint(len(m.rows), m.width, "aucun secret TOTP — n pour créer le premier"); h != "" {

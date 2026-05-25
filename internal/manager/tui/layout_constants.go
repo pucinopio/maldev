@@ -2,11 +2,18 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
-// ChromeRows is the number of rows reserved by the chrome shell — title bar,
-// tab strip, breadcrumb, and status bar — around every Ready-session screen.
-// Screens compute their content height as `m.hgt - ChromeRows`. Update this
-// constant if the chrome layout changes; do not duplicate the literal locally.
+// ChromeRows is the row budget subtracted from m.hgt to compute the
+// available content height. Screens use `m.hgt - ChromeRows` for sizing.
+// Update this constant if the chrome layout changes; do not duplicate the
+// literal locally.
 const ChromeRows = 4
+
+// TopChromeRows is the number of rows the top chrome occupies on the screen
+// BEFORE the content area starts. = title(1) + tab strip(2 — active tab
+// underline counts as a second row) + breadcrumb(1). Use this for absolute Y
+// calculations of elements rendered inside the screen body; ChromeRows is
+// for HEIGHT budgeting only.
+const TopChromeRows = 4
 
 // BoxFrame returns the horizontal and vertical overhead introduced by the
 // standard BoxStyle (border + padding + margin). Use this in size calculations
