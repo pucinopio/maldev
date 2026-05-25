@@ -195,6 +195,18 @@ func (m revocationModel) View() string {
 // revocInfoTile renders a small bordered tile with a string value for
 // the revocation screen header (used for non-numeric summary values).
 func revocInfoTile(label, value, footer string, color lipgloss.Color, w int) string {
+	// Truncate footer so it never wraps onto a second line — wrapping
+	// makes adjacent tiles uneven in height (one wraps, others don't),
+	// which lipgloss.JoinHorizontal then renders as visible misalignment.
+	// BoxStyle has Padding(0, 1) → text room = w - 2.
+	innerW := w - 2
+	if lipgloss.Width(footer) > innerW {
+		runes := []rune(footer)
+		for lipgloss.Width(string(runes)+"…") > innerW && len(runes) > 0 {
+			runes = runes[:len(runes)-1]
+		}
+		footer = string(runes) + "…"
+	}
 	inner := lipgloss.JoinVertical(lipgloss.Left,
 		Dim.Render(label),
 		lipgloss.NewStyle().Foreground(color).Bold(true).Render(value),
