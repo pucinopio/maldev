@@ -485,7 +485,14 @@ func (m serversModel) View() string {
 	leftCol := lipgloss.JoinVertical(lipgloss.Left, statusBox, configBox)
 
 	// ── Right column: live log (or Probe-specific inner view) ────────────
-	rightCol := m.renderRightColumn()
+	// Cap to the budget left by the leftCol (m.width/2 - 1) + 2-cell gap so
+	// long lines (e.g. live-log title with action hints, no-event message)
+	// don't leak past the right edge of the screen at narrow widths.
+	rightColW := m.width - (m.width/2 - 1) - 2
+	if rightColW < 20 {
+		rightColW = 20
+	}
+	rightCol := lipgloss.NewStyle().Width(rightColW).Render(m.renderRightColumn())
 
 	// ── 2-column body ─────────────────────────────────────────────────────
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "  ", rightCol)

@@ -8,20 +8,20 @@
 │ Status  [s] start                                       │  12:00:00  revocation    started   127.0.0.1:8443           
 │                                                         │  12:00:01  heartbeat     started   127.0.0.1:8444           
 │ ● [OFF]  port —                                         │  12:00:02  revocation    request   GET /revoked.pem 200     
-10.0.0.1:52000                                                                                                          
-│ — server stopped — start with  s                        │  12:00:03  probe         error     bind: address already in 
-use                                                                                                                     
-└─────────────────────────────────────────────────────────┘  12:00:04  heartbeat     request   POST /heartbeat 401      
-10.0.0.2:41000                                                                                                          
-┌─────────────────────────────────────────────────────────┐                                                             
-│ Configuration  [e] edit · [g] regen token               │                                                             
-│ port       —                                            │                                                             
+│ — server stopped — start with  s                        │  10.0.0.1:52000                                             
+└─────────────────────────────────────────────────────────┘  12:00:03  probe         error     bind: address already in 
+┌─────────────────────────────────────────────────────────┐  use                                                        
+│ Configuration  [e] edit · [g] regen token               │  12:00:04  heartbeat     request   POST /heartbeat 401      
+│ port       —                                            │  10.0.0.2:41000                                             
 │ TLS cert   /etc/license-manager/tls.crt                 │                                                             
 │ TLS key    /etc/license-manager/tls.key                 │                                                             
 │ admin tok  tk_aB3xZ9… shown once                        │                                                             
 │                                                         │                                                             
 │ endpoint: /crl, /revoke (admin)                         │                                                             
 └─────────────────────────────────────────────────────────┘                                                             
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         
