@@ -256,11 +256,13 @@ var (
 
 	// Heatmap cell styles, precomputed once instead of allocating
 	// lipgloss.NewStyle() 91+ times per dashboard frame (7 rows × 13 cols).
-	heatEmpty      = lipgloss.NewStyle().Foreground(Palette.FgMute)
+	// heatEmpty/heatOutOfRange are alias of Mute (theme); heatBorder/Green/Red
+	// stay local because they have no plain-color theme equivalent.
+	heatEmpty      = Mute
 	heatBorder     = lipgloss.NewStyle().Foreground(Palette.BorderBright)
 	heatGreen      = lipgloss.NewStyle().Foreground(Palette.Green)
 	heatRed        = lipgloss.NewStyle().Foreground(Palette.Red)
-	heatOutOfRange = heatEmpty
+	heatOutOfRange = Mute
 )
 
 // serverRow builds two lines for one server entry matching the reference layout:

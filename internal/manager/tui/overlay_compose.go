@@ -3,7 +3,6 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -28,7 +27,7 @@ func composeOverlay(body, overlay string, totalW, totalH int) string {
 	top := max(0, (totalH-overlayH)/2)
 	left := max(0, (totalW-overlayW)/2)
 
-	scrim := lipgloss.NewStyle().Foreground(Palette.FgMute).Faint(true)
+	scrim := Mute.Faint(true)
 
 	out := make([]string, totalH)
 	for i, line := range bodyLines {

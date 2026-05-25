@@ -331,20 +331,20 @@ func (m auditModel) View() string {
 	var detailBox string
 	switch {
 	case m.detail:
-		detailBox = BoxFocused.Width(m.width - 4).Render(m.vp.View())
+		detailBox = BoxFocused.Width(BoxedInner(m.width)).Render(m.vp.View())
 	case selected != nil:
 		row := selected
 		title := Dim.Render("Detail · ") + GlowCyan.Render(row.Kind) + Dim.Render(" · ") + Base.Render(row.Actor)
 		hint := HintKey.Render("[d]") + Dim.Render(" déplier le payload  ·  ") +
 			HintKey.Render("[E/J]") + Dim.Render(" exporter")
-		detailBox = BoxStyle.Width(m.width - 4).Render(
+		detailBox = BoxStyle.Width(BoxedInner(m.width)).Render(
 			lipgloss.JoinVertical(lipgloss.Left, title, "", hint),
 		)
 	default:
 		title := Dim.Render("Detail")
 		hint := Dim.Render("aucune sélection — utilise ↑/↓ pour choisir une ligne puis ") +
 			HintKey.Render("[d]") + Dim.Render(" pour le détail")
-		detailBox = BoxStyle.Width(m.width - 4).Render(
+		detailBox = BoxStyle.Width(BoxedInner(m.width)).Render(
 			lipgloss.JoinVertical(lipgloss.Left, title, "", hint),
 		)
 	}

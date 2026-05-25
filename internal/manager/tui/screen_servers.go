@@ -797,7 +797,7 @@ func (m serversModel) OnClick(x, y, _ int) tea.Cmd {
 			cursor += h.w
 		}
 	}
-	// Action bar lives at m.hgt - 2 (one above the global status bar).
+	// Action bar lives at m.height - 2 (one above the global status bar).
 	if y == m.height-2 {
 		switch m.actionBarHit(x) {
 		case "s":

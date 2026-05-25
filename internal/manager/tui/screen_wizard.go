@@ -441,9 +441,9 @@ func (m wizardModel) View() string {
 		// Badge: "[N]" styled by active/done state — single-line, no lipgloss borders.
 		var badge string
 		if s == m.step {
-			badge = lipgloss.NewStyle().Foreground(Palette.Magenta).Bold(true).Render(fmt.Sprintf("[%d]", i+1))
+			badge = GlowMagent.Render(fmt.Sprintf("[%d]", i+1))
 		} else {
-			badge = lipgloss.NewStyle().Foreground(Palette.FgMute).Render(fmt.Sprintf("[%d]", i+1))
+			badge = Mute.Render(fmt.Sprintf("[%d]", i+1))
 		}
 
 		var labelStyle lipgloss.Style

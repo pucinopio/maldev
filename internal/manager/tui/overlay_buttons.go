@@ -60,9 +60,9 @@ func (b button) render() string {
 		accent = Palette.Red
 	}
 	hot := lipgloss.NewStyle().Foreground(accent).Bold(true).Render("[" + b.hotkey + "] ")
-	labelStyle := lipgloss.NewStyle().Foreground(Palette.Fg)
+	labelStyle := Base
 	if b.focused {
-		labelStyle = labelStyle.Foreground(accent).Bold(true)
+		labelStyle = Base.Foreground(accent).Bold(true)
 	}
 	return hot + labelStyle.Render(b.label)
 }
