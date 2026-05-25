@@ -52,6 +52,11 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 	case SettingsLoadedMsg:
 		m.err = msg.Err
 		m.row = msg.Row
+		// Apply the persisted theme so a restart shows the same palette
+		// the operator picked last session.
+		if m.row != nil {
+			ApplyTheme(string(m.row.Theme))
+		}
 		return m, nil
 	case settingsSetThemeMsg:
 		themeMap := []setting.Theme{
@@ -70,6 +75,9 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 		if m.row != nil {
 			m.row.Theme = t
 		}
+		// Swap the runtime palette so the new colours appear on the very next
+		// render — without this the change only became visible after a restart.
+		ApplyTheme(string(t))
 		return m, settingsPersistCmd(m.svc, func(q *ent.SettingUpdateOne) {
 			q.SetTheme(t)
 		})
