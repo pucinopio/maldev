@@ -109,6 +109,33 @@ func (s *StepIdentity) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 	return s, nil
 }
 
+// OnClick handles row clicks in browse mode: clicking an issuer row selects
+// it, clicking the "Create new issuer" sentinel switches to create mode.
+// In create mode clicks are ignored (let the operator type).
+// body-local coords: header takes Y=0..2, rows start at Y=3.
+func (s *StepIdentity) OnClick(_, y int) tea.Cmd {
+	if s.mode == identityCreate {
+		return nil
+	}
+	const headerH = 3
+	idx := y - headerH
+	if idx < 0 {
+		return nil
+	}
+	if idx < len(s.rows) {
+		s.cursor = idx
+		id := s.rows[idx].ID.String()
+		return func() tea.Msg { return IdentityChosenMsg{IssuerID: id} }
+	}
+	if idx == len(s.rows) {
+		s.cursor = len(s.rows)
+		s.mode = identityCreate
+		s.nameIn.Focus()
+		return textinput.Blink
+	}
+	return nil
+}
+
 func (s *StepIdentity) handleBrowseKey(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "up", "k":

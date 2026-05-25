@@ -47,6 +47,12 @@ type StepReview struct {
 	issuing bool
 	focused bool
 	bounds  core.Rect
+
+	// issueBtnY / cancelBtnY are body-local Y rows of the two action buttons,
+	// recorded by View() so OnClick can hit-test without re-parsing the
+	// rendered string.
+	issueBtnY  int
+	cancelBtnY int
 }
 
 // NewStepReview constructs step 8.
@@ -211,8 +217,12 @@ func (s *StepReview) View() string {
 	}
 
 	if s.issuing {
+		s.issueBtnY = len(lines)
+		s.cancelBtnY = -1
 		lines = append(lines, fgDim.Render("  issuing…"))
 	} else {
+		s.issueBtnY = len(lines)
+		s.cancelBtnY = s.issueBtnY + 1
 		lines = append(lines,
 			green.Render("  [ enter / i ]  Issue licence"),
 			fgDim.Render("  [ esc ]        Cancel"),
@@ -220,6 +230,22 @@ func (s *StepReview) View() string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+// OnClick handles button clicks on step 8. body-local coords; ignores X
+// since the buttons span the full width and any click on the row counts.
+func (s *StepReview) OnClick(_, y int) tea.Cmd {
+	if s.issuing {
+		return nil
+	}
+	switch y {
+	case s.issueBtnY:
+		s.issuing = true
+		return s.issueCmd()
+	case s.cancelBtnY:
+		return func() tea.Msg { return IssueResultMsg{Err: ErrCancelled} }
+	}
+	return nil
 }
 
 func orDash(s string) string {

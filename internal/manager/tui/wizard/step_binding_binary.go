@@ -142,6 +142,18 @@ func (s *StepBindingBinary) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, header, body)
 }
 
+// OnClick — clicking anywhere on the body opens the file picker, which is
+// the dominant action on this step (the path textinput is rarely typed by
+// hand). body-local coords; only the hint line at the bottom is filtered.
+func (s *StepBindingBinary) OnClick(_, y int) tea.Cmd {
+	// Header(3) + path-label(1) + textinput(1) + blank(1) + status(1) + blank(1)
+	// = 8 rows; hint footer at y=8. Click anywhere from row 3 (path label) on.
+	if y < 3 {
+		return nil
+	}
+	return func() tea.Msg { return OpenFilePickerMsg{Callback: "binary"} }
+}
+
 // SetPath sets the path field (called when file picker returns a path).
 func (s *StepBindingBinary) SetPath(path string) {
 	s.pathIn.SetValue(path)

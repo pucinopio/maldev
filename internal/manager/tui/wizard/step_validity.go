@@ -97,6 +97,27 @@ func (s *StepValidity) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 	return s, s.forwardKey(msg)
 }
 
+// OnClick maps clicks on the "shortcuts: ..." line to the preset they
+// describe. body-local coords; header(3) + 6 body lines → shortcuts row Y=9.
+// The line reads: "  shortcuts: ctrl+w +7d   ctrl+m +30d   ctrl+y +1y   ctrl+f forever".
+func (s *StepValidity) OnClick(x, y int) tea.Cmd {
+	const shortcutsY = 9
+	if y != shortcutsY {
+		return nil
+	}
+	switch {
+	case x >= 13 && x < 24:
+		s.applyShortcut(7 * 24 * time.Hour)
+	case x >= 27 && x < 38:
+		s.applyShortcut(30 * 24 * time.Hour)
+	case x >= 41 && x < 51:
+		s.applyShortcut(365 * 24 * time.Hour)
+	case x >= 54 && x < 68:
+		s.endIn.SetValue("forever")
+	}
+	return nil
+}
+
 func (s *StepValidity) cycleField() {
 	if s.active == validityFieldStart {
 		s.startIn.Blur()

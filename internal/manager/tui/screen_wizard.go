@@ -288,17 +288,35 @@ func (m wizardModel) initStep(s wizardStep) tea.Cmd {
 }
 
 // routeBodyClick dispatches a wizard-body click (already in step-local coords)
-// to whichever step exposes an OnClick. Only steps with click affordances
-// need to participate; others return nil and the click is ignored.
+// to whichever step exposes an OnClick. Steps not listed here silently ignore
+// mouse clicks.
 func (m wizardModel) routeBodyClick(x, y int) tea.Cmd {
 	type clickable interface {
 		OnClick(x, y int) tea.Cmd
 	}
-	switch m.step {
-	case wizStepTOTP:
-		if c, ok := any(m.stepTOTP).(clickable); ok {
+	dispatch := func(w interface{}) tea.Cmd {
+		if c, ok := any(w).(clickable); ok {
 			return c.OnClick(x, y)
 		}
+		return nil
+	}
+	switch m.step {
+	case wizStepIdentity:
+		return dispatch(m.stepIdentity)
+	case wizStepRecipient:
+		return dispatch(m.stepRecipient)
+	case wizStepMachine:
+		return dispatch(m.stepMachine)
+	case wizStepBinary:
+		return dispatch(m.stepBinary)
+	case wizStepValidity:
+		return dispatch(m.stepValidity)
+	case wizStepFreeFields:
+		return dispatch(m.stepFreeFields)
+	case wizStepTOTP:
+		return dispatch(m.stepTOTP)
+	case wizStepReview:
+		return dispatch(m.stepReview)
 	}
 	return nil
 }

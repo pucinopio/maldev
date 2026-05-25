@@ -91,6 +91,37 @@ func (s *StepRecipient) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 	return s, nil
 }
 
+// OnClick handles browse-mode row clicks. body-local Y; header takes 3 rows
+// (title + sub + blank). Recipient rows first, then "skip" sentinel, then
+// "create new" sentinel.
+func (s *StepRecipient) OnClick(_, y int) tea.Cmd {
+	if s.mode == recipientCreate {
+		return nil
+	}
+	const headerH = 3
+	idx := y - headerH
+	if idx < 0 {
+		return nil
+	}
+	skipIdx := len(s.rows)
+	createIdx := len(s.rows) + 1
+	switch {
+	case idx < len(s.rows):
+		s.cursor = idx
+		id := s.rows[idx].ID.String()
+		return func() tea.Msg { return RecipientChosenMsg{RecipientID: id} }
+	case idx == skipIdx:
+		s.cursor = skipIdx
+		return func() tea.Msg { return RecipientChosenMsg{RecipientID: ""} }
+	case idx == createIdx:
+		s.cursor = createIdx
+		s.mode = recipientCreate
+		s.nameIn.Focus()
+		return textinput.Blink
+	}
+	return nil
+}
+
 func (s *StepRecipient) handleBrowseKey(msg tea.KeyMsg) tea.Cmd {
 	// +2 for "create new" and "skip" sentinels
 	total := len(s.rows) + 2
