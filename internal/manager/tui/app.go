@@ -231,6 +231,7 @@ func (m rootModel) Init() tea.Cmd {
 }
 
 func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	dumpMsg(msg)
 	// Data-loaded messages always need to reach their owning screen — even
 	// when an overlay is currently on top — so the underlying list stays
 	// fresh while a modal (wizard → QR, confirm, etc.) is open.
@@ -491,6 +492,25 @@ func (m rootModel) updateOverlay(msg tea.Msg) (tea.Model, tea.Cmd) {
 		ov, _ := push.overlay.Update(tea.WindowSizeMsg{Width: m.width, Height: m.hgt})
 		m.overlays = append(m.overlays, ov)
 		return m, ov.Init()
+	}
+	// Terminal resize while an overlay is open: update root dimensions, broadcast
+	// to every backing screen (so they re-render at the right size once the
+	// overlay closes), and forward to the active overlay before normal routing.
+	if wsm, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width = wsm.Width
+		m.hgt = wsm.Height
+		m.dashboard, _ = m.dashboard.Update(wsm)
+		m.passphrase, _ = m.passphrase.update(wsm)
+		m.onboarding, _ = m.onboarding.update(wsm)
+		m.licenses, _ = m.licenses.Update(wsm)
+		m.issuers, _ = m.issuers.Update(wsm)
+		m.recipients, _ = m.recipients.Update(wsm)
+		m.identities, _ = m.identities.Update(wsm)
+		m.revocation, _ = m.revocation.Update(wsm)
+		m.audit, _ = m.audit.Update(wsm)
+		m.settings, _ = m.settings.Update(wsm)
+		m.servers, _ = m.servers.Update(wsm)
+		m.totp, _ = m.totp.Update(wsm)
 	}
 	top := m.overlays[len(m.overlays)-1]
 	// Translate absolute mouse coords into overlay-relative coords so the
