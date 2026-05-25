@@ -252,7 +252,15 @@ func (m dashboardModel) keyCardContent(textW int) string {
 // primitives.jsx (StatusPill).
 var (
 	serverPillOn  = GlowGreen
-	serverPillOff = lipgloss.NewStyle().Foreground(Palette.FgMute).Bold(true)
+	serverPillOff = Mute.Bold(true)
+
+	// Heatmap cell styles, precomputed once instead of allocating
+	// lipgloss.NewStyle() 91+ times per dashboard frame (7 rows × 13 cols).
+	heatEmpty      = lipgloss.NewStyle().Foreground(Palette.FgMute)
+	heatBorder     = lipgloss.NewStyle().Foreground(Palette.BorderBright)
+	heatGreen      = lipgloss.NewStyle().Foreground(Palette.Green)
+	heatRed        = lipgloss.NewStyle().Foreground(Palette.Red)
+	heatOutOfRange = heatEmpty
 )
 
 // serverRow builds two lines for one server entry matching the reference layout:
@@ -425,11 +433,6 @@ func (m dashboardModel) renderHeatmap() string {
 	} else {
 		wd--
 	}
-	colors := []lipgloss.Color{
-		Palette.FgMute,
-		Palette.BorderBright,
-		Palette.Green,
-	}
 	dayLabels := []string{"Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"}
 	var lines []string
 	for d := 0; d < days; d++ {
@@ -443,28 +446,26 @@ func (m dashboardModel) renderHeatmap() string {
 				issue = m.heatIssue[offset]
 				exp = m.heatExpiry[offset]
 			}
-			var c lipgloss.Color
+			var cell lipgloss.Style
 			switch {
 			case exp > issue && exp > 0:
-				c = Palette.Red
-			case issue >= 3:
-				c = GlowGreen.GetForeground().(lipgloss.Color)
-			case issue >= 1:
-				c = colors[2]
+				cell = heatRed
+			case issue >= 3, issue >= 1:
+				cell = heatGreen
 			case offset < 0 || offset >= 91:
-				c = Palette.FgMute
+				cell = heatOutOfRange
 			default:
-				c = colors[0]
+				cell = heatEmpty
 			}
-			row.WriteString(lipgloss.NewStyle().Foreground(c).Render("■ "))
+			row.WriteString(cell.Render("■ "))
 		}
 		lines = append(lines, row.String())
 	}
 	legend := Mute.Render("  émissions") + " " +
-		lipgloss.NewStyle().Foreground(Palette.FgMute).Render("■") + " " +
-		lipgloss.NewStyle().Foreground(Palette.BorderBright).Render("■") + " " +
-		lipgloss.NewStyle().Foreground(Palette.Green).Render("■") + "  ·  " +
-		lipgloss.NewStyle().Foreground(Palette.Red).Render("■") + " " +
+		heatEmpty.Render("■") + " " +
+		heatBorder.Render("■") + " " +
+		heatGreen.Render("■") + "  ·  " +
+		heatRed.Render("■") + " " +
 		Mute.Render("expirations > émissions")
 	return lipgloss.JoinVertical(lipgloss.Left, lines...) + "\n" + legend
 }

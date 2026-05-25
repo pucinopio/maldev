@@ -148,9 +148,11 @@ func (o *probeDrawerOverlay) curlCommand() string {
 }
 
 func (o *probeDrawerOverlay) View() string {
-	green := lipgloss.NewStyle().Foreground(Palette.Green)
-	red := lipgloss.NewStyle().Foreground(Palette.Red)
-	yellow := lipgloss.NewStyle().Foreground(Palette.Yellow)
+	// Non-bold variants of the Glow* theme styles — same colors, no emphasis,
+	// so the overlay stays calm against bordered status pills.
+	green := GlowGreen.UnsetBold()
+	red := GlowRed.UnsetBold()
+	yellow := GlowYellow.UnsetBold()
 
 	// Prototype: cyan "◆ FINGERPRINT PROBE" title with phase dot + status.
 	var phaseDot, phaseStatus string

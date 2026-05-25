@@ -105,9 +105,11 @@ func (o *qrOverlay) saveCmd() tea.Cmd {
 }
 
 func (o *qrOverlay) View() string {
-	fgDim := lipgloss.NewStyle().Foreground(Palette.FgDim)
-	green := lipgloss.NewStyle().Foreground(Palette.Green)
-	red := lipgloss.NewStyle().Foreground(Palette.Red)
+	// Local aliases — Dim is exactly fgDim; Glow* unbolded matches the calm
+	// status-line look the QR overlay needs (compare to drawer_probe.go).
+	fgDim := Dim
+	green := GlowGreen.UnsetBold()
+	red := GlowRed.UnsetBold()
 
 	title := GlowGreen.Render("Licence Issued")
 

@@ -145,7 +145,7 @@ func (m *recipientsModel) rebuildTable() {
 	}
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
-	stretchLastColumn(&m.table, m.width-4) // -4 = box border(2) + padding(2)
+	stretchLastColumn(&m.table, BoxedInner(m.width))
 }
 
 // OnClick selects the clicked table row. Chrome occupies Y=0..3; data rows
@@ -172,13 +172,13 @@ func (m recipientsModel) View() string {
 		Mute.Render("· ") + HintKey.Render("[i]") + Dim.Render(" importer ") +
 		Mute.Render("· ") + HintKey.Render("[E]") + Dim.Render(" export .pub ") +
 		Mute.Render("· ") + HintKey.Render("[x]") + Dim.Render(" retirer")
-	title := titledBoxRow(titleLabel, hint, m.width-4)
+	title := titledBoxRow(titleLabel, hint, BoxedInner(m.width))
 
 	tableBody := m.table.View()
 	if h := emptyTableHint(len(m.rows), m.width, "aucun destinataire — n pour en ajouter un"); h != "" {
 		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", h)
 	}
-	boxed := BoxStyle.Width(m.width - 2).Render(title + "\n" + tableBody)
+	boxed := BoxStyle.Width(BoxedWidth(m.width)).Render(title + "\n" + tableBody)
 
 	body := lipgloss.JoinVertical(lipgloss.Left, "", intro, "", boxed)
 	if m.detail {
@@ -225,7 +225,7 @@ func (m recipientsModel) renderDetail() string {
 		"  ",
 		lipgloss.NewStyle().Width(colW).Render(actions),
 	)
-	return BoxStyle.Width(m.width - 2).Render(cols)
+	return BoxStyle.Width(BoxedWidth(m.width)).Render(cols)
 }
 
 // handleRecipientInputResult processes overlay results for the recipients screen.

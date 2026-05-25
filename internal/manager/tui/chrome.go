@@ -66,7 +66,7 @@ func renderTitleBar(width int) string {
 // dbName is the database filename; httpOn is the number of running HTTP servers.
 func renderTitleBarWith(width int, dbName string, httpOn int, now time.Time) string {
 	diamond := GlowMagent.Render("◆")
-	appName := lipgloss.NewStyle().Foreground(Palette.Cyan).Bold(true).Render(" license-manager ")
+	appName := GlowCyan.Render(" license-manager ")
 	ver := Dim.Render(appVersion)
 	left := diamond + appName + ver
 

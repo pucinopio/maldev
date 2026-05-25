@@ -186,7 +186,7 @@ func (s *StepBindingMachine) View() string {
 			fgDim.Render("  Machine-ID hex (ou colle):"),
 			"  "+s.pasteIn.View(),
 			"",
-			renderHints("enter confirm", "1-5 pick probed", "TAB probe mode", "ctrl+s/esc skip"),
+			renderHints("enter ok (empty=skip)", "1-5 pick probed", "TAB probe mode", "ctrl+s/esc skip"),
 		)
 	} else {
 		body = lipgloss.JoinVertical(lipgloss.Left,
