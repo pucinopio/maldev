@@ -370,21 +370,13 @@ func (m serversModel) View() string {
 		active := m.activeTab == td.id
 		var tab string
 		if active {
-			tab = lipgloss.NewStyle().
-				Foreground(Palette.Fg).Bold(true).
-				Padding(0, 1).
-				Border(lipgloss.NormalBorder(), false, false, true, false).
-				BorderForeground(Palette.Cyan).
-				Render(
-					GlowCyan.Render("["+td.key+"]") + " " + Base.Render(td.label) + " " + dot,
-				)
+			tab = serverSubTabActive.Render(
+				GlowCyan.Render("["+td.key+"]") + " " + Base.Render(td.label) + " " + dot,
+			)
 		} else {
-			tab = lipgloss.NewStyle().
-				Foreground(Palette.FgDim).
-				Padding(0, 1).
-				Render(
-					Mute.Render("["+td.key+"]") + " " + Dim.Render(td.label) + " " + dot,
-				)
+			tab = serverSubTabInactive.Render(
+				Mute.Render("["+td.key+"]") + " " + Dim.Render(td.label) + " " + dot,
+			)
 		}
 		tabParts = append(tabParts, tab)
 	}
@@ -869,3 +861,17 @@ type serverSubTabClickMsg struct {
 // probeViewSwitchMsg signals a Probe inner-tab (T/H/L) click; handled in
 // Update to mutate probeView + fire the matching load command.
 type probeViewSwitchMsg struct{ view probeInnerView }
+
+// serverSubTabActive / Inactive pre-built once; the sub-tab row is rendered
+// every tick (~1 Hz). Variables not constants because lipgloss.Style is a
+// runtime value, not a compile-time literal.
+var (
+	serverSubTabActive = lipgloss.NewStyle().
+				Foreground(Palette.Fg).Bold(true).
+				Padding(0, 1).
+				Border(lipgloss.NormalBorder(), false, false, true, false).
+				BorderForeground(Palette.Cyan)
+	serverSubTabInactive = lipgloss.NewStyle().
+				Foreground(Palette.FgDim).
+				Padding(0, 1)
+)

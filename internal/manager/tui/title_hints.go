@@ -19,10 +19,24 @@ type titleHint struct {
 // hit-test it without re-parsing the rendered string. Screens hold a
 // *titleHintRow that titleBar mutates each frame and OnClick consults.
 type titleHintRow struct {
-	y       int    // absolute Y of the title row (recorded via SetY)
-	startX  int    // absolute X of the first hint segment
-	segWs   []int  // rendered widths of each hint segment, in order
-	hints   []titleHint
+	y      int   // absolute Y of the title row (recorded via SetY)
+	startX int   // absolute X of the first hint segment
+	segWs  []int // rendered widths of each hint segment, in order
+	hints  []titleHint
+}
+
+// sepRendered is the cached "· "-separator string. Computed once at package
+// init from Mute (palette colour for the dot); width hint sep is recomputed
+// only when ApplyTheme swaps the palette (callers don't get notified, but
+// the value is dominated by structural width rather than colour).
+var (
+	sepRendered = ""
+	sepWidth    = 0
+)
+
+func init() {
+	sepRendered = Mute.Render("· ")
+	sepWidth = lipgloss.Width(sepRendered)
 }
 
 // titleBar renders a list-screen box title row: cyan label on the left,
@@ -44,8 +58,6 @@ func titleBar(t *titleHintRow, label string, hints []titleHint, boxLeftX, boxInn
 	leftRendered := GlowCyan.Render(label)
 	leftW := lipgloss.Width(leftRendered)
 
-	sep := Mute.Render("· ")
-	sepW := lipgloss.Width(sep)
 	segs := make([]string, len(hints))
 	ws := make([]int, len(hints))
 	total := 0
@@ -55,7 +67,7 @@ func titleBar(t *titleHintRow, label string, hints []titleHint, boxLeftX, boxInn
 		total += ws[i]
 	}
 	if len(hints) > 1 {
-		total += sepW * (len(hints) - 1)
+		total += sepWidth * (len(hints) - 1)
 	}
 	gap := boxInnerW - leftW - total
 	if gap < 1 {
@@ -75,7 +87,7 @@ func titleBar(t *titleHintRow, label string, hints []titleHint, boxLeftX, boxInn
 	b.WriteString(strings.Repeat(" ", gap))
 	for i, s := range segs {
 		if i > 0 {
-			b.WriteString(sep)
+			b.WriteString(sepRendered)
 		}
 		b.WriteString(s)
 	}
@@ -96,13 +108,12 @@ func (t *titleHintRow) hit(x, y int) tea.Cmd {
 	if t == nil || y != t.y || len(t.segWs) == 0 {
 		return nil
 	}
-	sepW := lipgloss.Width(Mute.Render("· "))
 	cursor := t.startX
 	for i, w := range t.segWs {
 		if x >= cursor && x < cursor+w {
 			return t.hints[i].Cmd()
 		}
-		cursor += w + sepW
+		cursor += w + sepWidth
 	}
 	return nil
 }

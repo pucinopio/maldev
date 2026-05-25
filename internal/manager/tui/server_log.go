@@ -40,10 +40,14 @@ type serverLog struct {
 const maxLogEntries = 500
 
 func newServerLog() *serverLog {
-	return &serverLog{
+	sl := &serverLog{
 		autoScroll: true,
 		vp:         widgets.NewWrappedViewport(""),
 	}
+	// Seed the empty-state hint at construction so View() can stay a pure
+	// renderer — Update() refreshes content as entries arrive.
+	sl.vp.SetContent(sl.render())
+	return sl
 }
 
 func (sl *serverLog) Layout(bounds core.Rect) {
@@ -103,11 +107,6 @@ func (sl *serverLog) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 }
 
 func (sl *serverLog) View() string {
-	// Late-seed: the empty-state hint must show even before any event arrives.
-	// SetContent is idempotent so re-emitting it here is safe.
-	if len(sl.entries) == 0 {
-		sl.vp.SetContent(sl.render())
-	}
 	return sl.vp.View()
 }
 
