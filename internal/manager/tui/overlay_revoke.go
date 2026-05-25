@@ -102,57 +102,79 @@ func (o *revokeOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 	return o, cmd
 }
 
-var revokeChipStyle = lipgloss.NewStyle().
-	Foreground(Palette.FgMute).
-	Border(lipgloss.NormalBorder()).BorderForeground(Palette.Border)
+// revokeChipStyle is a flat chip — `· reason ·` separators around dim text.
+// Previously this style added a NormalBorder, which made each chip a
+// 3-line bordered block; that broke alignment when several chips were
+// concatenated horizontally with string-builder (the embedded \n inside
+// chip[i] left chip[i+1] on the next row instead of beside it).
+var revokeChipStyle = Mute.Padding(0, 1)
+var revokeChipSep = Dim.Render(" · ")
 
 func (o *revokeOverlay) View() string {
 	suggestions := []string{
 		"key_compromised", "offboarding", "leak", "decommissioned", "abuse",
 	}
-	// The modal is 62 cells wide with a 3-cell border+padding on each side
-	// → 56 cells of usable inner width. Pack chips into rows that fit, with
-	// 1-cell gaps; spill to a second row when a chip would overflow.
-	//
-	// Record the overlay-relative bounding box of each chip so OnClick can
-	// hit-test it. lipgloss places the modal centered; we know:
-	//   border(1) + padding(1) = 2 cells offset at the start of each row.
-	// The chip strip is rendered after 8 content lines (title=1, blank=1,
-	// lic_id=1, subject=1, blank=1, "raison :"=1, input=1, blank=1,
-	// "Suggestions :"=1) → chip first row Y = 2 + 9 = 11.
+	// Modal: 62 cells wide, border(1) + padding(1,2) per side → text room
+	// = 62 - 2 (border) - 4 (padding) = 56 cells inside the styled box.
+	// The chips render on ONE line: each chip = " label " (padding(0,1)),
+	// joined by " · ". They fit at this width (typical sum = 75 chars but
+	// the longest individual chip is "decommissioned" = 16 → if they spill,
+	// JoinHorizontal still keeps them on one rendered row by definition;
+	// we measure the rendered width and let the modal auto-wrap only if
+	// it would exceed the 56-cell room — in which case we split into rows
+	// using lipgloss.JoinHorizontal for proper multi-row layout).
 	const innerW = 56
 	const chipStartY = 11
 	const chipStartX = 3 // border(1) + padding(2)
 	o.chipRects = o.chipRects[:0]
+
+	// Pack chips into rows of <= innerW cells. Each row is a single-line
+	// string joined by revokeChipSep; rows are then JoinVertical'd.
 	var rows []string
-	var row strings.Builder
+	var rowChips []string
+	var rowChipReasons []string
 	rowW := 0
 	rowIdx := 0
+	flushRow := func() {
+		if len(rowChips) == 0 {
+			return
+		}
+		joined := strings.Join(rowChips, revokeChipSep)
+		// Record per-chip X bounds for this row.
+		cursor := chipStartX
+		sepW := lipgloss.Width(revokeChipSep)
+		for i, c := range rowChips {
+			w := lipgloss.Width(c)
+			o.chipRects = append(o.chipRects, chipRect{
+				x1: cursor, x2: cursor + w, y: chipStartY + rowIdx, reason: rowChipReasons[i],
+			})
+			cursor += w + sepW
+		}
+		rows = append(rows, joined)
+		rowChips = rowChips[:0]
+		rowChipReasons = rowChipReasons[:0]
+		rowW = 0
+		rowIdx++
+	}
+	sepW := lipgloss.Width(revokeChipSep)
 	for _, s := range suggestions {
 		chip := revokeChipStyle.Render(s)
 		cw := lipgloss.Width(chip)
-		if rowW > 0 && rowW+1+cw > innerW {
-			rows = append(rows, row.String())
-			row.Reset()
-			rowW = 0
-			rowIdx++
+		need := cw
+		if len(rowChips) > 0 {
+			need += sepW
 		}
-		if rowW > 0 {
-			row.WriteString(" ")
-			rowW++
+		if rowW+need > innerW {
+			flushRow()
+			need = cw
 		}
-		x1 := chipStartX + rowW
-		row.WriteString(chip)
-		rowW += cw
-		o.chipRects = append(o.chipRects, chipRect{
-			x1: x1, x2: x1 + cw, y: chipStartY + rowIdx, reason: s,
-		})
+		rowChips = append(rowChips, chip)
+		rowChipReasons = append(rowChipReasons, s)
+		rowW += need
 	}
-	if row.Len() > 0 {
-		rows = append(rows, row.String())
-	}
+	flushRow()
 	chipLines := strings.Join(rows, "\n")
-	// Footer Y = first chip row Y + (chip rows - 1) + 2 blank lines below.
+	// Footer Y = chipStartY + (rendered chip rows - 1) + 1 blank + 1 line.
 	o.footerY = chipStartY + len(rows) - 1 + 2
 
 	footer := renderButtons(innerW,
@@ -166,8 +188,8 @@ func (o *revokeOverlay) View() string {
 		o.input.View() + "\n\n" +
 		Dim.Render("Suggestions :") + "\n" + chipLines + "\n\n" + footer
 
-	// Height grows by the number of chip rows; clamp the Place height so
-	// the modal never gets clipped under the global status bar.
+	// Height grows by the number of chip rows; chips are now single-line
+	// each so +len(rows)-1 still accurately reflects the extra rows.
 	height := 18 + len(rows) - 1
 	if height < 18 {
 		height = 18
