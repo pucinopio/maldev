@@ -226,7 +226,10 @@ func (m totpModel) View() string {
 	// the title wraps mid-render and the click hit-test for the table
 	// header lands a row above the real header.
 	totalW := m.width - 4
-	const minDetailW = 36
+	// QR ASCII for a typical 16-char base32 secret is 53 cells wide. The
+	// detail box adds 2 padding + 2 border, so minDetailW must be ≥ 57 or
+	// lipgloss soft-wraps the QR mid-row and the half-block grid breaks.
+	const minDetailW = 58
 	const minListW = 50
 	twoCol := totalW >= minListW+2+minDetailW
 	var listBoxOuterW int
