@@ -1,10 +1,110 @@
 # License-manager TUI — session handoff
 
-Snapshot of the work pushed during the 2026-05-22 session and what's still
-queued. All commits are on `master`, authored as `oioio-space
-<oioio-space@users.noreply.github.com>`.
+Snapshot of the work pushed during the 2026-05-22 and 2026-05-25 sessions
+and what's still queued. All commits are on `master`, authored as
+`oioio-space <oioio-space@users.noreply.github.com>`.
 
-## Commits shipped this session (newest first)
+## 2026-05-25 — Architecture refactor (research-driven)
+
+Research pass on Bubble Tea best practices (VHS, teatest, lipgloss v2,
+stickers/bubblelayout, focus patterns) followed by a 7-commit refactor of
+the existing TUI. Goals: eliminate magic numbers, prepare for golden-file
+test growth, centralize theme conventions.
+
+### Commits shipped
+
+| SHA | Title |
+|---|---|
+| `dc200a0` | refactor(tui): adopt BoxedInner/BoxedWidth in licenses screen |
+| `0752b83` | refactor(tui): adopt BoxedInner/BoxedWidth in list screens |
+| `4f8e302` | feat(tui): BoxedInner/BoxedWidth helpers + pinning test |
+| `d16713e` | refactor(tui): use shared theme styles in settings screen |
+| `36e04b0` | refactor(tui): adopt ChromeRows constant in 4 sites |
+| `e9b8ab0` | refactor(tui): rename PassphraseResult → PassphraseResultMsg |
+| `7ce8e5a` | feat(tui): layout constants + overlay resize fix + msg dump |
+
+### New infrastructure
+
+- **`internal/manager/tui/layout_constants.go`** — single source of truth
+  for chrome / box / modal frame metrics.
+  - `ChromeRows = 4` (title + tabs + breadcrumb + statusbar)
+  - `BoxFrame() (w, h int)` — BoxStyle border + padding overhead (4, 2)
+  - `ModalFrame() (w, h int)` — Modal style overhead (6, 4)
+  - `BoxedInner(total) int` — inner content width inside BoxStyle
+  - `BoxedWidth(total) int` — value to pass to `BoxStyle.Width(...)` for
+    a rendered width of `total` cells
+  - `FrameOf(s lipgloss.Style) (w, h int)` — ad-hoc frame query
+- **`internal/manager/tui/layout_constants_test.go`** — pins the resolved
+  values so any future BoxStyle tweak surfaces immediately as a test
+  failure instead of silently shifting every screen.
+- **`internal/manager/tui/debug.go`** — opt-in `tea.Msg` dump gated by
+  `LICENSE_MANAGER_TUI_DUMP=/path/to/log` env var. RFC3339Nano timestamp
+  + `%#v` per message. Useful for diagnosing message-routing bugs without
+  rebuilding.
+
+### Bug fixed
+
+- **Overlay resize bug** (`7ce8e5a`, app.go `updateOverlay`): when the
+  terminal was resized while an overlay was open, the `tea.WindowSizeMsg`
+  was never forwarded to the backing screens. Now `updateOverlay`
+  broadcasts the resize to all sub-models before normal routing so the
+  layout reflects the new size as soon as the overlay closes.
+
+### Magic numbers eliminated
+
+| Screen | Before | After |
+|---|---|---|
+| dashboard / settings / issuers / app.go | `m.height - 4`, local `chromeRows`, `m.hgt - (4 + ...)` | `ChromeRows` |
+| identities / issuers / revocation / totp / audit (vp) / licenses | `m.width - 4` (BoxStyle inner) | `BoxedInner(m.width)` |
+| identities / issuers / revocation / totp / licenses | `m.width - 2` (passed to `.Width()`) | `BoxedWidth(m.width)` |
+| licenses | `m.hgt - 6` (chrome + box vert) | `m.hgt - ChromeRows - boxV` (boxV from `BoxFrame()`) |
+| licenses | `m.width - 4 - 14` (box-inner minus label gutter) | `BoxedInner(m.width) - labelGutter` |
+
+Values are arithmetically identical at runtime — all 21 golden files
+remained valid without regeneration.
+
+### Naming convention
+
+- `PassphraseResult` → `PassphraseResultMsg` (the lone outlier in the
+  `*Msg` convention).
+- 14 `wizard.*Msg` types audited for privatization — **kept exported**
+  because `wizard_test.go` (package `tui_test`) consumes them; the
+  package lives under `internal/` so privatizing them is busy-work that
+  breaks 20+ tests for zero external-API benefit.
+
+### Settings styles centralized
+
+`screen_settings.go` had two inline `lipgloss.NewStyle().Foreground(Palette.X)`
+blocks that exactly matched the existing `GlowGreen` / `Mute` theme
+vars. Replaced (4 sites). Other screens use Palette colors directly
+through helpers — not generic enough to extract further without
+introducing per-screen style names.
+
+### Widget styles — kept as-is, with reason
+
+`widgets/statusbar.go`, `widgets/tabbar.go`, `widgets/tile.go`,
+`widgets/button.go` already use `sync.OnceValue` to cache style structs
+built from `core.Colors` (populated by `theme.go init()`). Moving them
+to `theme.go` would break the `widgets → core ← tui` cycle that was
+deliberately set up; locality wins over centralization here.
+
+### Deferred (the more invasive remaining items)
+
+- **`focusStack` for screens.** The overlay pile (`m.overlays`) is a
+  real stack; screens themselves have no `Focus()`/`Blur()` and routing
+  is piloted by `m.active`. Adding explicit per-screen focus would be a
+  large structural change and deserves a dedicated session with explicit
+  architectural sign-off.
+- **VHS regression tapes** (still queued from the previous session).
+  Now feasible because the layout constants give stable cell widths.
+- **Per-screen teatest tests with new goldens** for paths not covered
+  by the existing 21 (overlays in particular).
+- **lipgloss v2 migration** — `AdaptiveColor` → `lipgloss.LightDark()`,
+  listen to `tea.BackgroundColorMsg`. Cosmetic; do it when bumping
+  another dep.
+
+
+## 2026-05-22 session — Commits shipped (newest first)
 
 | SHA | Title |
 |---|---|
