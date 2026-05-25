@@ -24,11 +24,12 @@ make tui-snap VIEW=dashboard
 # writes  ignore/snapshots/dashboard.png
 ```
 
-### All nine views
+### All ten views
 
 ```bash
 make tui-snap-all
-# writes  ignore/snapshots/{dashboard,licenses,...,settings}.png
+# writes  ignore/snapshots/{dashboard,licenses,issuers,recipients,
+#                          identities,revocation,servers,totp,audit,settings}.png
 ```
 
 Output files land in `ignore/snapshots/` which is git-ignored.
@@ -71,7 +72,7 @@ injects via `cmds.DashboardSnapshotMsg`. Fields:
 ## tui-snap binary flags
 
 ```
--view  dashboard|licenses|issuers|recipients|identities|revocation|servers|audit|settings
+-view  dashboard|licenses|issuers|recipients|identities|revocation|servers|totp|audit|settings
        |onboarding|onboarding-step<0-3>|passphrase
        |wizard|wizard-step<1-8>
        |overlay-confirm|overlay-confirm-danger|overlay-error|overlay-quit|overlay-quit-servers

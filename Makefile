@@ -165,7 +165,7 @@ verify:
 # Requires: go install github.com/charmbracelet/freeze@latest
 # Output:   ignore/snapshots/<view>.png
 
-TUI_VIEWS := dashboard licenses issuers recipients identities revocation servers audit settings
+TUI_VIEWS := dashboard licenses issuers recipients identities revocation servers totp audit settings
 
 .PHONY: snap snap-all
 

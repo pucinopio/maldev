@@ -103,7 +103,8 @@ Six operator binaries under [`cmd/`](cmd/) — `packer`, `bundle-launcher`,
 
 A seventh tool, [`cmd/license-manager`](cmd/license-manager), manages the full
 lifecycle of maldev research licences (issue, revoke, rotate keys, fingerprint
-probe, three HTTP servers). See
+probe, TOTP secrets with QR provisioning, three HTTP servers, runtime theme
+switch). See
 [docs/license-manager/](docs/license-manager/concepts.md) for the operator
 guide.
 
