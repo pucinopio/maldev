@@ -76,12 +76,17 @@ func main() {
 		seedFlag   = flag.String("seed", "", "path to seed JSON file; empty = no data")
 		keysFlag   = flag.String("keys", "", `space-separated key labels to send after seed, e.g. "1 d / esc"`)
 		mouseFlag  = flag.String("mouse", "", `click to send after layout: "x,y" or "x,y,left|right"`)
+		themeFlag  = flag.String("theme", "", `apply a theme palette before rendering: neon|mono|nord-soft (empty = leave default)`)
 	)
 	flag.Parse()
 
 	view := *viewFlag
 	w := *widthFlag
 	h := *heightFlag
+
+	if *themeFlag != "" {
+		tui.ApplyTheme(*themeFlag)
+	}
 
 	// ── Standalone overlay views ──────────────────────────────────────────────
 	if ov := overlayForView(view, w, h); ov != nil {

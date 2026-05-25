@@ -179,6 +179,24 @@ snap: tui-snap
 snap-all: tui-snap
 	@for v in $(TUI_VIEWS); do bash scripts/tui-snap.sh $$v; done
 
+# ── VHS regression tapes ─────────────────────────────────────────────────────
+# Renders a recorded GIF of the TUI under deterministic input. Requires
+# vhs (~/go/bin/vhs), ttyd, ffmpeg. Outputs land under tapes/out/.
+.PHONY: tapes tape-themes tape-wizard-step3 tape-smoke
+tapes: tape-themes tape-wizard-step3 tape-smoke
+
+tape-themes: tui-snap license-manager
+	@mkdir -p tapes/out
+	@vhs tapes/themes.tape
+
+tape-wizard-step3: tui-snap
+	@mkdir -p tapes/out
+	@vhs tapes/wizard-step3.tape
+
+tape-smoke: tui-snap
+	@mkdir -p tapes/out
+	@vhs tapes/dashboard-smoke.tape
+
 # ── Tooling helpers ──────────────────────────────────────────────────────────
 install-garble:
 	go install mvdan.cc/garble@latest
