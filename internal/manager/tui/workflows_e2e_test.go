@@ -1006,7 +1006,7 @@ func TestE2E_WizardIssueResultSuccessEmitsDone(t *testing.T) {
 func TestE2E_WizardIssueResultCancelledEmitsDoneNil(t *testing.T) {
 	wm := newWizardModel(nil)
 	wm.step = wizStepReview
-	_, cmd := wm.Update(wizard.IssueResultMsg{Err: errCancelled{}})
+	_, cmd := wm.Update(wizard.IssueResultMsg{Err: wizard.ErrCancelled})
 	if cmd == nil {
 		t.Fatal("IssueResultMsg cancelled must emit cmd")
 	}

@@ -234,14 +234,24 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	dumpMsg(msg)
 	// Data-loaded messages always need to reach their owning screen — even
 	// when an overlay is currently on top — so the underlying list stays
-	// fresh while a modal (wizard → QR, confirm, etc.) is open.
+	// fresh while a modal (wizard → QR, confirm, etc.) is open. Capture
+	// any follow-up Cmd (e.g. TOTPLoadedMsg triggers loadCursorDetail) so
+	// it runs alongside whatever the rest of Update returns; previously
+	// the cmd was dropped and the QR detail never refreshed after reload.
+	// Return immediately to avoid double-dispatching via routeToActive.
 	switch dmsg := msg.(type) {
 	case LicensesLoadedMsg:
-		m.licenses, _ = m.licenses.Update(dmsg)
+		var cmd tea.Cmd
+		m.licenses, cmd = m.licenses.Update(dmsg)
+		return m, cmd
 	case IssuersLoadedMsg:
-		m.issuers, _ = m.issuers.Update(dmsg)
+		var cmd tea.Cmd
+		m.issuers, cmd = m.issuers.Update(dmsg)
+		return m, cmd
 	case TOTPLoadedMsg:
-		m.totp, _ = m.totp.Update(dmsg)
+		var cmd tea.Cmd
+		m.totp, cmd = m.totp.Update(dmsg)
+		return m, cmd
 	}
 	// Overlay stack takes priority.
 	if len(m.overlays) > 0 {

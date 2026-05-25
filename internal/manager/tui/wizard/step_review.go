@@ -19,6 +19,11 @@ type IssueResultMsg struct {
 	Err    error
 }
 
+// ErrCancelled is the sentinel returned by step_review's "cancel" branch.
+// The wizard root checks against it via errors.Is rather than comparing
+// err.Error() to a magic string.
+var ErrCancelled = fmt.Errorf("cancelled")
+
 // WizardState holds all collected choices across the 8 steps.
 type WizardState struct {
 	IssuerID    string
@@ -71,7 +76,7 @@ func (s *StepReview) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 			return s, s.issueCmd()
 		case "esc":
 			// Cancel — let wizard handle.
-			return s, func() tea.Msg { return IssueResultMsg{Err: fmt.Errorf("cancelled")} }
+			return s, func() tea.Msg { return IssueResultMsg{Err: ErrCancelled} }
 		}
 	}
 	return s, nil

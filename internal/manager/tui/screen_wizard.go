@@ -3,6 +3,7 @@ package tui
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -156,8 +157,9 @@ func (m wizardModel) Update(msg tea.Msg) (wizardModel, tea.Cmd) {
 	// Step 8 outcomes.
 	case wizard.IssueResultMsg:
 		// Propagate the msg to stepReview to clear its issuing flag.
-		m.stepReview.Update(msg) //nolint:errcheck — cmd is always nil for IssueResultMsg
-		if msg.Err != nil && msg.Err.Error() == "cancelled" {
+		// Returned cmd is always nil for IssueResultMsg — safe to discard.
+		_, _ = m.stepReview.Update(msg)
+		if errors.Is(msg.Err, wizard.ErrCancelled) {
 			return m, func() tea.Msg { return WizardDoneMsg{} }
 		}
 		if msg.Err != nil {
