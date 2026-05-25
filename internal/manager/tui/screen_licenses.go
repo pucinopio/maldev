@@ -59,8 +59,9 @@ type licensesModel struct {
 	rows   []*ent.License
 	err    error
 	filter         licenseFilter
-	detailTab      int // 0=Ident, 1=Bind, 2=PEM, 3=Audit, 4=Chain
-	detailAuditRows []*ent.AuditEvent // lazy-loaded when A tab opens
+	detailTab         int               // 0=Ident, 1=Bind, 2=PEM, 3=Audit, 4=Chain
+	detailAuditRows   []*ent.AuditEvent // lazy-loaded when A tab opens
+	detailAuditLoading bool             // true between tab-open and loaded msg
 	search textinput.Model
 	table  table.Model
 	detail bool
@@ -203,6 +204,8 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 		// Audit tab loads lazily — same path as the keyboard 'A' shortcut.
 		if msg.tab == 3 {
 			if row := m.selectedRow(); row != nil {
+				m.detailAuditRows = nil
+				m.detailAuditLoading = true
 				return m, loadLicenseAuditCmd(m.svc, row)
 			}
 		}
@@ -210,6 +213,7 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 
 	case licenseAuditLoadedMsg:
 		m.detailAuditRows = msg.rows
+		m.detailAuditLoading = false
 		return m, nil
 
 	case tableSelectRowMsg:
@@ -256,6 +260,8 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 			return m, nil
 		case "A":
 			m.detailTab = 3
+			m.detailAuditRows = nil
+			m.detailAuditLoading = true
 			return m, loadLicenseAuditCmd(m.svc, m.selectedRow())
 		case "C":
 			m.detailTab = 4
@@ -683,7 +689,7 @@ func (m licensesModel) renderDetailPEM(row *ent.License) string {
 		HintKey.Render("↑↓") + Dim.Render(" scroll")
 	pem := string(row.Pem)
 	if pem == "" {
-		pem = Dim.Render("(PEM not loaded — re-émettre pour regénérer)")
+		pem = Dim.Render("(PEM absent côté store — vérifie l'intégrité de la base ou re-émets la licence)")
 	}
 	return GlowCyan.Render("PEM signé") + "  " + hint + "\n" + Base.Render(pem)
 }
@@ -694,6 +700,9 @@ func (m licensesModel) renderDetailPEM(row *ent.License) string {
 func (m licensesModel) renderDetailAudit(row *ent.License) string {
 	hint := HintKey.Render("[r]") + Dim.Render(" refresh")
 	header := GlowCyan.Render("Audit · "+row.LicenseUUID[:8]+"…") + "  " + hint
+	if m.detailAuditLoading {
+		return header + "\n" + Dim.Render("  chargement de l'historique…")
+	}
 	if len(m.detailAuditRows) == 0 {
 		return header + "\n" + Dim.Render("  (aucun évènement pour cette licence)")
 	}
@@ -740,6 +749,7 @@ func (m licensesModel) renderDetailChain(row *ent.License) string {
 	if row.Status == "superseded" {
 		b.WriteString("\n" + GlowYellow.Render("⚠ cette licence est SUPERSEDED — re-émets le successeur le plus récent."))
 	}
+	b.WriteString("\n" + Mute.Render("  (parent/successor links pas encore modélisés dans le schéma ent — stub)"))
 	return b.String()
 }
 
