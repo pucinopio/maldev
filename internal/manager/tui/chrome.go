@@ -69,19 +69,37 @@ func renderTitleBarWith(width int, dbName string, httpOn int, now time.Time) str
 	appName := GlowCyan.Render(" license-manager ")
 	ver := Dim.Render(appVersion)
 	left := diamond + appName + ver
+	leftW := lipgloss.Width(left)
 
-	right := fmt.Sprintf("db: %s | net: online | http: %d/3 ON | %s",
-		dbName,
-		httpOn,
-		now.Format("02/01/2006 15:04:05"),
-	)
-	rightRendered := Dim.Render(right)
-
-	gap := width - lipgloss.Width(left) - lipgloss.Width(rightRendered)
-	if gap < 1 {
-		gap = 1
+	// Build progressively narrower right-side variants. Pick the longest
+	// that fits in the budget = width - leftW - 1 (one cell of gap). At
+	// very narrow widths the right side disappears entirely so the bar
+	// never wraps to a second line.
+	dt := now.Format("02/01/2006 15:04:05")
+	full := fmt.Sprintf("db: %s | net: online | http: %d/3 ON | %s", dbName, httpOn, dt)
+	medium := fmt.Sprintf("http: %d/3 ON | %s", httpOn, dt)
+	short := dt
+	budget := width - leftW - 1
+	right := ""
+	switch {
+	case budget >= lipgloss.Width(full):
+		right = full
+	case budget >= lipgloss.Width(medium):
+		right = medium
+	case budget >= lipgloss.Width(short):
+		right = short
 	}
-	bar := left + strings.Repeat(" ", gap) + rightRendered
+	var bar string
+	if right == "" {
+		bar = left
+	} else {
+		rightRendered := Dim.Render(right)
+		gap := width - leftW - lipgloss.Width(rightRendered)
+		if gap < 1 {
+			gap = 1
+		}
+		bar = left + strings.Repeat(" ", gap) + rightRendered
+	}
 	return lipgloss.NewStyle().
 		Background(Palette.Bg2).
 		Width(width).

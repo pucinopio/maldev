@@ -1,7 +1,6 @@
 ◆ license-manager v0.4.0-dev                            db: db.sqlite | net: online | http: 0/3 ON | 21/05/2026 07:54:12
-  1 Dashboard    2 Licenses    3 Issuer keys    4 Recipients    5 Identities    6 Revocation    7 Servers    8 TOTP    9
-Audit    0 Settings                                                                                                     
-                                                                                              ─────────────             
+  1    2    3    4    5    6    7    8    9    0                                                                        
+                              ─────                                                                                     
  servers                                                                                                                
  [R] Revocation ●  [H] Heartbeat ●  [P] Fingerprint probe ●   events fan-in via httpsrv.MergedEvents()                  
 ──────────────────                                                                                                      
@@ -32,6 +31,7 @@ Audit    0 Settings
                                                                                                                         
                                                                                                                         
   [s]  start/stop [e]  edit bind [g]  regen token [c]  clear log [a]  auto-scroll                                       
+                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

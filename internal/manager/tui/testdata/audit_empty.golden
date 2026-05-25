@@ -1,7 +1,6 @@
 ◆ license-manager v0.4.0-dev                            db: db.sqlite | net: online | http: 0/3 ON | 21/05/2026 07:54:12
-  1 Dashboard    2 Licenses    3 Issuer keys    4 Recipients    5 Identities    6 Revocation    7 Servers    8 TOTP    9
-Audit    0 Settings                                                                                                     
-                                                                                                           ──────────   
+  1    2    3    4    5    6    7    8    9    0                                                                        
+                                   ─────                                                                                
  totp                                                                                                                   
                                                                                                                         
  Les secrets TOTP créés ici sont réutilisables — la liste apparaît dans le wizard step 7. Suppression libère le secret  
@@ -17,6 +16,7 @@ mais n'invalide pas les licences qui en dépendent.
 │                                       aucun secret     │                                                              
 │ TOTP — n pour créer le premier                         │                                                              
 └────────────────────────────────────────────────────────┘                                                              
+                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

@@ -67,7 +67,7 @@ func rootOf(t *testing.T, m tea.Model) rootModel {
 func newOnboardingRoot(t *testing.T) tea.Model {
 	t.Helper()
 	var m tea.Model = New(nil, nil, SessionOnboarding)
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	return m
 }
 
@@ -400,7 +400,7 @@ func TestE2E_RelaunchAfterOnboarding(t *testing.T) {
 // any non-empty passphrase and emits PassphraseResultMsg.
 func TestE2E_PassphraseUnlockSuccess(t *testing.T) {
 	var m tea.Model = New(nil, nil, SessionLocked)
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 
 	m = driveStr(m, "Str0ngP@ss!")
 	var cmd tea.Cmd
@@ -423,7 +423,7 @@ func TestE2E_PassphraseUnlockSuccess(t *testing.T) {
 // SessionLocked.
 func TestE2E_PassphraseUnlockWrong(t *testing.T) {
 	var m tea.Model = New(nil, nil, SessionLocked)
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 
 	m = driveKey(m, tea.KeyEnter) // empty input
 	r := rootOf(t, m)
@@ -442,7 +442,7 @@ func TestE2E_PassphraseUnlockWrong(t *testing.T) {
 func TestE2E_ServersStartStop(t *testing.T) {
 	mc := &testCtrl{}
 	sm := newServersModel(nil, mc)
-	sm, _ = sm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	sm, _ = sm.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 
 	sm, cmd := sm.Update(serverStartMsg{name: "revocation"})
 	if cmd != nil {
@@ -865,7 +865,7 @@ func TestE2E_IssuersDetailPanel(t *testing.T) {
 	}
 
 	im := newIssuersModel(svc)
-	im, _ = im.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	im, _ = im.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	im, _ = im.Update(listIssuersCmd(svc)())
 	im.detail = true
 	got := im.View()
@@ -1210,7 +1210,7 @@ func TestE2E_PassphraseSuccessEmitsQuit(t *testing.T) {
 	t.Cleanup(func() { _ = st.Close() })
 
 	var m tea.Model = NewPassphrasePrompt(st, "")
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	m = driveStr(m, "right-pass")
 	// Enter → TryUnlockCmd is returned.
 	var unlockCmd tea.Cmd
@@ -1274,7 +1274,7 @@ func TestE2E_PassphraseFailureShowsErrorNotQuit(t *testing.T) {
 	t.Cleanup(func() { _ = st.Close() })
 
 	var m tea.Model = NewPassphrasePrompt(st, "")
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	m = driveStr(m, "wrong-pass")
 	var unlockCmd tea.Cmd
 	m, unlockCmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -1331,7 +1331,7 @@ func TestE2E_PassphraseAfterClearStillProducesValue(t *testing.T) {
 	t.Cleanup(func() { _ = st.Close() })
 
 	var m tea.Model = NewPassphrasePrompt(st, "")
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	m = driveStr(m, "correct-pass")
 	var unlockCmd tea.Cmd
 	m, unlockCmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -1408,7 +1408,7 @@ func TestE2E_OnboardingPersistEnablesMainTUILaunch(t *testing.T) {
 	t.Cleanup(func() { _ = svc.Close() })
 
 	var m tea.Model = New(svc, nil, SessionReady)
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 
 	view := m.View()
 	if view == "" {
@@ -1468,7 +1468,7 @@ func TestE2E_MainTUIRendersDashboardAfterOnboarding(t *testing.T) {
 
 	// Build rootModel in SessionReady and confirm dashboard renders.
 	var m tea.Model = New(svc, nil, SessionReady)
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	view := m.View()
 	if !strings.Contains(view, "Dashboard") {
 		t.Fatalf("dashboard view does not contain 'Dashboard' after onboarding; got:\n%s", view)
@@ -1686,7 +1686,7 @@ func TestE2E_LicensesDetailContent(t *testing.T) {
 	_ = out
 
 	lm := newLicensesModel(svc)
-	lm, _ = lm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	lm, _ = lm.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	lm, _ = lm.Update(ListLicensesCmd(svc)())
 	lm.detail = true
 	got := lm.View()
@@ -1873,7 +1873,7 @@ func TestE2E_RecipientsDetailPanel(t *testing.T) {
 	}
 
 	rm := newRecipientsModel(svc)
-	rm, _ = rm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	rm, _ = rm.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	rm, _ = rm.Update(listRecipientsCmd(svc)())
 	rm.detail = true
 	got := rm.View()
@@ -1894,7 +1894,7 @@ func TestE2E_IdentitiesDetailPanel(t *testing.T) {
 	}
 
 	im := newIdentitiesModel(svc)
-	im, _ = im.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	im, _ = im.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	im, _ = im.Update(listIdentitiesCmd(svc)())
 	im.detail = true
 	got := im.View()
@@ -1972,7 +1972,7 @@ func TestE2E_RevocationTileHeader(t *testing.T) {
 	}
 
 	rm := newRevocationModel(svc)
-	rm, _ = rm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	rm, _ = rm.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	rm, _ = rm.Update(listRevocationCmd(svc)())
 	got := rm.View()
 
@@ -2006,7 +2006,7 @@ func TestE2E_SettingsScreenLoadsFromService(t *testing.T) {
 func TestE2E_SettingsScreenSections(t *testing.T) {
 	svc, _ := newTestServices(t)
 	sm := newSettingsModel(svc)
-	sm, _ = sm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	sm, _ = sm.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	msg := loadSettingsCmd(svc)()
 	sm, _ = sm.Update(msg)
 	got := sm.View()
@@ -2036,7 +2036,7 @@ func TestE2E_SettingsScreenSections(t *testing.T) {
 // does not panic and re-arms the load command.
 func TestE2E_SettingsMouseRefreshCycle(t *testing.T) {
 	var m tea.Model = New(nil, nil, SessionReady)
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	m = driveRune(m, '0')         // navigate to Settings (10th tab)
 	m = driveRune(m, 'r')         // trigger refresh
 	if got := m.View(); got == "" {
@@ -2062,7 +2062,7 @@ func TestE2E_BreadcrumbRendersPerView(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.viewID, func(t *testing.T) {
 			var m tea.Model = New(nil, nil, SessionReady)
-			m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+			m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 			m = driveRune(m, c.key)
 			got := m.View()
 			if !strings.Contains(got, c.crumb) {
@@ -2076,7 +2076,7 @@ func TestE2E_BreadcrumbRendersPerView(t *testing.T) {
 // "filter:<name>" when a non-all filter is active on the Licenses screen.
 func TestE2E_BreadcrumbLicensesFilter(t *testing.T) {
 	var m tea.Model = New(nil, nil, SessionReady)
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	m = driveRune(m, '2') // go to licenses
 	m = driveRune(m, 'f') // cycle to active filter
 	got := m.View()
@@ -2245,7 +2245,7 @@ func TestE2E_ServersSubTabSwitching(t *testing.T) {
 		c := c
 		t.Run(string(c.key), func(t *testing.T) {
 			sm := newServersModel(nil, nil)
-			sm, _ = sm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+			sm, _ = sm.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 			sm, _ = sm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{c.key}})
 			if sm.activeTab != c.wantTab {
 				t.Fatalf("key %q: activeTab = %d, want %d", c.key, sm.activeTab, c.wantTab)
@@ -2262,7 +2262,7 @@ func TestE2E_ServersSubTabSwitching(t *testing.T) {
 // [R], [H], [P] hotkey labels in the servers screen view.
 func TestE2E_ServersViewRendersSubTabBar(t *testing.T) {
 	sm := newServersModel(nil, nil)
-	sm, _ = sm.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	sm, _ = sm.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	got := sm.View()
 	for _, label := range []string{"[R]", "[H]", "[P]"} {
 		if !strings.Contains(got, label) {
@@ -2310,7 +2310,7 @@ func TestE2E_AuditFilterChipsDirectKeys(t *testing.T) {
 // 6 chip labels so the operator can see which filters are available.
 func TestE2E_AuditFilterChipsViewContainsLabels(t *testing.T) {
 	am := newAuditModel(nil)
-	am, _ = am.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	am, _ = am.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	am, _ = am.Update(AuditLoadedMsg{Rows: nil, Err: nil})
 	got := am.View()
 	for _, label := range []string{"all", "license", "key", "server", "identity", "probe"} {
@@ -2325,7 +2325,7 @@ func TestE2E_AuditFilterChipsViewContainsLabels(t *testing.T) {
 // the border characters around the active label in the chip bar).
 func TestE2E_AuditActiveChipHighlighted(t *testing.T) {
 	am := newAuditModel(nil)
-	am, _ = am.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	am, _ = am.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	// Switch to license filter and confirm the count title changes.
 	am, _ = am.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
 	if am.filter != auditFilterLicense {
@@ -2508,7 +2508,7 @@ func TestE2E_HelpOverlayInEachView(t *testing.T) {
 		v := v
 		t.Run(v.label, func(t *testing.T) {
 			var m tea.Model = New(nil, nil, SessionReady)
-			m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+			m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 			m = driveRune(m, v.key)
 			m = driveRune(m, '?')
 			got := m.View()
@@ -2522,7 +2522,7 @@ func TestE2E_HelpOverlayInEachView(t *testing.T) {
 // TestE2E_HelpOverlayOpensOnQuestionMark guards that "?" pushes the help overlay.
 func TestE2E_HelpOverlayOpensOnQuestionMark(t *testing.T) {
 	var m tea.Model = New(nil, nil, SessionReady)
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	m = driveRune(m, '?')
 	r := rootOf(t, m)
 	if len(r.overlays) != 1 {
@@ -2549,7 +2549,7 @@ func TestE2E_HelpOverlayOpensOnQuestionMark(t *testing.T) {
 // TestE2E_TabCyclesViews guards Tab / Shift-Tab cycling with wrap-around.
 func TestE2E_TabCyclesViews(t *testing.T) {
 	var m tea.Model = New(nil, nil, SessionReady)
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 
 	r := rootOf(t, m)
 	if r.active != ViewDashboard {

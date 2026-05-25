@@ -59,15 +59,25 @@ func (tb *TabBar) View() string {
 	activeStyle, inactiveStyle, dimStyle := s.active, s.inactive, s.dim
 	tb.tabWidths = make([]int, len(tb.Tabs))
 	parts := make([]string, len(tb.Tabs))
+
+	// Render twice: first the full-label version (the common wide case).
+	// If the total exceeds bounds.W, fall back to digit-only labels so
+	// the strip stays on one row even at 80-cell terminals. Without this
+	// trim, lipgloss soft-wraps the strip and breaks the chrome.
+	compact := tb.shouldUseCompact()
 	for i, tab := range tb.Tabs {
-		label := tab.Label
+		var label string
+		digit := tabDigit(i)
 		switch {
+		case compact:
+			// Compact: "N" only (dim if inactive, bold via activeStyle).
+			label = dimStyle.Render(digit)
 		case i < 9:
-			label = dimStyle.Render(string(rune('1'+i))) + " " + label
+			label = dimStyle.Render(digit) + " " + tab.Label
 		case i == 9:
-			// 10th tab uses "0" as its single-key shortcut so it stays
-			// keyboard-reachable when more than 9 tabs are present.
-			label = dimStyle.Render("0") + " " + label
+			label = dimStyle.Render(digit) + " " + tab.Label
+		default:
+			label = tab.Label
 		}
 		var rendered string
 		if tab.ID == tb.Active {
@@ -83,6 +93,41 @@ func (tb *TabBar) View() string {
 		Background(core.Colors.Bg1).
 		Width(tb.bounds.W).
 		Render(strip)
+}
+
+// tabDigit returns the single-key shortcut for tab i: "1".."9", then "0"
+// for the 10th tab. Tabs beyond 10 have no shortcut.
+func tabDigit(i int) string {
+	switch {
+	case i < 9:
+		return string(rune('1' + i))
+	case i == 9:
+		return "0"
+	}
+	return ""
+}
+
+// shouldUseCompact measures the fully-labelled strip width and reports
+// whether it would overflow the bounds. Cheap: each tab is rendered to a
+// small string and summed.
+func (tb *TabBar) shouldUseCompact() bool {
+	if tb.bounds.W <= 0 {
+		return false
+	}
+	total := 0
+	s := tabStyleCache()
+	for i, tab := range tb.Tabs {
+		var label string
+		if i < 10 {
+			label = s.dim.Render(tabDigit(i)) + " " + tab.Label
+		} else {
+			label = tab.Label
+		}
+		// Active style adds underline (no extra width) so width is the
+		// same either way; use inactive as a representative measurer.
+		total += lipgloss.Width(s.inactive.Render(label))
+	}
+	return total > tb.bounds.W
 }
 
 // OnClick implements core.Clickable. x is relative to bounds.X.

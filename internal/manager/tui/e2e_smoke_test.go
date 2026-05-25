@@ -19,7 +19,10 @@ import (
 func TestE2E_SmokeTUI(t *testing.T) {
 	root := New(nil, nil, SessionReady)
 	var m tea.Model = root
-	m, _ = m.Update(tea.WindowSizeMsg{Width: 140, Height: 44})
+	// 144 is the prototype reference width — wide enough to render the
+	// full tab labels. Below ~143 the tabbar compacts to digit-only mode
+	// (added 2026-05-25 to keep the strip on one row at 80-cell terminals).
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	dashboard := m.View()
 	if !strings.Contains(dashboard, "Dashboard") {
 		t.Fatalf("expected dashboard chrome to render, got: %q", firstLine(dashboard))

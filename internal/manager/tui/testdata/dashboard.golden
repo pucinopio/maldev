@@ -1,7 +1,6 @@
 ◆ license-manager v0.4.0-dev                            db: db.sqlite | net: online | http: 0/3 ON | 21/05/2026 07:54:12
-  1 Dashboard    2 Licenses    3 Issuer keys    4 Recipients    5 Identities    6 Revocation    7 Servers    8 TOTP    9
-Audit    0 Settings                                                                                                     
-───────────────                                                                                                         
+  1    2    3    4    5    6    7    8    9    0                                                                        
+─────                                                                                                                   
  dashboard                                                                                                              
 ┌──────────────────────┐┌──────────────────────┐┌──────────────────────┐┌──────────────────────┐┌──────────────────────┐
 │Actives            [a]││Révoquées          [r]││Expirées           [e]││Expirent < 7 j     [w]││Superseded         [u]│
@@ -37,4 +36,5 @@ Audit    0 Settings
 │ ○ Probe  —                                 [OFF]   │ │  [k]  clés                                                   │ 
 │   arrêté · démarrer via onglet [7]                 │ │ d'émission         │ [i]  identity.bin │ [?]  aide           │ 
 └────────────────────────────────────────────────────┘ │ contextuelle                                                 │ 
+                                                       └──────────────────────────────────────────────────────────────┘ 
 1-9 onglets  n nouvelle licence  / rechercher  k clés actives  ? aide  q quitter                                 ~ tour 
