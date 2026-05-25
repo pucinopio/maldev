@@ -13,8 +13,13 @@ A change touching the TUI updates the matching `Last verified` date.
 | 2026-05-25 | 4 | WizardSidebarSteps × 8, WizardReviewButtons (Issue + Cancel) | StepReview.View() recorded button Y as slice index instead of rendered row (fixed in d017f75) |
 | 2026-05-25 | 5 | ServersSubTabBar × 3, ServersActionChips × 5 | — |
 | 2026-05-25 | 2 | DashboardTiles × 5 | — |
+| 2026-05-25 | 7 | SettingsKeyboard × 11 (rekey/vacuum/backup/argon×3/theme×3/toggle×2) | — |
+| 2026-05-25 | 10 | ServerLogFilters × 4 (keys 1-4) + RootKeys_AZ_NoPanic | — |
+| 2026-05-25 | 11 | ConfirmOverlay (y+n), InputOverlay (typed enter), OK+Error (dismiss) | — |
+| 2026-05-25 | 8 | OnboardingHappyPath (welcome→passphrase→issuer→license, payload assert) | — |
+| 2026-05-25 | 9 | WizardFullHappyPath (8 steps msg injection + final state assertion) | — |
 
-**Total: ~72 interactions covered by auto:click tests this session. 2 layout bugs caught + fixed.**
+**Total: ~95 interactions covered by auto:click + auto:teatest tests this session. 2 layout bugs caught + fixed.**
 
 ## Legend
 
