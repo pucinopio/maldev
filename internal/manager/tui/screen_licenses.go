@@ -366,8 +366,11 @@ func (m *licensesModel) rebuildTable() {
 		})
 	}
 
-	// Compute table height: reserve space for header, filter bar, detail panel, status bar.
-	tableH := m.hgt - 6 // title + tabs + filter + status
+	// Compute table height: chrome (4) + box vertical frame (2) = 6 rows of
+	// fixed overhead before the table itself; ChromeRows already includes the
+	// status bar, the +2 accounts for the BoxStyle borders above and below.
+	_, boxV := BoxFrame()
+	tableH := m.hgt - ChromeRows - boxV
 	if m.detail {
 		tableH = tableH / 2
 	}
@@ -380,7 +383,7 @@ func (m *licensesModel) rebuildTable() {
 
 	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
-	stretchLastColumn(&m.table, m.width-4) // -4 = box border(2) + padding(2)
+	stretchLastColumn(&m.table, BoxedInner(m.width))
 }
 
 func (m licensesModel) View() string {
@@ -398,7 +401,7 @@ func (m licensesModel) View() string {
 	count := fmt.Sprintf("%d/%d", len(m.rows), len(m.rows))
 	chips := m.renderFilterBar()
 	// Lay out: search | count | chips, with search flex-growing.
-	rowW := m.width - 4
+	rowW := BoxedInner(m.width)
 	chipsW := lipgloss.Width(chips)
 	countW := lipgloss.Width(count)
 	searchW := rowW - chipsW - countW - 4
@@ -416,12 +419,12 @@ func (m licensesModel) View() string {
 		Mute.Render("· ") + HintKey.Render("[n]") + Dim.Render(" nouvelle ") +
 		Mute.Render("· ") + HintKey.Render("[x]") + Dim.Render(" révoquer ") +
 		Mute.Render("· ") + HintKey.Render("[e]") + Dim.Render(" re-émettre")
-	title := titledBoxRow(titleLabel, hint, m.width-4)
+	title := titledBoxRow(titleLabel, hint, BoxedInner(m.width))
 	tableBody := m.table.View()
 	if h := emptyTableHint(len(m.rows), m.width, "aucune licence — n pour en émettre une, ? pour l'aide"); h != "" {
 		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", h)
 	}
-	boxed := BoxStyle.Width(m.width - 2).Render(title + "\n" + tableBody)
+	boxed := BoxStyle.Width(BoxedWidth(m.width)).Render(title + "\n" + tableBody)
 
 	body := lipgloss.JoinVertical(lipgloss.Left, "", topRow, "", boxed)
 
@@ -524,7 +527,7 @@ func (m licensesModel) renderDetail() string {
 		hint := Dim.Render("aucune sélection — émets une licence avec ") + HintKey.Render("[n]") +
 			Dim.Render(" ou sélectionne une ligne pour voir les onglets ") +
 			HintKey.Render("[I/B/P/A/C]")
-		return BoxStyle.Width(m.width - 2).Render(
+		return BoxStyle.Width(BoxedWidth(m.width)).Render(
 			lipgloss.JoinVertical(lipgloss.Left, title, "", hint),
 		)
 	}
@@ -547,7 +550,7 @@ func (m licensesModel) renderDetail() string {
 		HintKey.Render("[C]") + Dim.Render("haîne"),
 	}, "  ")
 	actions := Dim.Render("[d] replier  [c] PEM  [e] re-émettre  [x] révoquer")
-	headerW := m.width - 4
+	headerW := BoxedInner(m.width)
 	gap := headerW - lipgloss.Width(tabStrip) - lipgloss.Width(actions)
 	if gap < 1 {
 		gap = 1
@@ -556,7 +559,7 @@ func (m licensesModel) renderDetail() string {
 
 	body := m.renderDetailBody(row)
 
-	return BoxStyle.Width(m.width - 2).Render(
+	return BoxStyle.Width(BoxedWidth(m.width)).Render(
 		lipgloss.JoinVertical(lipgloss.Left, header, "", body),
 	)
 }
@@ -597,9 +600,10 @@ func (m licensesModel) renderDetailBody(row *ent.License) string {
 	}
 	statusPill := licStatusPill(row.Status)
 
-	// valueW is the cell budget for the right-hand value column (m.width minus
-	// box border+padding minus the 14-cell label gutter).
-	valueW := m.width - 4 - 14
+	// valueW is the cell budget for the right-hand value column (box-inner
+	// area minus the 14-cell label gutter).
+	const labelGutter = 14
+	valueW := BoxedInner(m.width) - labelGutter
 	if valueW < 12 {
 		valueW = 12
 	}
