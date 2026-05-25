@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // TestThemeSeparationRule scans the package for inline
@@ -55,6 +57,40 @@ func TestThemeSeparationRule(t *testing.T) {
 		t.Errorf("theme-separation rule violated — use a named style from theme.go instead of building one inline:\n%s",
 			strings.Join(violations, "\n"))
 	}
+}
+
+// TestApplyTheme_ReseedsAllGlowStyles asserts that every Glow* style
+// vars picks up the new palette colour after ApplyTheme. Without this,
+// adding a new Glow* var to theme.go and forgetting to wire it into
+// reseedStyles() would go silently undetected (the var would keep
+// emitting its boot-time palette colour).
+func TestApplyTheme_ReseedsAllGlowStyles(t *testing.T) {
+	defer ApplyTheme("neon")
+
+	check := func(name string, want struct {
+		Cyan, Magenta, Green, Red, Yellow, Violet lipgloss.Color
+	}) {
+		t.Helper()
+		ApplyTheme(name)
+		assert := func(field string, got lipgloss.TerminalColor, want lipgloss.Color) {
+			if got != want {
+				t.Errorf("ApplyTheme(%q): Glow%s foreground = %v, want %v (reseedStyles missing this var?)", name, field, got, want)
+			}
+		}
+		assert("Cyan", GlowCyan.GetForeground(), want.Cyan)
+		assert("Magent", GlowMagent.GetForeground(), want.Magenta)
+		assert("Green", GlowGreen.GetForeground(), want.Green)
+		assert("Red", GlowRed.GetForeground(), want.Red)
+		assert("Yellow", GlowYellow.GetForeground(), want.Yellow)
+		assert("Violet", GlowViolet.GetForeground(), want.Violet)
+	}
+
+	check("mono", struct {
+		Cyan, Magenta, Green, Red, Yellow, Violet lipgloss.Color
+	}{paletteMono.Cyan, paletteMono.Magenta, paletteMono.Green, paletteMono.Red, paletteMono.Yellow, paletteMono.Violet})
+	check("nord-soft", struct {
+		Cyan, Magenta, Green, Red, Yellow, Violet lipgloss.Color
+	}{paletteNordSoft.Cyan, paletteNordSoft.Magenta, paletteNordSoft.Green, paletteNordSoft.Red, paletteNordSoft.Yellow, paletteNordSoft.Violet})
 }
 
 // TestApplyTheme_SwapsPaletteAndStyles checks that ApplyTheme mutates the
