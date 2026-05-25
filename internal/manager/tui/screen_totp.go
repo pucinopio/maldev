@@ -221,39 +221,53 @@ func (m totpModel) View() string {
 		Dim.Render(" créés ici sont réutilisables — la liste apparaît dans le wizard step 7. Suppression libère le secret mais n'invalide pas les licences qui en dépendent.")
 
 	titleLabel := fmt.Sprintf("TOTP secrets (%d)", len(m.rows))
+	// Compute the layout mode + list-box inner width FIRST so titleBar sizes
+	// the hint strip to whatever the list-box can actually fit. Otherwise
+	// the title wraps mid-render and the click hit-test for the table
+	// header lands a row above the real header.
+	totalW := m.width - 4
+	const minDetailW = 36
+	const minListW = 50
+	twoCol := totalW >= minListW+2+minDetailW
+	var listBoxOuterW int
+	if twoCol {
+		rightW := minDetailW
+		if rightW < totalW*45/100 {
+			rightW = totalW * 45 / 100
+		}
+		listBoxOuterW = totalW - rightW - 2
+	} else {
+		listBoxOuterW = BoxedWidth(m.width)
+	}
+	listInnerW := listBoxOuterW - BoxStyle.GetHorizontalFrameSize() + BoxStyle.GetHorizontalBorderSize()
 	title := titleBar(m.titleHints, titleLabel, []titleHint{
 		{Key: "n", Label: " générer ", Cmd: keyCmd("n")},
 		{Key: "E", Label: " export QR PNG ", Cmd: keyCmd("E")},
 		{Key: "x", Label: " supprimer ", Cmd: keyCmd("x")},
 		{Key: "r", Label: " rafraîchir", Cmd: keyCmd("r")},
-	}, 0, BoxedInner(m.width))
+	}, 0, listInnerW)
 	introH := lipgloss.Height(lipgloss.NewStyle().Width(m.width).Render(intro))
-	m.titleHints.SetY(TopChromeRows + 1 + introH + 1 + 1)
+	// Title may still wrap if listInnerW is small — measure its actual height
+	// so the headerY click target lands on the row AFTER the wrap.
+	titleH := lipgloss.Height(lipgloss.NewStyle().Width(listInnerW).Render(title))
+	m.titleHints.SetY(TopChromeRows + 1 + introH + 1 + titleH)
 
 	tableBody := m.table.View()
 	if h := emptyTableHint(len(m.rows), m.width, "aucun secret TOTP — n pour créer le premier"); h != "" {
 		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", h)
 	}
-	// 2-column body when there is enough horizontal room: list on the left,
-	// QR detail on the right. Falls back to a stacked layout on narrow
-	// terminals so neither column overflows the screen.
-	totalW := m.width - 4
-	// Detail panel needs ~35 cells for the half-block QR + box chrome.
-	const minDetailW = 36
-	const minListW = 50
 	var body string
-	if totalW >= minListW+2+minDetailW {
+	if twoCol {
 		rightW := minDetailW
 		if rightW < totalW*45/100 {
 			rightW = totalW * 45 / 100
 		}
-		leftW := totalW - rightW - 2 // 2-cell gap
-		listBox := BoxStyle.Width(leftW).Render(title + "\n" + tableBody)
+		listBox := BoxStyle.Width(listBoxOuterW).Render(title + "\n" + tableBody)
 		detailBox := m.renderDetailSide(rightW)
-		twoCol := lipgloss.JoinHorizontal(lipgloss.Top, listBox, "  ", detailBox)
-		body = lipgloss.JoinVertical(lipgloss.Left, "", intro, "", twoCol)
+		twoColView := lipgloss.JoinHorizontal(lipgloss.Top, listBox, "  ", detailBox)
+		body = lipgloss.JoinVertical(lipgloss.Left, "", intro, "", twoColView)
 	} else {
-		listBox := BoxStyle.Width(BoxedWidth(m.width)).Render(title + "\n" + tableBody)
+		listBox := BoxStyle.Width(listBoxOuterW).Render(title + "\n" + tableBody)
 		detailBox := m.renderDetailSide(BoxedWidth(m.width))
 		body = lipgloss.JoinVertical(lipgloss.Left, "", intro, "", listBox, detailBox)
 	}
