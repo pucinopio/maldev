@@ -301,6 +301,9 @@ func (m auditModel) View() string {
 		auditFilterServer, auditFilterIdentity, auditFilterProbe,
 	}
 	filterLabel := Dim.Render("filtres :")
+	// Measure the bordered chip strip width. If it overflows m.width,
+	// fall back to flat text chips (no border) so the chip-row top/
+	// bottom borders don't fragment across multiple lines at 80×24.
 	var chips []string
 	for _, f := range allFilters {
 		label := HintKey.Render(f.hotkey()) + Dim.Render(f.label())
@@ -317,6 +320,18 @@ func (m auditModel) View() string {
 		chipRow,
 		"  ", exportHints,
 	)
+	if lipgloss.Width(chipBar) > m.width {
+		// Compact: flat chips, comma-separated, fits on one line.
+		var flatChips []string
+		for _, f := range allFilters {
+			seg := HintKey.Render(f.hotkey()) + " " + Dim.Render(f.label())
+			if f == m.filter {
+				seg = HintKey.Render(f.hotkey()) + " " + Base.Render(f.label())
+			}
+			flatChips = append(flatChips, seg)
+		}
+		chipBar = " " + filterLabel + " " + strings.Join(flatChips, Mute.Render(" · "))
+	}
 
 	// ── Table box with count in title ─────────────────────────────────────
 	// Use table row count (already filtered by rebuildTable) rather than

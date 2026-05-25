@@ -491,7 +491,27 @@ func (m licensesModel) renderFilterBar() string {
 	}
 	// PaddingLeft applies to every line of the multi-line chip block; a leading
 	// space concat would only indent the first row (top border).
-	return lipgloss.NewStyle().PaddingLeft(1).Render(lipgloss.JoinHorizontal(lipgloss.Top, parts...))
+	bordered := lipgloss.NewStyle().PaddingLeft(1).Render(lipgloss.JoinHorizontal(lipgloss.Top, parts...))
+	// Compact fallback for narrow terminals: bordered pills are 3 rows tall
+	// and break alignment when the topRow (search + count + chips) overflows
+	// m.width — lipgloss wraps each row independently → chip rows split
+	// across 4 lines. The topRow reserves ~30 cells for search+count, so
+	// the chip budget is roughly m.width - 35.
+	const topRowReserve = 35
+	if m.width > 0 && lipgloss.Width(bordered) > m.width-topRowReserve {
+		var flat []string
+		for _, f := range filters {
+			seg := f.String()
+			if f == m.filter {
+				seg = GlowGreen.Render(seg)
+			} else {
+				seg = Mute.Render(seg)
+			}
+			flat = append(flat, seg)
+		}
+		return " " + strings.Join(flat, Mute.Render(" · "))
+	}
+	return bordered
 }
 
 func (m licensesModel) renderDetail() string {
