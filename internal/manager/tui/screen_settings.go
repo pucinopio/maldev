@@ -374,15 +374,13 @@ func (m settingsModel) boxArgonPreset(w int, r *ent.Setting) string {
 	// Borderless preset rows. Embedding bordered chips here breaks the parent
 	// box's row count (lipgloss line-wrap on inner borders) and produces the
 	// well-known staircase against the left column.
-	activeStyle := lipgloss.NewStyle().Foreground(Palette.Green).Bold(true)
-	inactiveStyle := lipgloss.NewStyle().Foreground(Palette.FgMute)
 	var rows []string
 	for _, p := range presets {
-		marker := inactiveStyle.Render(" ")
-		labelStyle := inactiveStyle
+		marker := Mute.Render(" ")
+		labelStyle := Mute
 		if r.DefaultArgonPreset == p.v {
-			marker = activeStyle.Render("●")
-			labelStyle = activeStyle
+			marker = GlowGreen.Render("●")
+			labelStyle = GlowGreen
 		}
 		rows = append(rows, marker+" "+HintKey.Render("["+p.key+"]")+" "+labelStyle.Render(p.label))
 	}
@@ -423,12 +421,10 @@ func (m settingsModel) boxCycleVieServeurs(w int, r *ent.Setting) string {
 
 func (m settingsModel) boxApparence(w int) string {
 	// Borderless theme markers (same reason as boxArgonPreset).
-	activeStyle := lipgloss.NewStyle().Foreground(Palette.Green).Bold(true)
-	inactiveStyle := lipgloss.NewStyle().Foreground(Palette.FgMute)
 	themes := []string{
-		activeStyle.Render("●") + " " + HintKey.Render("[1]") + " " + activeStyle.Render("neon"),
-		inactiveStyle.Render(" ") + " " + HintKey.Render("[2]") + " " + inactiveStyle.Render("mono"),
-		inactiveStyle.Render(" ") + " " + HintKey.Render("[3]") + " " + inactiveStyle.Render("nord-soft"),
+		GlowGreen.Render("●") + " " + HintKey.Render("[1]") + " " + GlowGreen.Render("neon"),
+		Mute.Render(" ") + " " + HintKey.Render("[2]") + " " + Mute.Render("mono"),
+		Mute.Render(" ") + " " + HintKey.Render("[3]") + " " + Mute.Render("nord-soft"),
 	}
 	body := Dim.Render("thème : ") + strings.Join(themes, "  ") + "\n" +
 		settingsToggle("bold + couleur saturée (équivalent glow en TUI)", true) + "\n" +
