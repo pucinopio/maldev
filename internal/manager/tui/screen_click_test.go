@@ -90,15 +90,14 @@ func TestClickMapping_ListScreens(t *testing.T) {
 }
 
 // renderListScreen wires the model into a rootModel, sends WindowSizeMsg,
-// switches to the target view, and returns the full screen render. The
-// caller passes a pointer to the typed sub-model so titleHints stays
-// observable after Update.
+// switches to the target view, and returns the full screen render. It also
+// copies the post-Update sub-model state BACK into the caller's pointer so
+// follow-up OnClick calls operate against the rebuilt table / cursor and
+// not the pre-Update zero state.
 func renderListScreen(t *testing.T, view ViewID, sub any) string {
 	t.Helper()
 	root := New(&service.Services{}, nil, SessionReady)
 	root.active = view
-	// Replace the matching sub-model with the caller-provided pointer's value
-	// so titleHints is the SAME *titleHintRow we'll inspect later.
 	switch v := sub.(type) {
 	case *issuersModel:
 		root.issuers = *v
@@ -112,12 +111,35 @@ func renderListScreen(t *testing.T, view ViewID, sub any) string {
 		root.revocation = *v
 	case *licensesModel:
 		root.licenses = *v
+	case *auditModel:
+		root.audit = *v
 	default:
 		t.Fatalf("unknown sub-model type %T", sub)
 	}
 	var m tea.Model = root
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
-	return m.View()
+	view2 := m.View()
+	// Sync post-Update state back into the caller's pointer so OnClick uses
+	// the rebuilt table (height halved when detail mode is on, rows visible,
+	// titleHints.y populated).
+	r := m.(rootModel)
+	switch v := sub.(type) {
+	case *issuersModel:
+		*v = r.issuers
+	case *recipientsModel:
+		*v = r.recipients
+	case *identitiesModel:
+		*v = r.identities
+	case *totpModel:
+		*v = r.totp
+	case *revocationModel:
+		*v = r.revocation
+	case *licensesModel:
+		*v = r.licenses
+	case *auditModel:
+		*v = r.audit
+	}
+	return view2
 }
 
 // findLineY returns the 0-based Y of the first line containing marker, or -1.

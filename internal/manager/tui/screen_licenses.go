@@ -424,8 +424,10 @@ func (m licensesModel) OnClick(x, y, _ int) tea.Cmd {
 		return nil
 	}
 
-	// Table rows: header at Y=7, data at Y=8+.
-	const tableHeaderY = 7
+	// Table rows: header sits one line below the box title row recorded by
+	// View() — same convention as every other list screen via titleHints.
+	// Data rows start at headerY + 1; box bottom border at headerY + 1 + table.Height().
+	tableHeaderY := m.titleHints.y + 1
 	tableEndY := tableHeaderY + m.table.Height() + 1 // +1 for the box bottom border
 	if y > tableHeaderY && y < tableEndY {
 		row := y - tableHeaderY - 1
@@ -435,10 +437,13 @@ func (m licensesModel) OnClick(x, y, _ int) tea.Cmd {
 		}
 		return nil
 	}
-	// Detail [I/B/P/A/C] tab strip: lives at Y = tableEndY + 2 (top box border
-	// at tableEndY+1, then the tab strip is the title row's second line).
+	// Detail [I/B/P/A/C] tab strip: detail box renders BELOW the table box.
+	//   tableEndY     box bottom border ─
+	//   tableEndY + 1 detail box top border ─
+	//   tableEndY + 2 detail title row ("Détail · lic:… · subject")
+	//   tableEndY + 3 tab strip ("[I]dent  [B]ind  [P]EM  [A]udit  [C]haîne")
 	if m.detail && m.selectedRow() != nil {
-		tabStripY := tableEndY + 2
+		tabStripY := tableEndY + 3
 		if y == tabStripY {
 			// Layout mirrors renderDetail's tabStrip: "[I]dent  [B]ind  [P]EM  [A]udit  [C]haîne"
 			// Each cell = 3 (key) + label + 2 (spacing). Walk by widths.
