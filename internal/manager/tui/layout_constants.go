@@ -28,3 +28,27 @@ func ModalFrame() (w, h int) {
 func FrameOf(s lipgloss.Style) (w, h int) {
 	return s.GetHorizontalFrameSize(), s.GetVerticalFrameSize()
 }
+
+// BoxedInner returns the content width available inside BoxStyle when the
+// outer block is `total` columns wide — i.e. `total` minus border AND padding.
+// Use this for tables, viewports, or any text laid out inside the box.
+func BoxedInner(total int) int {
+	w := total - BoxStyle.GetHorizontalFrameSize()
+	if w < 0 {
+		return 0
+	}
+	return w
+}
+
+// BoxedWidth returns the value to pass to `BoxStyle.Width(...)` so the box's
+// outer rendered width is exactly `total` columns. lipgloss `.Width()` sets
+// the content area (padding included, border excluded); this helper subtracts
+// only the border so callers don't have to remember which lipgloss component
+// `.Width()` is measuring.
+func BoxedWidth(total int) int {
+	w := total - BoxStyle.GetHorizontalBorderSize()
+	if w < 0 {
+		return 0
+	}
+	return w
+}
