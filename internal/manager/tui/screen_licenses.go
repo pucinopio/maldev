@@ -62,6 +62,7 @@ type licensesModel struct {
 	detailTab          int               // 0=Ident, 1=Bind, 2=PEM, 3=Audit, 4=Chain
 	detailAuditRows    []*ent.AuditEvent // lazy-loaded when A tab opens
 	detailAuditLoading bool              // true between tab-open and loaded msg
+	detailAuditErr     error             // surfaced in renderDetailAudit when the load fails
 	search             textinput.Model
 	table              table.Model
 	detail             bool
@@ -160,6 +161,7 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 
 	case licenseAuditLoadedMsg:
 		m.detailAuditRows = msg.rows
+		m.detailAuditErr = msg.err
 		m.detailAuditLoading = false
 		return m, nil
 
@@ -671,6 +673,9 @@ func (m licensesModel) renderDetailAudit(row *ent.License) string {
 	if m.detailAuditLoading {
 		return header + "\n" + Dim.Render("  chargement de l'historique…")
 	}
+	if m.detailAuditErr != nil {
+		return header + "\n" + GlowRed.Render("  erreur : "+m.detailAuditErr.Error())
+	}
 	if len(m.detailAuditRows) == 0 {
 		return header + "\n" + Dim.Render("  (aucun évènement pour cette licence)")
 	}
@@ -688,6 +693,7 @@ func (m licensesModel) renderDetailAudit(row *ent.License) string {
 // licenseAuditLoadedMsg carries the audit history for the selected licence.
 type licenseAuditLoadedMsg struct {
 	rows []*ent.AuditEvent
+	err  error
 }
 
 // loadLicenseAuditCmd fetches the audit events for one licence via
@@ -698,9 +704,9 @@ func loadLicenseAuditCmd(svc *service.Services, row *ent.License) tea.Cmd {
 	}
 	licID := row.ID
 	return func() tea.Msg {
-		rows, _ := svc.Audit.ListForTarget(context.Background(),
+		rows, err := svc.Audit.ListForTarget(context.Background(),
 			service.Target{Kind: "License", ID: licID.String()}, 50)
-		return licenseAuditLoadedMsg{rows: rows}
+		return licenseAuditLoadedMsg{rows: rows, err: err}
 	}
 }
 

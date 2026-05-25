@@ -629,9 +629,9 @@ func (m serversModel) renderProbeTokens() string {
 			lines = append(lines,
 				lipgloss.NewStyle().Width(22).Render(tok)+
 					lipgloss.NewStyle().Width(16).Render(t.Label)+
-					lipgloss.NewStyle().Width(20).Render(t.CreatedAt.Format("2006-01-02 15:04")) +
-					lipgloss.NewStyle().Width(8).Foreground(Palette.Yellow).Render(ttl)+
-					lipgloss.NewStyle().Width(10).Foreground(Palette.Yellow).Render(state),
+					lipgloss.NewStyle().Width(20).Render(t.CreatedAt.Format("2006-01-02 15:04"))+
+					FgYellow.Width(8).Render(ttl)+
+					FgYellow.Width(10).Render(state),
 			)
 		}
 		body = strings.Join(lines, "\n")
@@ -675,7 +675,7 @@ func (m serversModel) renderProbeHistory() string {
 				lipgloss.NewStyle().Width(14).Render(t.Label)+
 				lipgloss.NewStyle().Width(16).Render(t.Hostname)+
 				lipgloss.NewStyle().Width(10).Render(t.Os)+
-				lipgloss.NewStyle().Width(14).Foreground(Palette.Cyan).Render(local),
+				FgCyan.Width(14).Render(local),
 		)
 	}
 	return strings.Join(lines, "\n")
@@ -684,8 +684,14 @@ func (m serversModel) renderProbeHistory() string {
 // probeTokensLoadedMsg / probeHistoryLoadedMsg carry the result of an async
 // probe history fetch; populated when the operator opens the Tokens / History
 // inner views on the Probe sub-tab.
-type probeTokensLoadedMsg struct{ rows []*ent.ProbeToken }
-type probeHistoryLoadedMsg struct{ rows []*ent.ProbeToken }
+type probeTokensLoadedMsg struct {
+	rows []*ent.ProbeToken
+	err  error
+}
+type probeHistoryLoadedMsg struct {
+	rows []*ent.ProbeToken
+	err  error
+}
 
 // loadProbeTokensCmd fetches recent probe-token rows. svc.Probe.History returns
 // the most recent N regardless of state; we filter into "waiting" vs "used"
@@ -695,7 +701,10 @@ func loadProbeTokensCmd(svc *service.Services) tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		rows, _ := svc.Probe.History(context.Background(), 20)
+		rows, err := svc.Probe.History(context.Background(), 20)
+		if err != nil {
+			return probeTokensLoadedMsg{err: err}
+		}
 		var active []*ent.ProbeToken
 		for _, r := range rows {
 			if r.UsedAt.IsZero() {
@@ -711,7 +720,10 @@ func loadProbeHistoryCmd(svc *service.Services) tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		rows, _ := svc.Probe.History(context.Background(), 20)
+		rows, err := svc.Probe.History(context.Background(), 20)
+		if err != nil {
+			return probeHistoryLoadedMsg{err: err}
+		}
 		var used []*ent.ProbeToken
 		for _, r := range rows {
 			if !r.UsedAt.IsZero() {

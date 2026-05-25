@@ -86,12 +86,19 @@ func (o *probeDrawerOverlay) subscribeCmd(tokenID string) tea.Cmd {
 	}
 }
 
-// cancelCmd revokes any in-flight probe token then dismisses the drawer.
+// cancelCmd revokes any in-flight probe token, unsubscribes the waiting
+// subscriber (which closes the channel and lets subscribeCmd's goroutine
+// exit instead of blocking forever on `<-ch`), then dismisses the drawer.
 // Shared by the esc key path and the mouse "annuler/fermer" hit.
 func (o *probeDrawerOverlay) cancelCmd() tea.Cmd {
 	if o.token != nil && o.state == probeStateWaiting {
 		svc := o.svc
 		id := o.token.ID
+		// Unsubscribe first: closes the channel so the tea.Cmd waiting on
+		// it returns immediately with !ok and produces ProbeAgentResultMsg{}.
+		// Then revoke the token in the DB (fire-and-forget — the user is
+		// closing the drawer so we don't await the result).
+		svc.Probe.Unsubscribe(id)
 		go func() { _ = svc.Probe.Revoke(context.Background(), id, "operator") }()
 	}
 	return func() tea.Msg { return OverlayDoneMsg{Result: nil} }

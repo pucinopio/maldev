@@ -247,7 +247,14 @@ func (m *auditModel) rebuildTable() {
 		}
 		rows = append(rows, table.Row{ts, r.Kind, r.Actor, target, note})
 	}
-	tableH := m.hgt - 6
+	// Magic 6 = empirically measured fixed-row overhead the audit screen
+	// reserves above the table (chip bar + title + spacers + statusbar).
+	// Bumping it produces a too-short table; not bumping it is safe today
+	// because bubbles/table absorbs the over-allocation internally. Keep
+	// the literal but reference ChromeRows so the chrome dependency is
+	// at least documented.
+	const auditFixedOverhead = ChromeRows + 2 // 4 + 2 = 6
+	tableH := m.hgt - auditFixedOverhead
 	if m.detail {
 		tableH = tableH / 2
 	}
@@ -261,7 +268,7 @@ func (m *auditModel) rebuildTable() {
 	m.table.SetHeight(tableH)
 	stretchLastColumn(&m.table, m.width)
 	if m.detail {
-		m.vp.Height = m.hgt - tableH - 6
+		m.vp.Height = m.hgt - tableH - auditFixedOverhead
 		if m.vp.Height < 3 {
 			m.vp.Height = 3
 		}
@@ -415,11 +422,13 @@ func writeAuditJSON(path string, rows []*ent.AuditEvent) error {
 	return os.WriteFile(path, b, 0o644)
 }
 
-// OnClick handles filter-chip clicks. Chrome=4 rows; the chip bar pills span
-// Y=4..6 (3-row bordered pill block — top border, label row, bottom border).
-// Mirrors chipBar layout: " filtres :  " prefix then chips back-to-back.
+// OnClick handles filter-chip clicks. Chip bar sits immediately below the
+// chrome (TopChromeRows..TopChromeRows+2 — 3-row bordered pill block:
+// top border, label row, bottom border). Mirrors chipBar layout:
+// " filtres :  " prefix then chips back-to-back.
 func (m auditModel) OnClick(x, y, _ int) tea.Cmd {
-	if y < 4 || y > 6 {
+	const chipTopY = TopChromeRows
+	if y < chipTopY || y > chipTopY+2 {
 		return nil
 	}
 	allFilters := []auditKindFilter{

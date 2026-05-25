@@ -16,7 +16,12 @@ import (
 // the top of theme.go — palette access must go through a named style var
 // so ApplyTheme() can swap the palette without leaving stale colours.
 func TestThemeSeparationRule(t *testing.T) {
-	pattern := regexp.MustCompile(`lipgloss\.NewStyle\(\)\.[A-Za-z]+\(Palette\.`)
+	// Catches any chain that starts with `lipgloss.NewStyle()` and ends
+	// with `.Foreground(Palette.X)` anywhere in between, e.g.:
+	//   lipgloss.NewStyle().Width(8).Foreground(Palette.Yellow).Render(x)
+	// Pass-2 used a tighter regex that only caught the FIRST method call;
+	// the agent audit (pass-3 quality) found 3 sites that slipped through.
+	pattern := regexp.MustCompile(`lipgloss\.NewStyle\(\)[^/\n]*\.Foreground\(Palette\.`)
 	root := "."
 	violations := []string{}
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
