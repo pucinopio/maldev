@@ -295,10 +295,10 @@ var (
 	// heatEmpty/heatOutOfRange are alias of Mute (theme); heatBorder/Green/Red
 	// stay local because they have no plain-color theme equivalent.
 	heatEmpty       = Mute
-	heatBorder      = lipgloss.NewStyle().Foreground(Palette.BorderBright)
-	heatGreen       = lipgloss.NewStyle().Foreground(Palette.Green)
+	heatBorder      = FgBorderBright
+	heatGreen       = FgGreen
 	heatGreenStrong = GlowGreen // dense weeks (3+ issuances) — bold green
-	heatRed         = lipgloss.NewStyle().Foreground(Palette.Red)
+	heatRed         = FgRed
 	heatOutOfRange  = Mute
 )
 

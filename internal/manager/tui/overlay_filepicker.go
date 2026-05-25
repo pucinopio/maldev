@@ -147,8 +147,6 @@ func (o *filePickerOverlay) navigateUp() (Overlay, tea.Cmd) {
 }
 
 func (o *filePickerOverlay) View() string {
-	red := lipgloss.NewStyle().Foreground(Palette.Red)
-
 	// Header: "filepicker  cwd  <path>" with key hints.
 	header := lipgloss.JoinHorizontal(lipgloss.Top,
 		GlowCyan.Render("filepicker"),
@@ -163,7 +161,7 @@ func (o *filePickerOverlay) View() string {
 
 	var lines []string
 	if o.errMsg != "" {
-		lines = []string{red.Render("  " + o.errMsg)}
+		lines = []string{FgRed.Render("  " + o.errMsg)}
 	} else if len(o.entries) == 0 {
 		lines = []string{Mute.Render("  (répertoire vide)")}
 	} else {
@@ -175,13 +173,13 @@ func (o *filePickerOverlay) View() string {
 			var nameStyle lipgloss.Style
 			if e.IsDir() {
 				icon = GlowCyan.Render("▸")
-				nameStyle = lipgloss.NewStyle().Foreground(Palette.Cyan)
+				nameStyle = FgCyan
 			} else {
 				ext := filepath.Ext(e.Name())
 				switch ext {
 				case ".exe", ".elf", ".dmg", ".bin", ".sh":
 					icon = GlowMagent.Render("●")
-					nameStyle = lipgloss.NewStyle().Foreground(Palette.Magenta)
+					nameStyle = FgMagenta
 				default:
 					icon = Dim.Render("·")
 					nameStyle = Dim
@@ -192,9 +190,7 @@ func (o *filePickerOverlay) View() string {
 				name = nameStyle.Render(e.Name() + "/")
 			}
 			if i == o.cursor {
-				lines = append(lines,
-					lipgloss.NewStyle().Foreground(Palette.Magenta).Bold(true).Render("> ")+
-						icon+" "+name)
+				lines = append(lines, GlowMagent.Render("> ")+icon+" "+name)
 			} else {
 				lines = append(lines, "  "+icon+" "+name)
 			}

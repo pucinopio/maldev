@@ -212,7 +212,7 @@ func (o *probeDrawerOverlay) View() string {
 		" ", phaseDot, " ", phaseStatus,
 		"  ", Dim.Render("[esc] fermer"),
 	)
-	rule := lipgloss.NewStyle().Foreground(Palette.Cyan).Render(
+	rule := FgCyan.Render(
 		strings.Repeat("─", probeDrawerWidth),
 	)
 

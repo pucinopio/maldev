@@ -457,7 +457,7 @@ func (m wizardModel) View() string {
 		// Active step gets a "│ " left-margin accent; others get "  ".
 		var prefix string
 		if s == m.step {
-			prefix = lipgloss.NewStyle().Foreground(Palette.Magenta).Render("│") + " "
+			prefix = FgMagenta.Render("│") + " "
 		} else {
 			prefix = "  "
 		}

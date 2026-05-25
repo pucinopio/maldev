@@ -1,5 +1,18 @@
 package tui
 
+// THEME SEPARATION RULE
+// ---------------------
+// theme.go is the SINGLE SOURCE OF TRUTH for palette access. Every other
+// file in the TUI MUST reference an exported style var (Base, Dim, Mute,
+// FgCyan/Magenta/Green/Red/Yellow, GlowCyan/Magent/Green/Red/Yellow,
+// BoxStyle, BoxFocused, TabActive/Inactive, Pill*, Chip*, Modal*, Hint*)
+// instead of reconstructing one from `Palette.X`. ApplyTheme swaps every
+// style var atomically; inline `lipgloss.NewStyle().Foreground(Palette.X)`
+// usage would survive the swap with stale colours.
+//
+// Exceptions: theme.go itself (where styles are seeded), and palette-data
+// definitions that intentionally hold raw hex literals.
+
 import (
 	"github.com/charmbracelet/lipgloss"
 
@@ -82,6 +95,18 @@ var (
 
 	ChipActive   lipgloss.Style
 	ChipInactive lipgloss.Style
+
+	// Non-bold colour foregrounds. Use these for inline coloured glyphs
+	// (rules, list-item labels, single-character markers) so theme.go stays
+	// the single source of truth for palette access. The Glow* equivalents
+	// add Bold(true); call .UnsetBold() on those only when an unbold variant
+	// would not match a named style.
+	FgCyan         lipgloss.Style
+	FgMagenta      lipgloss.Style
+	FgGreen        lipgloss.Style
+	FgRed          lipgloss.Style
+	FgYellow       lipgloss.Style
+	FgBorderBright lipgloss.Style
 )
 
 func init() {
@@ -147,6 +172,13 @@ func reseedStyles() {
 	// so the visual rhythm matches.
 	ChipActive = lipgloss.NewStyle().Foreground(Palette.Magenta).Border(lipgloss.NormalBorder()).BorderForeground(Palette.Magenta).Padding(0, 1)
 	ChipInactive = lipgloss.NewStyle().Foreground(Palette.FgDim).Border(lipgloss.NormalBorder()).BorderForeground(Palette.Border).Padding(0, 1)
+
+	FgCyan = lipgloss.NewStyle().Foreground(Palette.Cyan)
+	FgMagenta = lipgloss.NewStyle().Foreground(Palette.Magenta)
+	FgGreen = lipgloss.NewStyle().Foreground(Palette.Green)
+	FgRed = lipgloss.NewStyle().Foreground(Palette.Red)
+	FgYellow = lipgloss.NewStyle().Foreground(Palette.Yellow)
+	FgBorderBright = lipgloss.NewStyle().Foreground(Palette.BorderBright)
 }
 
 func reseedCoreColors() {
