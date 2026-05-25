@@ -536,21 +536,23 @@ func (m licensesModel) renderDetail() string {
 	)
 }
 
-// licStatusPill renders a colored status pill for the Licenses detail panel.
+// licStatusPill renders a flat, one-line coloured status tag for the
+// Licenses detail panel. The bordered Pill* styles render on 3 rows which
+// breaks kvRow's single-line baseline (the key label would align with the
+// pill's top border instead of the centred text).
 func licStatusPill(s licenseent.Status) string {
 	switch s {
 	case licenseent.StatusActive:
-		return PillActive.Render("ACTIVE")
+		return GlowGreen.Render("● ACTIVE")
 	case licenseent.StatusRevoked:
-		return PillRevoked.Render("REVOKED")
+		return GlowRed.Render("● REVOKED")
 	case licenseent.StatusExpired:
-		return PillOff.Render("EXPIRED")
+		return Mute.Bold(true).Render("● EXPIRED")
 	case licenseent.StatusSuperseded:
-		return PillSuperseded.Render("SUPERSEDED")
+		return GlowViolet.Render("● SUPERSEDED")
 	default:
-		// "expiring" is a computed status not stored in ent; render with yellow pill.
 		if s == "expiring" {
-			return PillExpiring.Render("EXPIRING")
+			return GlowYellow.Render("● EXPIRING")
 		}
 		return Dim.Render(string(s))
 	}

@@ -69,6 +69,7 @@ var (
 	GlowGreen  lipgloss.Style
 	GlowRed    lipgloss.Style
 	GlowYellow lipgloss.Style
+	GlowViolet lipgloss.Style
 
 	// BorderBright is used for box edges so the grid is legible on dark
 	// terminals — Palette.Border is intentionally dim and only meant for
@@ -144,6 +145,7 @@ func reseedStyles() {
 	GlowGreen = lipgloss.NewStyle().Foreground(Palette.Green).Bold(true)
 	GlowRed = lipgloss.NewStyle().Foreground(Palette.Red).Bold(true)
 	GlowYellow = lipgloss.NewStyle().Foreground(Palette.Yellow).Bold(true)
+	GlowViolet = lipgloss.NewStyle().Foreground(Palette.Violet).Bold(true)
 
 	BoxStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(Palette.BorderBright).Padding(0, 1)
 	BoxFocused = BoxStyle.BorderForeground(Palette.Magenta)
