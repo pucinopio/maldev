@@ -211,12 +211,20 @@ func (s *StepReview) View() string {
 		"",
 	}
 
+	// Record button Y in RENDERED rows, not slice indices — lines[0] is the
+	// 3-line stepHeader and counts as 3 visible rows once JoinVertical
+	// expands embedded \n. Walk current lines and accumulate display height
+	// so OnClick(_, y) matches the actual row.
+	renderedY := 0
+	for _, l := range lines {
+		renderedY += lipgloss.Height(l)
+	}
 	if s.issuing {
-		s.issueBtnY = len(lines)
+		s.issueBtnY = renderedY
 		s.cancelBtnY = -1
 		lines = append(lines, wizDim.Render("  issuing…"))
 	} else {
-		s.issueBtnY = len(lines)
+		s.issueBtnY = renderedY
 		s.cancelBtnY = s.issueBtnY + 1
 		lines = append(lines,
 			wizGreen.Render("  [ enter / i ]  Issue licence"),

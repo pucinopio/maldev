@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -8,6 +9,7 @@ import (
 
 	"github.com/oioio-space/maldev/internal/manager/store/ent"
 	"github.com/oioio-space/maldev/internal/manager/tui/widgets"
+	"github.com/oioio-space/maldev/internal/manager/tui/wizard"
 )
 
 // truncateLines returns the first n lines of s for compact failure dumps.
@@ -17,6 +19,90 @@ func truncateLines(s string, n int) string {
 		lines = lines[:n]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Batch 4 — wizard sidebar steps + step buttons.
+//
+// 4a — sidebar [1..8] click: the wizardOverlay.Update mouse-handler maps
+// body-local Y to step index `(bodyY - 2) / 2` so each step occupies 2
+// rows (badge + label). We bypass the overlay's coord translation and
+// drive routeBodyClick / gotoStep directly through the wizardModel
+// because that's where the step-switching logic lives.
+//
+// 4b — stepReview Issue / Cancel buttons: click body-local Y on the
+// recorded issueBtnY/cancelBtnY and assert the matching IssueResultMsg
+// is produced (Issue → none yet, Cancel → ErrCancelled).
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestInteractions_WizardSidebarSteps(t *testing.T) {
+	m := newWizardModel(nil)
+	// Render once so any lazy state initialises.
+	_, w, h := 144, 90, 30
+	_ = w
+	_ = h
+	m.width, m.hgt = 144, 30
+	for step := wizStepIdentity; step <= wizStepReview; step++ {
+		updated, _ := m.gotoStep(step)
+		if updated.step != step {
+			t.Errorf("gotoStep(%d): step is %d, want %d", step, updated.step, step)
+		}
+	}
+}
+
+func TestInteractions_WizardReviewButtons(t *testing.T) {
+	sr := wizard.NewStepReview(nil)
+	sr.Focus()
+	// View() populates issueBtnY / cancelBtnY based on the rendered
+	// summary length. We don't expose the fields publicly so test
+	// indirectly via OnClick: click anywhere below the summary lines
+	// (Issue is the first action row, Cancel the next).
+	_ = sr.View()
+	issueCmd := sr.OnClick(0, reviewIssueY(sr))
+	if issueCmd == nil {
+		t.Fatal("StepReview.OnClick on Issue row returned nil")
+	}
+	msg := issueCmd()
+	res, ok := msg.(wizard.IssueResultMsg)
+	if !ok {
+		// Issue path triggers issueCmd() which calls into the service;
+		// with a nil svc it returns an IssueResultMsg with an error.
+		t.Errorf("Issue button: cmd produced %T, want IssueResultMsg", msg)
+	}
+	_ = res
+
+	// Fresh StepReview for the Cancel path — Issue above set s.issuing=true
+	// which short-circuits OnClick.
+	sr2 := wizard.NewStepReview(nil)
+	sr2.Focus()
+	_ = sr2.View()
+	cancelCmd := sr2.OnClick(0, reviewCancelY(sr2))
+	if cancelCmd == nil {
+		t.Fatal("StepReview.OnClick on Cancel row returned nil")
+	}
+	cancelMsg := cancelCmd().(wizard.IssueResultMsg)
+	if !errors.Is(cancelMsg.Err, wizard.ErrCancelled) {
+		t.Errorf("Cancel button: Err = %v, want wizard.ErrCancelled", cancelMsg.Err)
+	}
+}
+
+// reviewIssueY / reviewCancelY locate the action button Y rows by scanning
+// the rendered StepReview view for the distinctive labels.
+func reviewIssueY(sr *wizard.StepReview) int {
+	for i, l := range strings.Split(sr.View(), "\n") {
+		if strings.Contains(l, "Issue licence") {
+			return i
+		}
+	}
+	return -1
+}
+func reviewCancelY(sr *wizard.StepReview) int {
+	for i, l := range strings.Split(sr.View(), "\n") {
+		if strings.Contains(l, "Cancel") {
+			return i
+		}
+	}
+	return -1
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
