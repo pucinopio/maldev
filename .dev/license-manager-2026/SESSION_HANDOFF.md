@@ -4,6 +4,114 @@ Snapshot of the work pushed during the 2026-05-22 and 2026-05-25 sessions
 and what's still queued. All commits are on `master`, authored as
 `oioio-space <oioio-space@users.noreply.github.com>`.
 
+## 2026-05-25 — Simplify pass + queued items + VHS infra
+
+Second autonomous pass on the same day. Ran a 3-agent /simplify
+(reuse / quality / efficiency) over `internal/manager/tui/`, applied
+the surgical findings, closed handoff items #1, #4, #6, #7, and set
+up VHS tape infrastructure.
+
+### Commits shipped (newest first)
+
+| SHA | Title |
+|---|---|
+| `a4d12b7` | feat(tooling): VHS regression tapes + tui-snap -theme flag |
+| `844f370` | fix(tui/licenses): license detail tabs B/P/A/C polish |
+| `2785230` | docs: add TOTP tab to README + tui-snapshots + Makefile snap target |
+| `018edd2` | refactor(tui): more simplify wins — chips, wizard shared styles, audit cache |
+| `da82675` | feat(tui): runtime theme swap (handoff item #1) |
+| `73b677f` | fix(tui): TOTPLoadedMsg cmd-drop + cancelled sentinel |
+| `72abb4c` | refactor(tui): simplify pass — theme reuse + heatmap perf + wizard hint |
+
+### Real bugs fixed (not just polish)
+
+1. **TOTPLoadedMsg cmd-drop** (`73b677f`) — `app.go` Update was
+   discarding `loadCursorDetail()` returned by `m.totp.Update`. The
+   TOTP screen's QR detail never refreshed after a list reload. Same
+   hazard was latent for `LicensesLoadedMsg` / `IssuersLoadedMsg`.
+   Fix returns early with the captured cmd, also eliminating the
+   double-dispatch via routeToActive.
+2. **Theme runtime swap** (`da82675`, handoff item #1) — Persisted
+   `Setting.Theme` had no runtime effect. Now `ApplyTheme(name)`
+   reassigns Palette + reseeds every theme.go style var +
+   `core.Colors`. Wired into both `settingsSetThemeMsg` and
+   `SettingsLoadedMsg`. Three palettes ship: `neon`, `mono`,
+   `nord-soft`. Limitation: `widgets/` `sync.OnceValue` caches keep
+   their boot-time look until restart.
+3. **Cancelled sentinel** (`73b677f`) — `screen_wizard` compared
+   `err.Error() == "cancelled"`. Replaced with `wizard.ErrCancelled`
+   sentinel + `errors.Is`.
+
+### Simplify findings applied
+
+- 10 reuse, 8 efficiency, 8 quality findings reviewed; the safe
+  surgical ones landed:
+  - `screen_recipients` missed the BoxedInner sweep — fixed.
+  - `chrome.go` uses GlowCyan instead of inline cyan+bold.
+  - `drawer_probe.go`, `overlay_qr.go` local style shadows now alias
+    `Glow*.UnsetBold()` / `Dim`.
+  - `screen_dashboard` `serverPillOff` uses `Mute.Bold(true)`.
+  - Heatmap cell allocations precomputed (`heatEmpty/Border/Green/Red/OutOfRange`)
+    — 91 + 4 lipgloss.NewStyle per frame eliminated.
+  - `theme.go` adds exported `ChipActive`/`ChipInactive`; `screen_audit`
+    drops 14-line inline chip blocks.
+  - `wizard/helpers.go` exposes `wizSel/wizFg/wizDim`; `step_binding_machine`
+    drops 5 per-View NewStyle allocations.
+  - `screen_audit` View() caches `selectedRow()` to halve `visibleRows()`
+    iterations when the detail panel is visible.
+- Deferred (need their own focused sessions):
+  - `buildWidgetTree` rebuild per dashboard frame (efficiency #2)
+  - Overlay-dimensions cached for mouse offset (efficiency #1)
+  - Probe table column style hoisting (efficiency #3) — Servers screen is
+    architecturally heavier; bundle with widget-tree work
+  - `m.height` ↔ `m.hgt` field-name convergence
+  - Magic overlay-ID strings → typed constants
+  - Custom golden-file harness → `teatest.RequireEqualOutput`
+
+### License detail tabs polish (handoff item #6)
+
+- Audit tab: `detailAuditLoading` flag distinguishes loading from empty;
+  rows cleared on tab open to prevent stale data.
+- PEM tab: empty-PEM message now states the right diagnosis (storage
+  problem, not a "forgot to emit").
+- Chain tab: explicit stub note that parent/successor links are not yet
+  modeled in the ent schema.
+
+### Docs (handoff item #7)
+
+- README: TOTP / QR / theme switch mentioned in the license-manager
+  paragraph.
+- `docs/license-manager/tui-snapshots.md`: tenth view listed (totp).
+- `Makefile` `TUI_VIEWS`: now includes `totp` so `make snap-all` covers
+  all 10 tabs.
+- `docs/mitre.md` unchanged (license-manager isn't a technique).
+
+### VHS infra (new)
+
+- `tapes/` directory with three scripts:
+  - `themes.tape` — dashboard in neon → mono → nord-soft (proves
+    runtime swap visually).
+  - `wizard-step3.tape` — paste-mode hint shows the reworded text.
+  - `dashboard-smoke.tape` — minimal one-frame render for CI.
+- `tui-snap` accepts `-theme <name>` so tapes can drive `ApplyTheme`
+  without seeding a settings DB.
+- Makefile targets: `tape-themes`, `tape-wizard-step3`, `tape-smoke`,
+  and `tapes` (all three). Outputs land under `tapes/out/`
+  (git-ignored).
+- Requires `vhs`, `ttyd`, `ffmpeg` (already on dev host).
+- Verified: three GIFs produced (235K + 70K + 87K), wizard hint
+  reword present in raw output, theme ANSI codes change with
+  `-theme` flag.
+
+### Tests added
+
+- `theme_test.go` — `TestApplyTheme_SwapsPaletteAndStyles` pins the
+  Palette swap + style reseed + fallback for unknown theme names.
+- `layout_constants_test.go` (from earlier session) — already pins
+  Box/Modal frame metrics + `BoxedInner`/`BoxedWidth` values.
+
+---
+
 ## 2026-05-25 — Architecture refactor (research-driven)
 
 Research pass on Bubble Tea best practices (VHS, teatest, lipgloss v2,
