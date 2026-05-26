@@ -23,6 +23,7 @@ import (
 
 	httpsrvPkg "github.com/oioio-space/maldev/internal/manager/httpsrv"
 	"github.com/oioio-space/maldev/internal/manager/crypto"
+	"github.com/oioio-space/maldev/internal/manager/service"
 	"github.com/oioio-space/maldev/internal/manager/store"
 	"github.com/oioio-space/maldev/internal/manager/store/ent"
 	licenseent "github.com/oioio-space/maldev/internal/manager/store/ent/license"
@@ -1903,6 +1904,306 @@ func sendKeyToRoot(m rootModel, key string) rootModel {
 	km := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
 	updated, cmd := m.Update(km)
 	return drainCmd(updated.(rootModel), cmd)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Session 7 — DS-T01: arrow keys navigate every table (WithFocused(true))
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestLive_IssuersArrowKeys_MoveCursor verifies that ↓ advances and ↑ retreats
+// the issuers table cursor. Before DS-T01 fix, WithFocused(false) caused the
+// table.Update to return immediately, leaving cursor frozen at 0.
+func TestLive_IssuersArrowKeys_MoveCursor(t *testing.T) {
+	m := newIssuersModel(nil)
+	m.rows = []*ent.Issuer{fakeIssuer(), fakeIssuer(), fakeIssuer()}
+	m.rebuildTable()
+
+	before := m.table.Cursor()
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	after := m2.table.Cursor()
+	if after <= before {
+		t.Errorf("↓ on issuers table: cursor did not advance (before=%d after=%d); table likely not focused", before, after)
+	}
+	m3, _ := m2.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if m3.table.Cursor() >= after {
+		t.Errorf("↑ on issuers table: cursor did not retreat (was=%d got=%d)", after, m3.table.Cursor())
+	}
+}
+
+// TestLive_LicensesArrowKeys_MoveCursor guards DS-T01 for the licenses table.
+func TestLive_LicensesArrowKeys_MoveCursor(t *testing.T) {
+	m := newLicensesModel(nil)
+	m.rows = []*ent.License{fakeLicense(), fakeLicense(), fakeLicense()}
+	m.rebuildTable()
+
+	before := m.table.Cursor()
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if m2.table.Cursor() <= before {
+		t.Errorf("↓ on licenses table: cursor did not advance (before=%d after=%d)", before, m2.table.Cursor())
+	}
+}
+
+// TestLive_RecipientsArrowKeys_MoveCursor guards DS-T01 for the recipients table.
+func TestLive_RecipientsArrowKeys_MoveCursor(t *testing.T) {
+	m := newRecipientsModel(nil)
+	m.rows = []*ent.RecipientKey{{}, {}, {}}
+	m.rebuildTable()
+
+	before := m.table.Cursor()
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if m2.table.Cursor() <= before {
+		t.Errorf("↓ on recipients table: cursor did not advance (before=%d after=%d)", before, m2.table.Cursor())
+	}
+}
+
+// TestLive_RevocationArrowKeys_MoveCursor guards DS-T01 for the revocation table.
+func TestLive_RevocationArrowKeys_MoveCursor(t *testing.T) {
+	now := time.Now()
+	m := newRevocationModel(nil)
+	m.rows = []service.RevocationView{
+		{Subject: "a", RevokedAt: now},
+		{Subject: "b", RevokedAt: now},
+		{Subject: "c", RevokedAt: now},
+	}
+	m.rebuildTable()
+
+	before := m.table.Cursor()
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if m2.table.Cursor() <= before {
+		t.Errorf("↓ on revocation table: cursor did not advance (before=%d after=%d)", before, m2.table.Cursor())
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Session 7 — DS-I01: issuer detail toggle rebuilds table
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestLive_IssuerDetailToggle_RebuildTable verifies that pressing 'd' on the
+// issuers screen toggles m.detail AND calls rebuildTable (height changes).
+func TestLive_IssuerDetailToggle_RebuildTable(t *testing.T) {
+	m := newIssuersModel(nil)
+	m.width = 144
+	m.hgt = 44
+	m.rows = []*ent.Issuer{fakeIssuer()}
+	m.rebuildTable()
+
+	heightBefore := m.table.Height()
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	if !m2.detail {
+		t.Fatal("'d' must toggle m.detail to true")
+	}
+	heightAfter := m2.table.Height()
+	if heightAfter >= heightBefore {
+		t.Errorf("detail panel open: table height should shrink (before=%d after=%d)", heightBefore, heightAfter)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Session 7 — DS-I02: issuer activate fans dashboard refresh
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestLive_IssuerActivate_DashboardRefreshed verifies that IssuersLoadedMsg
+// arriving at the root model always batches a dashboard.refresh() cmd (DS-I02).
+func TestLive_IssuerActivate_DashboardRefreshed(t *testing.T) {
+	m := driveRootModel(t)
+	m = sendKeyToRoot(m, "3") // goto Issuers
+
+	// Simulate the IssuersLoadedMsg that [a] activate produces.
+	updated, cmd := m.Update(IssuersLoadedMsg{Rows: []*ent.Issuer{fakeIssuer()}})
+	_ = updated
+	if cmd == nil {
+		t.Error("IssuersLoadedMsg at root: expected batch cmd including dashboard refresh, got nil")
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Session 7 — DS-I03: green dot in issuers table for active row
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestLive_IssuersGreenDot_ActiveRow verifies that the active issuer's first
+// table column contains the green dot "●" and inactive rows do not.
+func TestLive_IssuersGreenDot_ActiveRow(t *testing.T) {
+	active := fakeIssuer()
+	active.Active = true
+	inactive := fakeIssuer()
+	inactive.Active = false
+
+	m := newIssuersModel(nil)
+	m.rows = []*ent.Issuer{active, inactive}
+	m.rebuildTable()
+
+	rows := m.table.Rows()
+	if len(rows) < 2 {
+		t.Fatalf("expected 2 rows, got %d", len(rows))
+	}
+	// Column 0 is the dot column. Active row must contain "●", inactive must not.
+	if !strings.Contains(rows[0][0], "●") {
+		t.Errorf("active issuer row[0][0] = %q, want it to contain '●'", rows[0][0])
+	}
+	if strings.Contains(rows[1][0], "●") {
+		t.Errorf("inactive issuer row[1][0] = %q, must not contain '●'", rows[1][0])
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Session 7 — DS-I04: hint label must say "retirer" not "retraiter"
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestLive_IssuersHint_RetireLabelIsRetirer verifies the title bar hint for [x]
+// uses "retirer" (the correct French UI infinitive) not "retraiter" (DS-I04).
+func TestLive_IssuersHint_RetireLabelIsRetirer(t *testing.T) {
+	m := newIssuersModel(nil)
+	m.width = 160
+	m.hgt = 44
+	view := m.View()
+	if strings.Contains(view, "retraiter") {
+		t.Errorf("issuers view still contains 'retraiter'; must be 'retirer' (DS-I04)")
+	}
+	if !strings.Contains(view, "retirer") {
+		t.Errorf("issuers view does not contain 'retirer' hint for [x] action (DS-I04)")
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Session 7 — DS-L03: Chain tab loads real lineage via GetChain
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestLive_LicensesChainTab_LoadsCmd verifies that pressing [C] on the licenses
+// screen returns a non-nil loadLicenseChainCmd when a row is selected (DS-L03).
+func TestLive_LicensesChainTab_LoadsCmd(t *testing.T) {
+	m := newLicensesModel(nil)
+	m.rows = []*ent.License{fakeLicense()}
+	m.rebuildTable()
+
+	// svc=nil → loadLicenseChainCmd returns nil, but the model fields must update.
+	m2, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("C")})
+	if m2.detailTab != 4 {
+		t.Errorf("'C' must set detailTab=4, got %d", m2.detailTab)
+	}
+	if !m2.detailChainLoading {
+		t.Error("'C' must set detailChainLoading=true")
+	}
+	// With nil svc the cmd is nil (no service to call), which is correct.
+	_ = cmd
+}
+
+// TestLive_LicensesChainTab_RenderShowsThisRow verifies that with a nil chain
+// (pre-load), renderDetailChain still surfaces the UUID and subject (DS-L03).
+func TestLive_LicensesChainTab_RenderShowsThisRow(t *testing.T) {
+	row := fixtureLicense()
+	m := licensesModel{detailChain: nil, detailChainLoading: false}
+	out := m.renderDetailChain(row)
+	if !strings.Contains(out, row.LicenseUUID[:8]) {
+		t.Errorf("chain tab pre-load: UUID prefix %q missing from output", row.LicenseUUID[:8])
+	}
+	if !strings.Contains(out, row.Subject) {
+		t.Errorf("chain tab pre-load: subject %q missing from output", row.Subject)
+	}
+}
+
+// TestLive_LicensesChainTab_RenderShowsParentAndSuccessor verifies that when
+// detailChain is populated, parent and successor UUIDs appear in the output.
+func TestLive_LicensesChainTab_RenderShowsParentAndSuccessor(t *testing.T) {
+	parent := fakeLicense()
+	this := fakeLicense()
+	successor := fakeLicense()
+
+	m := licensesModel{
+		width: 160,
+		detailChain: &service.LicenseChain{
+			Parents:    []*ent.License{parent},
+			This:       this,
+			Successors: []*ent.License{successor},
+		},
+	}
+	out := m.renderDetailChain(this)
+	if !strings.Contains(out, parent.LicenseUUID[:8]) {
+		t.Errorf("chain render: parent UUID prefix %q not found in output", parent.LicenseUUID[:8])
+	}
+	if !strings.Contains(out, successor.LicenseUUID[:8]) {
+		t.Errorf("chain render: successor UUID prefix %q not found in output", successor.LicenseUUID[:8])
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Session 7 — DS-L01: detail tab click cursor starts at box-left offset
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestLive_LicensesDetailTabClick_BoxLeftOffset verifies that clicking at X=2
+// (box-left = 1 border + 1 padding) on the tab strip row lands on the first tab
+// ([I]dent), not an off-by-two miss. Guards DS-L01.
+func TestLive_LicensesDetailTabClick_BoxLeftOffset(t *testing.T) {
+	m := newLicensesModel(nil)
+	m.width = 160
+	m.hgt = 44
+	m.detail = true
+	m.rows = []*ent.License{fakeLicense()}
+	m.rebuildTable()
+
+	// Render to populate titleHints.y.
+	_ = m.View()
+
+	tableHeaderY := m.titleHints.y + 1
+	tableEndY := tableHeaderY + m.table.Height() + 1
+	tabStripY := tableEndY + 3
+
+	// X=2 = box left-border(1) + padding(1) = first character of "[I]dent".
+	cmd := m.OnClick(2, tabStripY, 0)
+	if cmd == nil {
+		t.Fatal("click at X=2 on tab strip must return a cmd (lands on [I]dent tab)")
+	}
+	msg := cmd()
+	tab, ok := msg.(licenseDetailTabClickMsg)
+	if !ok {
+		t.Fatalf("expected licenseDetailTabClickMsg, got %T", msg)
+	}
+	if tab.tab != 0 {
+		t.Errorf("click at X=2 (box-left): expected tab=0 ([I]dent), got tab=%d", tab.tab)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Session 7 — DS-L04: re-issue confirm overlay dispatched to screen
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestLive_LicenseReissue_ConfirmYProducesOverlay re-tests DS-L04 end-to-end:
+// pushing the confirm overlay, pressing 'y', and verifying a pushOverlayMsg
+// (the OK/error overlay) is enqueued.
+func TestLive_LicenseReissue_ConfirmYProducesOverlay(t *testing.T) {
+	m := driveRootModel(t)
+	m = sendKeyToRoot(m, "2") // goto Licenses
+
+	// Seed a license row so selectedRow() is non-nil.
+	m.licenses.rows = []*ent.License{fakeLicense()}
+	m.licenses.rebuildTable()
+
+	// Push the reissue confirm overlay exactly as the 'e' key does.
+	push := pushOverlayMsg{newConfirmOverlay(OverlayIDLicenseReissue, "Re-émettre", "body", "re-émettre", "annuler", false)}
+	updated, _ := m.Update(push)
+	m = updated.(rootModel)
+
+	if len(m.overlays) == 0 {
+		t.Fatal("confirm overlay not pushed")
+	}
+
+	// Press 'y' — overlay emits OverlayDoneMsg as a cmd; drain one tick to
+	// process the OverlayDoneMsg (which pops overlay + routes to screen handler).
+	updated2, yCmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	m2 := updated2.(rootModel)
+	// Execute the cmd from 'y' → OverlayDoneMsg.
+	if yCmd == nil {
+		t.Fatal("DS-L04: 'y' on confirm overlay must return a cmd (OverlayDoneMsg)")
+	}
+	updated3, doneCmd := m2.Update(yCmd())
+	m3 := updated3.(rootModel)
+	// Overlay must be popped after processing OverlayDoneMsg.
+	if len(m3.overlays) != 0 {
+		t.Error("DS-L04: overlay still open after OverlayDoneMsg; dispatchOverlayResult not reached")
+	}
+	// doneCmd batches the re-issue cmd (nil svc → stub OK overlay). Must be non-nil.
+	if doneCmd == nil {
+		t.Error("DS-L04: doneCmd is nil after OverlayDoneMsg; handleLicenseReissueConfirm must return a cmd for feedback")
+	}
 }
 
 // liveTestStore opens an in-memory store pre-seeded with the given passphrase

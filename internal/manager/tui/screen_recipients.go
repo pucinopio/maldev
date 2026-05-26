@@ -39,7 +39,7 @@ func newRecipientsModel(svc *service.Services) recipientsModel {
 	}
 	t := table.New(
 		table.WithColumns(cols),
-		table.WithFocused(false),
+		table.WithFocused(true),
 		table.WithHeight(15),
 		table.WithStyles(licTableStyles()),
 	)

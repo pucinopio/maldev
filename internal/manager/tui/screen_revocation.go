@@ -38,7 +38,7 @@ func newRevocationModel(svc *service.Services) revocationModel {
 	}
 	t := table.New(
 		table.WithColumns(cols),
-		table.WithFocused(false),
+		table.WithFocused(true),
 		table.WithHeight(15),
 		table.WithStyles(licTableStyles()),
 	)

@@ -389,6 +389,56 @@ func (svc *LicenseService) Get(ctx context.Context, id uuid.UUID) (*ent.License,
 	return svc.store.Client.License.Get(ctx, id)
 }
 
+// LicenseChain holds the parent-walk and successor-walk for a single licence.
+type LicenseChain struct {
+	// Parents is ordered oldest-first (root at index 0).
+	Parents []*ent.License
+	// This is the licence the chain was built around.
+	This *ent.License
+	// Successors is ordered newest-last (direct successor at index 0).
+	Successors []*ent.License
+}
+
+// GetChain resolves the full parent/successor lineage for id.
+// It walks ReplacesLicenseID backwards (up to 20 hops) for parents, and
+// queries all rows whose ReplacesLicenseID equals each node for successors.
+func (svc *LicenseService) GetChain(ctx context.Context, id uuid.UUID) (*LicenseChain, error) {
+	root, err := svc.store.Client.License.Get(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("get chain root: %w", err)
+	}
+	chain := &LicenseChain{This: root}
+
+	// Walk backwards: follow ReplacesLicenseID until nil or > 20 hops.
+	cur := root
+	for range 20 {
+		if cur.ReplacesLicenseID == nil {
+			break
+		}
+		parent, err := svc.store.Client.License.Get(ctx, *cur.ReplacesLicenseID)
+		if err != nil {
+			break // parent may have been deleted; stop gracefully
+		}
+		chain.Parents = append(chain.Parents, parent)
+		cur = parent
+	}
+	// Reverse so oldest is first.
+	for i, j := 0, len(chain.Parents)-1; i < j; i, j = i+1, j-1 {
+		chain.Parents[i], chain.Parents[j] = chain.Parents[j], chain.Parents[i]
+	}
+
+	// Walk forward: direct successors are rows where ReplacesLicenseID == id.
+	succs, err := svc.store.Client.License.Query().
+		Where(licenseent.ReplacesLicenseIDEQ(id)).
+		Order(ent.Asc(licenseent.FieldCreatedAt)).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list successors: %w", err)
+	}
+	chain.Successors = succs
+	return chain, nil
+}
+
 func (svc *LicenseService) GetByUUID(ctx context.Context, licUUID string) (*ent.License, error) {
 	return svc.store.Client.License.Query().Where(licenseent.LicenseUUIDEQ(licUUID)).Only(ctx)
 }

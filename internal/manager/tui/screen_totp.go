@@ -60,7 +60,7 @@ func newTOTPModel(svc *service.Services) totpModel {
 	}
 	t := table.New(
 		table.WithColumns(cols),
-		table.WithFocused(false),
+		table.WithFocused(true),
 		table.WithHeight(8),
 		table.WithStyles(licTableStyles()),
 	)

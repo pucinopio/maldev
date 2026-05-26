@@ -248,7 +248,9 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case IssuersLoadedMsg:
 		var cmd tea.Cmd
 		m.issuers, cmd = m.issuers.Update(dmsg)
-		return m, cmd
+		// Batch a dashboard refresh so the "Clé d'émission active" tile stays
+		// in sync whenever the active issuer changes (e.g. after [a] activate).
+		return m, tea.Batch(cmd, m.dashboard.refresh())
 	case TOTPLoadedMsg:
 		var cmd tea.Cmd
 		m.totp, cmd = m.totp.Update(dmsg)

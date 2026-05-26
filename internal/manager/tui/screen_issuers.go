@@ -67,6 +67,7 @@ type issuersModel struct {
 
 func newIssuersModel(svc *service.Services) issuersModel {
 	cols := []table.Column{
+		{Title: "●", Width: 2},
 		{Title: "KEYID", Width: 20},
 		{Title: "NAME", Width: 24},
 		{Title: "STATUS", Width: 10},
@@ -75,7 +76,7 @@ func newIssuersModel(svc *service.Services) issuersModel {
 	}
 	t := table.New(
 		table.WithColumns(cols),
-		table.WithFocused(false),
+		table.WithFocused(true),
 		table.WithHeight(15),
 		table.WithStyles(licTableStyles()),
 	)
@@ -116,6 +117,7 @@ func (m issuersModel) Update(msg tea.Msg) (issuersModel, tea.Cmd) {
 		switch msg.String() {
 		case "d":
 			m.detail = !m.detail
+			m.rebuildTable()
 			return m, nil
 
 		case "a":
@@ -194,6 +196,12 @@ func (m *issuersModel) selectedRow() *ent.Issuer {
 func (m *issuersModel) rebuildTable() {
 	rows := make([]table.Row, 0, len(m.rows))
 	for _, r := range m.rows {
+		// Green dot in first column identifies the single active signing key at
+		// a glance without reading the STATUS column.
+		dot := "  "
+		if r.Active {
+			dot = GlowGreen.Render("●")
+		}
 		status := "inactive"
 		if r.Active {
 			status = "active"
@@ -202,7 +210,7 @@ func (m *issuersModel) rebuildTable() {
 		}
 		created := r.CreatedAt.Format("2006-01-02")
 		rows = append(rows, table.Row{
-			r.KeyID, r.Name, status, created, "—",
+			dot, r.KeyID, r.Name, status, created, "—",
 		})
 	}
 	// clampTableHeight handles the universal halve-on-detail / min-3 /
@@ -262,7 +270,7 @@ func (m issuersModel) View() string {
 		{Key: "n", Label: " générer ", Cmd: keyCmd("n")},
 		{Key: "a", Label: " activer ", Cmd: keyCmd("a")},
 		{Key: "E", Label: " export .pub ", Cmd: keyCmd("E")},
-		{Key: "x", Label: " retraiter", Cmd: keyCmd("x")},
+		{Key: "x", Label: " retirer", Cmd: keyCmd("x")},
 	}, 0, BoxedInner(m.width))
 	// Title row Y = TopChromeRows + leading blank + introH + trailing blank
 	// + box top border. introH uses the rendered height so wrapped intros and

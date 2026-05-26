@@ -68,6 +68,10 @@ type licensesModel struct {
 	detailAuditRows    []*ent.AuditEvent // lazy-loaded when A tab opens
 	detailAuditLoading bool              // true between tab-open and loaded msg
 	detailAuditErr     error             // surfaced in renderDetailAudit when the load fails
+	// detailChain is the resolved lineage for the Chain tab (lazy-loaded when C opens).
+	detailChain        *service.LicenseChain
+	detailChainLoading bool
+	detailChainErr     error
 	search             textinput.Model
 	table              table.Model
 	// pemViewport scrolls the raw PEM text in the PEM detail tab.
@@ -90,7 +94,7 @@ func newLicensesModel(svc *service.Services) licensesModel {
 	}
 	t := table.New(
 		table.WithColumns(cols),
-		table.WithFocused(false),
+		table.WithFocused(true),
 		table.WithHeight(15),
 		table.WithStyles(licTableStyles()),
 	)
@@ -176,12 +180,20 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 
 	case licenseDetailTabClickMsg:
 		m.detailTab = msg.tab
-		// Audit tab loads lazily — same path as the keyboard 'A' shortcut.
-		if msg.tab == 3 {
+		// Audit tab (3) and Chain tab (4) load lazily — same path as keyboard shortcuts.
+		switch msg.tab {
+		case 3:
 			if row := m.selectedRow(); row != nil {
 				m.detailAuditRows = nil
 				m.detailAuditLoading = true
 				return m, loadLicenseAuditCmd(m.svc, row)
+			}
+		case 4:
+			if row := m.selectedRow(); row != nil {
+				m.detailChain = nil
+				m.detailChainLoading = true
+				m.detailChainErr = nil
+				return m, loadLicenseChainCmd(m.svc, row)
 			}
 		}
 		return m, nil
@@ -190,6 +202,12 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 		m.detailAuditRows = msg.rows
 		m.detailAuditErr = msg.err
 		m.detailAuditLoading = false
+		return m, nil
+
+	case licenseChainLoadedMsg:
+		m.detailChain = msg.chain
+		m.detailChainErr = msg.err
+		m.detailChainLoading = false
 		return m, nil
 
 	case tableSelectRowMsg:
@@ -245,7 +263,11 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 			return m, loadLicenseAuditCmd(m.svc, m.selectedRow())
 		case "C":
 			m.detailTab = 4
-			return m, nil
+			// Lazy-load on every open so the chain is fresh after a re-issue.
+			m.detailChain = nil
+			m.detailChainLoading = true
+			m.detailChainErr = nil
+			return m, loadLicenseChainCmd(m.svc, m.selectedRow())
 
 		case "n":
 			return m, openWizardCmd(m.svc)
@@ -508,9 +530,12 @@ func (m licensesModel) OnClick(x, y, _ int) tea.Cmd {
 	if m.detail && m.selectedRow() != nil {
 		tabStripY := tableEndY + 3
 		if y == tabStripY {
-			// Layout mirrors renderDetail's tabStrip: "[I]dent  [B]ind  [P]EM  [A]udit  [C]haîne"
-			// Each cell = 3 (key) + label + 2 (spacing). Walk by widths.
-			cursor := 0
+			// Tab strip renders inside BoxStyle; absolute X of the first character
+			// is boxLeft = (total horizontal frame) / 2 (left side only).
+			// Without this offset clicks at X<2 miss every tab (DS-L01).
+			// Layout: "[I]dent  [B]ind  [P]EM  [A]udit  [C]haîne", gap=2 between cells.
+			boxLeft := BoxStyle.GetHorizontalFrameSize() / 2
+			cursor := boxLeft
 			cells := []struct {
 				tab   int
 				label string
@@ -805,30 +830,92 @@ func loadLicenseAuditCmd(svc *service.Services, row *ent.License) tea.Cmd {
 	}
 }
 
-// renderDetailChain renders the parent → here → successors lineage.
-// The ent schema does not model parent/successor links yet; this render
-// surfaces what IS known (uuid, subject, status) inside a structured
-// placeholder so the tab is informative rather than an empty stub.
-func (m licensesModel) renderDetailChain(row *ent.License) string {
-	header := GlowCyan.Render("Chaîne de succession") + "  " +
-		Mute.Render("(liens parent/successeur — à venir)")
+// licenseChainLoadedMsg carries the resolved lineage for the Chain tab.
+type licenseChainLoadedMsg struct {
+	chain *service.LicenseChain
+	err   error
+}
 
-	// Skeleton table: PARENT / THIS / SUCCESSORS rows.
-	// labelW matches the 14-cell gutter used by renderDetailBody's kvRows.
+// loadLicenseChainCmd resolves the full parent/successor chain for one licence.
+// Returns nil when svc or row is nil (nothing to load).
+func loadLicenseChainCmd(svc *service.Services, row *ent.License) tea.Cmd {
+	if svc == nil || row == nil {
+		return nil
+	}
+	id := row.ID
+	return func() tea.Msg {
+		chain, err := svc.License.GetChain(context.Background(), id)
+		return licenseChainLoadedMsg{chain: chain, err: err}
+	}
+}
+
+// renderDetailChain renders the real parent → this → successor lineage using
+// ReplacesLicenseID edges resolved by loadLicenseChainCmd.
+func (m licensesModel) renderDetailChain(row *ent.License) string {
+	hint := HintKey.Render("[C]") + Dim.Render(" chaîne")
+	header := GlowCyan.Render("Chaîne de succession") + "  " + hint
+
+	if m.detailChainLoading {
+		return header + "\n" + Dim.Render("  chargement de la chaîne…")
+	}
+	if m.detailChainErr != nil {
+		return header + "\n" + GlowRed.Render("  erreur : "+m.detailChainErr.Error())
+	}
+	// When chain has not been loaded yet, show the current row so the UUID and
+	// subject are always visible, with a prompt to load the full lineage.
+	if m.detailChain == nil {
+		const labelW = 14
+		thisVal := GlowMagent.Render(row.LicenseUUID[:8]+"…") + " " +
+			Base.Render(row.Subject) + " " + licStatusPill(row.Status)
+		prompt := Dim.Render("  (appuie sur [C] pour charger la chaîne complète)")
+		if row.Status == licenseent.StatusSuperseded {
+			prompt = GlowYellow.Render("cette licence est SUPERSEDED — re-émettre le successeur le plus récent")
+		}
+		return strings.Join([]string{
+			header, "",
+			kvRow("cette lic.", thisVal, labelW), "",
+			prompt,
+		}, "\n")
+	}
+
 	const labelW = 14
 	divider := Dim.Render(strings.Repeat("─", BoxedInner(m.width)))
-	parentRow := kvRow("parent", Mute.Render("aucun (racine)"), labelW)
-	thisRow := kvRow("cette lic.", GlowMagent.Render(row.LicenseUUID[:8]+"…")+" "+Dim.Render(row.Subject), labelW)
-	succRow := kvRow("successeurs", Mute.Render("aucun enregistré"), labelW)
 
-	lines := []string{header, "", parentRow, divider, thisRow, divider, succRow}
+	var lines []string
+	lines = append(lines, header, "")
 
-	if row.Status == licenseent.StatusSuperseded {
-		lines = append(lines, "",
-			GlowYellow.Render("cette licence est SUPERSEDED — re-émettre le successeur le plus récent"))
+	// Parents section (oldest first).
+	if len(m.detailChain.Parents) == 0 {
+		lines = append(lines, kvRow("parents", Mute.Render("aucun (racine de la chaîne)"), labelW))
+	} else {
+		for i, p := range m.detailChain.Parents {
+			label := fmt.Sprintf("parent %d", i+1)
+			val := GlowCyan.Render(p.LicenseUUID[:8]+"…") + " " + Dim.Render(p.Subject) +
+				" " + licStatusPill(p.Status)
+			lines = append(lines, kvRow(label, val, labelW))
+		}
 	}
-	lines = append(lines, "",
-		Dim.Render("  Liens parent/successeur seront peuplés une fois le champ successor_id ajouté au schéma ent."))
+
+	lines = append(lines, divider)
+
+	// This licence.
+	thisVal := GlowMagent.Render(row.LicenseUUID[:8]+"…") + " " +
+		Base.Render(row.Subject) + " " + licStatusPill(row.Status)
+	lines = append(lines, kvRow("cette lic.", thisVal, labelW))
+
+	lines = append(lines, divider)
+
+	// Successors section.
+	if len(m.detailChain.Successors) == 0 {
+		lines = append(lines, kvRow("successeurs", Mute.Render("aucun (extrémité de la chaîne)"), labelW))
+	} else {
+		for i, s := range m.detailChain.Successors {
+			label := fmt.Sprintf("successeur %d", i+1)
+			val := GlowCyan.Render(s.LicenseUUID[:8]+"…") + " " + Dim.Render(s.Subject) +
+				" " + licStatusPill(s.Status)
+			lines = append(lines, kvRow(label, val, labelW))
+		}
+	}
 
 	return strings.Join(lines, "\n")
 }
