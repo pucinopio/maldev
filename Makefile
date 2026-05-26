@@ -19,12 +19,28 @@
 # Native cmd.exe is not supported.
 
 # ── Host OS detection ────────────────────────────────────────────────────────
+# MSYS/Git-Bash make strips $(OS) from its environment, so we detect Windows
+# via either $(OS) (Windows-native make) or $(MSYSTEM) (MSYS/MinGW).
 ifeq ($(OS),Windows_NT)
-    EXE      := .exe
+    HOST_OS  := windows
+else ifneq ($(MSYSTEM),)
     HOST_OS  := windows
 else
-    EXE      :=
     HOST_OS  := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+endif
+
+ifeq ($(HOST_OS),windows)
+    EXE := .exe
+    # MSYS/Git-Bash strips USERPROFILE/TMP/GOPATH from make's environment, so
+    # the Go toolchain falls back to system defaults that aren't writable.
+    # Pin all Go state to repo-local .gocache/ (writable, gitignored). This
+    # works identically from bash, cmd, and PowerShell.
+    export GOTMPDIR   := $(CURDIR)/.gocache/tmp
+    export GOCACHE    := $(CURDIR)/.gocache/cache
+    export GOPATH     := $(CURDIR)/.gocache/gopath
+    export GOMODCACHE := $(CURDIR)/.gocache/gopath/pkg/mod
+else
+    EXE :=
 endif
 
 # ── Flags ────────────────────────────────────────────────────────────────────
@@ -85,18 +101,23 @@ help:
 	@echo ""
 	@echo "Tools: $(TOOLS)"
 
-# ── Output directory ─────────────────────────────────────────────────────────
+# ── Output directories ────────────────────────────────────────────────────────
 $(BIN):
 	@mkdir -p $(BIN)
 
 $(BIN)/linux: | $(BIN)
 	@mkdir -p $(BIN)/linux
 
+# Go state sink — ensures GOTMPDIR/GOCACHE/GOPATH/GOMODCACHE directories exist
+# on Windows where the bash-inherited paths don't resolve.
+.gocache:
+	@mkdir -p .gocache/tmp .gocache/cache .gocache/gopath/pkg/mod
+
 # ── Per-tool build targets ───────────────────────────────────────────────────
 # Each $(t) target builds ./cmd/$(t) → ./$(BIN)/$(t)[.exe]
 # rshell gets the Windows GUI ldflag; everything else takes plain LDFLAGS.
 define TOOL_template
-$(1): | $$(BIN)
+$(1): | $$(BIN) .gocache
 	@echo "build $(1) -> $$(BIN)/$(1)$$(EXE)"
 	@go build $$(GOFLAGS) \
 		-ldflags="$$(if $$(filter rshell,$(1)),$$(RSHELL_LDFLAGS),$$(LDFLAGS))" \
