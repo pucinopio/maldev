@@ -6,7 +6,65 @@ kb_verified: 124
 kb_total: 124
 ms_verified: 106
 ms_total: 106
-defects_open: 0
+defects_open: 2
+---
+
+## Session 5 — autonomous defect hunt (2026-05-26)
+
+### Summary table
+
+| Defect | Discovery method | Status |
+|---|---|---|
+| D-S3: settings `1/2/3` intercepted by chrome | Strategy 1 + code audit | Open — design collision; screen handler correct in isolation |
+| D-S5: servers `1/2/3/4` intercepted by chrome | Strategy 1 + code audit | Open — same root cause as D-S3 |
+| D-S6: audit detail `r/E/J` consumed by viewport | Strategy 1 AssertOutput + Live test | Fixed: 6017323 |
+| D-S7: server `'s'` key never fires (button unfocused) | Code audit (Button.Update) | Fixed: 6017323 |
+| D-S8: `keyMsgFromLabel` nil for ctrl+X/shift+tab | Harness trace inspection | Fixed: 6017323 |
+| D-S9: `wiz.ctrlquit/next/prev.kb` never fired | Cascaded from D-S8 | Fixed: 6017323 |
+| D-S10: `aud.detail.kb` no side-effect assertion | Strategy 1 | Fixed: 6017323 (AssertNotOutput) |
+| D-S11: `lic.detail.enter.kb` no side-effect assertion | Strategy 1 | Fixed: 6017323 (AssertNotOutput) |
+| D-S12: `setLicensesFilterCmd` unverifiable in snap | Strategy 1 investigation | Documented; cmd-not-run limitation noted |
+| D-S13: async overlay dismiss undocumented | Strategy 5 test writing | Fixed: 9c6e1e2 (test + comment) |
+| Edge: empty-row targets panic (×6 screens) | Strategy 3 | Confirmed safe; guard tests added: 5a6dd18 |
+| Edge: `detailTab=99` OOB | Strategy 3 | Confirmed safe (default fallback); guard test: 5a6dd18 |
+| Edge: WindowSizeMsg with overlay on stack | Strategy 3 | Confirmed safe; guard test: 5a6dd18 |
+| Edge: concurrent LicensesLoadedMsg | Strategy 3 | Last-write-wins confirmed; guard test: 5a6dd18 |
+| Edge: audit future timestamp | Strategy 3 | Confirmed safe; guard test: 5a6dd18 |
+| Chrome tab nav missing AssertOutput (×11) | Strategy 1 | Fixed: 9c6e1e2 (all chrome.tab.N.kb specs) |
+| Cross-screen filter/detail state preservation | Strategy 4 | Confirmed correct; 4 guard tests: 9c6e1e2 |
+
+**Total found: 17. Fixed: 15. Open: 2 (D-S3, D-S5 — design-level key collision).**
+
+### Open defects (2)
+
+**D-S3** — Settings `[1][2][3]` argon-preset shortcuts are intercepted by the
+global chrome digit-navigation loop (`handleKey` in `app.go`) before the
+settings model sees them. The UI shows `[1] fast / [2] default / [3] paranoid`
+as clickable hints but pressing them navigates to Dashboard/Licenses/Issuers
+instead. Fix options: (a) exclude `ViewSettings` from digit tab-nav for 1-3, or
+(b) remap argon preset keys to e.g. `F`/`D`/`P` (no collision). Guard test
+`TestLive_SettingsArgonKeyCollision` proves the screen handler is correct in
+isolation. Reproducer: press `0` (go to Settings), press `1` → goes to Dashboard.
+
+**D-S5** — Servers screen `1/2/3/4` log-filter shortcuts share the same root
+cause as D-S3. Pressing `1`–`4` on the Servers screen navigates to tabs
+instead of filtering the live log. Guard test `TestLive_ServersLogFilterKeyCollision`
+proves the screen handler is correct in isolation. Reproducer: press `7` (go to
+Servers), press `2` → goes to Licenses.
+
+### Harness improvements shipped
+
+- **`keyMsgFromLabel`** in `cmd/tui-snap/main.go` expanded from 4 to 17 key
+  labels: `shift+tab`, `up/down/left/right`, `ctrl+c/right/left/n/p/q/x`,
+  `pgup/pgdn`. Previously any spec using these labels silently no-oped.
+- **`AssertOutput`/`AssertNotOutput`** added to 21 additional specs (was 6,
+  now 27): chrome tab navigation (×11), dashboard shortcuts (×8),
+  `aud.detail.kb`, `lic.detail.enter.kb`, `srv.startstop.kb`.
+- **`aud.refresh.detail.kb`** new spec guarding D-S6 regression.
+- **`coverage_gaps9_test.go`** new file with 10 Strategy 3 edge-case tests.
+- **4 cross-screen state tests** in `interactions_live_test.go` covering
+  Strategy 4 (filter/detail preserved) and Strategy 5 (overlay+filter).
+
 ---
 
 ## Session 4 — defect backlog from operator manual test (2026-05-26)
