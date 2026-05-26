@@ -201,14 +201,61 @@ func specs() []spec {
 		},
 
 		// ── Dashboard Raccourcis hotkeys ───────────────────────────────────
-		{ID: "dash.shortcut.n.kb", View: "dashboard", Keys: "n", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'n' on dashboard goto Licenses + wizard"},
-		{ID: "dash.shortcut.slash.kb", View: "dashboard", Keys: "/", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'/' on dashboard goto Licenses + focus search"},
-		{ID: "dash.shortcut.k.kb", View: "dashboard", Keys: "k", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'k' on dashboard goto Issuers"},
-		{ID: "dash.shortcut.i.kb", View: "dashboard", Keys: "i", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'i' on dashboard goto Identities"},
-		{ID: "dash.tile.a.kb", View: "dashboard", Keys: "a", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'a' on dashboard goto Licenses active filter"},
-		{ID: "dash.tile.e.kb", View: "dashboard", Keys: "e", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'e' on dashboard goto Licenses expired filter"},
-		{ID: "dash.tile.w.kb", View: "dashboard", Keys: "w", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'w' on dashboard goto Licenses expiring filter"},
-		{ID: "dash.tile.u.kb", View: "dashboard", Keys: "u", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'u' on dashboard goto Licenses superseded filter"},
+		// AssertOutput verifies navigation actually happened (breadcrumb changes).
+		{
+			ID: "dash.shortcut.n.kb", View: "dashboard", Keys: "n",
+			ExpectMsgs: []string{"tea.KeyMsg"},
+			// 'n' goes to Licenses (wizard cmd not run in snap; licenses renders).
+			AssertOutput: "Licences",
+			Notes: "'n' on dashboard navigates to Licenses screen",
+		},
+		{
+			ID: "dash.shortcut.k.kb", View: "dashboard", Keys: "k",
+			ExpectMsgs:   []string{"tea.KeyMsg"},
+			AssertOutput: "Issuer keys",
+			Notes:        "'k' on dashboard navigates to Issuers",
+		},
+		{
+			ID: "dash.shortcut.i.kb", View: "dashboard", Keys: "i",
+			ExpectMsgs:   []string{"tea.KeyMsg"},
+			AssertOutput: "identities",
+			Notes:        "'i' on dashboard navigates to Identities",
+		},
+		{
+			ID: "dash.tile.a.kb", View: "dashboard", Keys: "a",
+			ExpectMsgs:   []string{"tea.KeyMsg"},
+			// AssertOutput "filter:active" not usable: setLicensesFilterCmd is a
+			// returned cmd that the snap never runs; the breadcrumb stays "all".
+			// Navigation to Licenses is confirmed by AssertOutput "Licences".
+			AssertOutput: "Licences",
+			Notes:        "'a' on dashboard → Licenses (filter set via cmd, not verifiable in snap)",
+		},
+		{
+			ID: "dash.tile.e.kb", View: "dashboard", Keys: "e",
+			ExpectMsgs:   []string{"tea.KeyMsg"},
+			AssertOutput: "Licences",
+			Notes:        "'e' on dashboard → Licenses (filter set via cmd)",
+		},
+		{
+			ID: "dash.tile.w.kb", View: "dashboard", Keys: "w",
+			ExpectMsgs:   []string{"tea.KeyMsg"},
+			AssertOutput: "Licences",
+			Notes:        "'w' on dashboard → Licenses (filter set via cmd)",
+		},
+		{
+			ID: "dash.tile.u.kb", View: "dashboard", Keys: "u",
+			ExpectMsgs:   []string{"tea.KeyMsg"},
+			AssertOutput: "Licences",
+			Notes:        "'u' on dashboard → Licenses (filter set via cmd)",
+		},
+		// dash.shortcut.slash.kb: '/' navigates to Licenses but focusSearchCmd is
+		// a cmd (not run by snap); asserting "Licences" is sufficient.
+		{
+			ID: "dash.shortcut.slash.kb", View: "dashboard", Keys: "/",
+			ExpectMsgs:   []string{"tea.KeyMsg"},
+			AssertOutput: "Licences",
+			Notes:        "'/' on dashboard navigates to Licenses (search focus via cmd)",
+		},
 
 		// ── Dashboard tile mouse clicks ────────────────────────────────────
 		{ID: "dash.tile.active.ms", View: "dashboard", Mouse: "14,4,left", ExpectMsgs: []string{"tea.MouseMsg"}, Notes: "click Actives tile (tile 1 center X≈14, Y=4)"},
