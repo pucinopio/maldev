@@ -145,6 +145,9 @@ func scanView(bin, view, keys string, w, h int) (findings, error) {
 	symbolGlyphs := map[string]bool{
 		"✓": true, "✗": true, "•": true, "·": true, "ON": true, "OFF": true,
 		"ACTIVE": true, "WARN": true, "ERR": true, "OK": true, "→": true, "←": true,
+		// bubbles/table handles pgup/pgdn implicitly via its focused-table
+		// keymap; not a wiring defect.
+		"pgup/pgdn": true, "pgup": true, "pgdn": true,
 	}
 	for _, m := range hintTokenRE.FindAllStringSubmatch(stripped, -1) {
 		raw := strings.TrimSpace(m[1])
@@ -178,6 +181,16 @@ func scanView(bin, view, keys string, w, h int) (findings, error) {
 			continue
 		}
 		handlers[m[1]] = true
+	}
+	// Also include chrome-level case statements from app.go — many screens
+	// (notably dashboard) wire their hotkeys there, gated on m.active.
+	if appBody, err := os.ReadFile("internal/manager/tui/app.go"); err == nil {
+		for _, m := range caseRE.FindAllStringSubmatch(string(appBody), -1) {
+			if strings.Contains(m[1], "-") {
+				continue
+			}
+			handlers[m[1]] = true
+		}
 	}
 	handlersSlice := keysOf(handlers)
 	sort.Strings(handlersSlice)

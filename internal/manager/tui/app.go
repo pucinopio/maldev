@@ -426,8 +426,75 @@ func (m rootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Dashboard shortcut keys — the Raccourcis card promises these but the
+	// dashboard model itself has no key handler. Wire them at chrome level
+	// so they fire only on the dashboard (other screens may bind same keys).
+	// Dashboard has no text-input widgets so we don't need to guard against
+	// search focus — the m.active check is enough.
+	if m.active == ViewDashboard && m.session == SessionReady {
+		switch msg.String() {
+		case "n":
+			// Goto Licenses then push the wizard overlay.
+			m.active = ViewLicenses
+			cmds := []tea.Cmd{m.initScreen(m.active), openWizardCmd(m.services)}
+			return m, tea.Batch(cmds...)
+		case "/":
+			// Goto Licenses with search focused.
+			m.active = ViewLicenses
+			return m, tea.Batch(m.initScreen(m.active), focusLicensesSearchCmd())
+		case "x":
+			// Goto Licenses (operator triggers x on a selected row from there).
+			m.active = ViewLicenses
+			return m, m.initScreen(m.active)
+		case "k":
+			m.active = ViewIssuers
+			return m, m.initScreen(m.active)
+		case "i":
+			m.active = ViewIdentities
+			return m, m.initScreen(m.active)
+		case "s":
+			// Servers HTTP card promises [s] start/stop; route to Servers view.
+			m.active = ViewServers
+			return m, m.initScreen(m.active)
+		// Counter tile hotkeys — set Licenses filter on entry.
+		case "a":
+			m.active = ViewLicenses
+			return m, tea.Batch(m.initScreen(m.active), setLicensesFilterCmd(licFilterActive))
+		case "e":
+			m.active = ViewLicenses
+			return m, tea.Batch(m.initScreen(m.active), setLicensesFilterCmd(licFilterExpired))
+		case "w":
+			m.active = ViewLicenses
+			return m, tea.Batch(m.initScreen(m.active), setLicensesFilterCmd(licFilterExpiring))
+		case "u":
+			m.active = ViewLicenses
+			return m, tea.Batch(m.initScreen(m.active), setLicensesFilterCmd(licFilterSuperseded))
+		// Note: 'r' (Révoquées) collides with the global refresh binding above;
+		// the Raccourcis tile uses [r] for the revoked filter but global 'r'
+		// refreshes the dashboard — refresh wins. Operator clicks the tile or
+		// uses '2' then 'f' to cycle to revoked.
+		}
+	}
+
 	return m.routeToActive(msg)
 }
+
+// focusLicensesSearchCmd / setLicensesFilterCmd are tiny cross-screen
+// commands the dashboard hotkeys emit so the routed-to screen lands in
+// the right sub-state. Sent as cmds (not msgs) so they execute after
+// initScreen completes.
+func focusLicensesSearchCmd() tea.Cmd {
+	return func() tea.Msg { return licensesFocusSearchMsg{} }
+}
+
+func setLicensesFilterCmd(f licenseFilter) tea.Cmd {
+	return func() tea.Msg { return licensesSetFilterMsg{f: f} }
+}
+
+// licensesFocusSearchMsg / licensesSetFilterMsg are received by
+// licensesModel.Update to apply the cross-screen entry state.
+type licensesFocusSearchMsg struct{}
+type licensesSetFilterMsg struct{ f licenseFilter }
 
 // initScreen returns the Init cmd for a screen when first navigated to.
 func (m *rootModel) initScreen(id ViewID) tea.Cmd {

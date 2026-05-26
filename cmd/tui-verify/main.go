@@ -132,6 +132,64 @@ func specs() []spec {
 			ExpectMsgs: []string{"tea.MouseMsg"},
 			Notes:      "click on Active tile should switch view + filter",
 		},
+
+		// ── Dashboard Raccourcis hotkeys (newly wired) ─────────────────────
+		{
+			ID:         "dash.shortcut.n.kb",
+			View:       "dashboard",
+			Keys:       "n",
+			ExpectMsgs: []string{"tea.KeyMsg"},
+			Notes:      "'n' on dashboard goto Licenses + open wizard",
+		},
+		{
+			ID:         "dash.shortcut.slash.kb",
+			View:       "dashboard",
+			Keys:       "/",
+			ExpectMsgs: []string{"tea.KeyMsg"},
+			Notes:      "'/' on dashboard goto Licenses + focus search",
+		},
+		{
+			ID:         "dash.shortcut.k.kb",
+			View:       "dashboard",
+			Keys:       "k",
+			ExpectMsgs: []string{"tea.KeyMsg"},
+			Notes:      "'k' on dashboard goto Issuers",
+		},
+		{
+			ID:         "dash.shortcut.i.kb",
+			View:       "dashboard",
+			Keys:       "i",
+			ExpectMsgs: []string{"tea.KeyMsg"},
+			Notes:      "'i' on dashboard goto Identities",
+		},
+		{
+			ID:         "dash.tile.a.kb",
+			View:       "dashboard",
+			Keys:       "a",
+			ExpectMsgs: []string{"tea.KeyMsg"},
+			Notes:      "'a' on dashboard goto Licenses with active filter",
+		},
+		{
+			ID:         "dash.tile.e.kb",
+			View:       "dashboard",
+			Keys:       "e",
+			ExpectMsgs: []string{"tea.KeyMsg"},
+			Notes:      "'e' on dashboard goto Licenses with expired filter",
+		},
+		{
+			ID:         "dash.tile.w.kb",
+			View:       "dashboard",
+			Keys:       "w",
+			ExpectMsgs: []string{"tea.KeyMsg"},
+			Notes:      "'w' on dashboard goto Licenses with expiring filter",
+		},
+		{
+			ID:         "dash.tile.u.kb",
+			View:       "dashboard",
+			Keys:       "u",
+			ExpectMsgs: []string{"tea.KeyMsg"},
+			Notes:      "'u' on dashboard goto Licenses with superseded filter",
+		},
 	}
 }
 

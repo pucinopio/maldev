@@ -147,6 +147,17 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 		m.rebuildTable()
 		return m, nil
 
+	case licensesSetFilterMsg:
+		// Cross-screen entry from a dashboard hotkey (a/e/w/u).
+		m.filter = msg.f
+		m.rebuildTable()
+		return m, nil
+
+	case licensesFocusSearchMsg:
+		// Cross-screen entry from dashboard '/' shortcut.
+		m.search.Focus()
+		return m, textinput.Blink
+
 	case licenseDetailTabClickMsg:
 		m.detailTab = msg.tab
 		// Audit tab loads lazily — same path as the keyboard 'A' shortcut.

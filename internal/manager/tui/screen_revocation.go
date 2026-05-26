@@ -163,10 +163,14 @@ func (m revocationModel) View() string {
 		Dim.Render(" (Certificate Revocation List) liste les licences révoquées. Le serveur revocation l'expose en HTTPS pour que les clients vérifient la validité d'une licence.")
 
 	titleLabel := fmt.Sprintf("Revocations (%d)", len(m.rows))
+	// Note: [n] ajouter would imply a "create revocation" flow, but revocation
+	// is initiated from the Licenses screen (x on a row). [d] détail would
+	// imply a per-row detail panel; the row already shows subject/keyID/reason
+	// in full so a detail panel adds nothing. Both hints removed to match
+	// what's actually wired in Update().
 	title := titleBar(m.titleHints, titleLabel, []titleHint{
-		{Key: "n", Label: " ajouter ", Cmd: keyCmd("n")},
 		{Key: "x", Label: " retirer ", Cmd: keyCmd("x")},
-		{Key: "d", Label: " détail ", Cmd: keyCmd("d")},
+		{Key: "E", Label: " export CRL ", Cmd: keyCmd("E")},
 		{Key: "r", Label: " rafraîchir", Cmd: keyCmd("r")},
 	}, 0, BoxedInner(m.width))
 	// Title Y = TopChromeRows + tilesH + blank + introH + blank + box top border.
