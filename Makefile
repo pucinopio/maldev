@@ -77,6 +77,7 @@ TOOLS := \
     test-report \
     tui-orphan-scan \
     tui-snap \
+    tui-verify \
     vmtest
 
 .PHONY: all build tools release debug test test-intrusive verify cross-linux \
@@ -208,6 +209,15 @@ snap-all: tui-snap
 .PHONY: orphans
 orphans: tui-snap tui-orphan-scan
 	@./$(BIN)/tui-orphan-scan$(EXE)
+
+# Interaction verification: drives the TUI through each spec (see
+# cmd/tui-verify/main.go specs()) via a tui_trace-tagged build, then asserts
+# the expected tea.Msg appears in the JSONL trace. ID glob via:
+#   make verify-tui FILTER='chrome.*'
+.PHONY: verify-tui
+FILTER ?=
+verify-tui: tui-verify
+	@./$(BIN)/tui-verify$(EXE) $(if $(FILTER),-id "$(FILTER)",)
 
 # ── VHS regression tapes ─────────────────────────────────────────────────────
 # Renders a recorded GIF of the TUI under deterministic input. Requires
