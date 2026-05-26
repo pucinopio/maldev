@@ -47,8 +47,15 @@ type spec struct {
 	ClickTarget string   // substring to locate in the rendered frame; click at its visual centre
 	Seed        string   // optional path to seed JSON
 	ExpectMsgs  []string // substrings to find in trace msg_type or msg dump
-	KnownFail   bool     // expected to fail — flag in report but don't count as regression
-	Notes       string   // free-form for the report
+	// AssertOutput is a substring that MUST appear in the post-action rendered
+	// frame (ANSI-stripped stdout). Set this for specs that assert a visual
+	// side-effect (e.g. overlay pushed, panel open) not just message routing.
+	AssertOutput string
+	// AssertNotOutput is a substring that MUST NOT appear in the post-action
+	// rendered frame. Useful for asserting a misleading hint is gone.
+	AssertNotOutput string
+	KnownFail       bool   // expected to fail — flag in report but don't count as regression
+	Notes           string // free-form for the report
 }
 
 // ansiStripper removes all ANSI / VT escape sequences from a byte slice.
@@ -297,9 +304,24 @@ func specs() []spec {
 		// ── Licenses keyboard bindings ─────────────────────────────────────
 		{ID: "lic.search.kb", View: "licenses", Keys: "2 /", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'/' on Licenses focuses search"},
 		{ID: "lic.filter.kb", View: "licenses", Keys: "2 f", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'f' cycles filter chip"},
-		{ID: "lic.detail.kb", View: "licenses", Keys: "2 d", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'d' toggles detail panel"},
+		{
+			ID:              "lic.detail.kb",
+			View:            "licenses",
+			Keys:            "2 d",
+			ExpectMsgs:      []string{"tea.KeyMsg"},
+			// 'd' collapses the always-open detail panel; the panel header must vanish.
+			AssertNotOutput: "Détail licence",
+			Notes:           "'d' toggles detail panel — AssertNotOutput proves panel actually closed",
+		},
 		{ID: "lic.detail.enter.kb", View: "licenses", Keys: "2 enter", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'enter' toggles detail panel"},
-		{ID: "lic.detail.tab.i.kb", View: "licenses", Keys: "2 I", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'I' switches detail tab to Identité"},
+		{
+			ID:           "lic.detail.tab.i.kb",
+			View:         "licenses",
+			Keys:         "2 I",
+			ExpectMsgs:   []string{"tea.KeyMsg"},
+			AssertOutput: "Détail licence",
+			Notes:        "'I' switches to Identité tab — detail panel must be visible",
+		},
 		{ID: "lic.detail.tab.b.kb", View: "licenses", Keys: "2 B", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'B' switches detail tab to Bindings"},
 		{ID: "lic.detail.tab.p.kb", View: "licenses", Keys: "2 P", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'P' switches detail tab to PEM"},
 		{ID: "lic.detail.tab.c.kb", View: "licenses", Keys: "2 C", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'C' switches detail tab to Chaîne"},
@@ -405,7 +427,15 @@ func specs() []spec {
 		},
 
 		// ── Issuers keyboard bindings ──────────────────────────────────────
-		{ID: "iss.detail.kb", View: "issuers", Keys: "3 d", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'d' toggles detail panel"},
+		{
+			ID:           "iss.detail.kb",
+			View:         "issuers",
+			Keys:         "3 d",
+			ExpectMsgs:   []string{"tea.KeyMsg"},
+			// issuers detail defaults closed; 'd' opens it and the panel header must appear.
+			AssertOutput: "Détail issuer",
+			Notes:        "'d' toggles detail panel — AssertOutput proves panel actually opened",
+		},
 		{ID: "iss.setactive.kb", View: "issuers", Keys: "3 a", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'a' sets selected row active"},
 		{ID: "iss.new.kb", View: "issuers", Keys: "3 n", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'n' pushes input overlay to generate issuer"},
 		{ID: "iss.exportpub.kb", View: "issuers", Keys: "3 E", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'E' pushes input overlay to export pub key"},
@@ -1365,7 +1395,8 @@ func runSpec(bin string, s spec) (bool, []string, error) {
 
 	cmd := exec.Command(bin, args...)
 	cmd.Env = append(os.Environ(), "MALDEV_TUI_TRACE="+tracePath)
-	if err := cmd.Run(); err != nil {
+	stdout, err := cmd.Output()
+	if err != nil {
 		return false, nil, fmt.Errorf("exec %s: %w", filepath.Base(bin), err)
 	}
 
@@ -1404,6 +1435,20 @@ func runSpec(bin string, s spec) (bool, []string, error) {
 			return false, lines, nil
 		}
 	}
+
+	// AssertOutput / AssertNotOutput check the post-action rendered frame.
+	if s.AssertOutput != "" || s.AssertNotOutput != "" {
+		plain := string(stripANSI(stdout))
+		if s.AssertOutput != "" && !strings.Contains(plain, s.AssertOutput) {
+			lines = append(lines, fmt.Sprintf("[AssertOutput FAIL] %q not found in rendered frame", s.AssertOutput))
+			return false, lines, nil
+		}
+		if s.AssertNotOutput != "" && strings.Contains(plain, s.AssertNotOutput) {
+			lines = append(lines, fmt.Sprintf("[AssertNotOutput FAIL] %q unexpectedly found in rendered frame", s.AssertNotOutput))
+			return false, lines, nil
+		}
+	}
+
 	return true, lines, nil
 }
 
