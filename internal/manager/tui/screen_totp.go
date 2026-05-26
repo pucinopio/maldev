@@ -300,6 +300,7 @@ func (m totpModel) View() string {
 	}
 	listInnerW := listBoxOuterW - BoxStyle.GetHorizontalFrameSize() + BoxStyle.GetHorizontalBorderSize()
 	title := titleBar(m.titleHints, titleLabel, []titleHint{
+		{Key: "↑↓", Label: " nav ", Cmd: func() tea.Cmd { return nil }},
 		{Key: "n", Label: " générer ", Cmd: keyCmd("n")},
 		{Key: "E", Label: " export QR PNG ", Cmd: keyCmd("E")},
 		{Key: "P", Label: " export PDF ", Cmd: keyCmd("P")},

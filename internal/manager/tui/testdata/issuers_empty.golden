@@ -7,13 +7,13 @@
 retraitées (retired).                                                                                                   
                                                                                                                         
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ Issuer keys Ed25519 (0)              [d]  détail ·  [n]  générer ·  [a]  activer ·  [E]  export .pub ·  [x]  retirer │
+│ Issuer keys Ed25519 (0)  [↑↓]  nav ·  [d]  détail ·  [n]  générer ·  [a]  activer ·  [E]  export .pub ·  [x]         │
+│ retirer                                                                                                              │
 │  ●   KEYID                 NAME                      STATUS      CREATED       #SIGNED                               │
 │                                                                                                                      │
 │                                                                                                                      │
 │                                     aucune clé d'émission — n pour créer la première                                 │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

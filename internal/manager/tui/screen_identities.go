@@ -198,6 +198,7 @@ func (m identitiesModel) View() string {
 	titleLabel := fmt.Sprintf("Identities (%d)", len(m.rows))
 	regenLabel := " régénérer " + GlowYellow.Render("⚠")
 	title := titleBar(m.titleHints, titleLabel, []titleHint{
+		{Key: "↑↓", Label: " nav ", Cmd: func() tea.Cmd { return nil }},
 		{Key: "n", Label: " créer ", Cmd: keyCmd("n")},
 		{Key: "E", Label: " export .bin ", Cmd: keyCmd("E")},
 		{Key: "R", Label: regenLabel, Cmd: keyCmd("R")},

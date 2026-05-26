@@ -7,16 +7,16 @@
 mais n'invalide pas les licences qui en dépendent.                                                                      
                                                                                                                         
 ┌────────────────────────────────────────────────────────┐  ┌──────────────────────────────────────────────────────────┐
-│ TOTP secrets (0)  [n]  générer ·  [E]  export QR PNG · │  │ QR code · aucune sélection                               │
-│ [P]  export PDF ·  [x]  supprimer ·  [r]  rafraîchir   │  │                                                          │
-│  LABEL                             ID                  │  │ crée un secret avec  [n]  ou sélectionne une ligne.      │
-│ CREATED       BOUND TO                                 │  └──────────────────────────────────────────────────────────┘
+│ TOTP secrets (0)  [↑↓]  nav ·  [n]  générer ·  [E]     │  │ QR code · aucune sélection                               │
+│ export QR PNG ·  [P]  export PDF ·  [x]  supprimer ·   │  │                                                          │
+│ [r]  rafraîchir                                        │  │ crée un secret avec  [n]  ou sélectionne une ligne.      │
+│  LABEL                             ID                  │  └──────────────────────────────────────────────────────────┘
+│ CREATED       BOUND TO                                 │                                                              
 │                                                        │                                                              
 │                                                        │                                                              
 │                                       aucun secret     │                                                              
 │ TOTP — n pour créer le premier                         │                                                              
 └────────────────────────────────────────────────────────┘                                                              
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

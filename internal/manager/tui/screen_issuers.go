@@ -266,6 +266,7 @@ func (m issuersModel) View() string {
 
 	titleLabel := fmt.Sprintf("Issuer keys Ed25519 (%d)", len(m.rows))
 	title := titleBar(m.titleHints, titleLabel, []titleHint{
+		{Key: "↑↓", Label: " nav ", Cmd: func() tea.Cmd { return nil }},
 		{Key: "d", Label: " détail ", Cmd: keyCmd("d")},
 		{Key: "n", Label: " générer ", Cmd: keyCmd("n")},
 		{Key: "a", Label: " activer ", Cmd: keyCmd("a")},

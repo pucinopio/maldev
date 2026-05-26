@@ -331,7 +331,7 @@ func (m auditModel) View() string {
 	// Use table row count (already filtered by rebuildTable) rather than
 	// calling visibleRows() again to avoid a second O(n) scan.
 	tableTitle := GlowCyan.Render(fmt.Sprintf("Audit (%d)", len(m.table.Rows()))) +
-		"  " + Dim.Render("[d] detail · [r] refresh · [pgup/pgdn] page")
+		"  " + Dim.Render("[↑↓] nav · [d] detail · [r] refresh · [pgup/pgdn] page")
 	tableBody := m.table.View()
 	if hint := emptyTableHint(len(m.table.Rows()), m.width, "aucun évènement — l'historique s'enrichit à chaque action"); hint != "" {
 		tableBody = lipgloss.JoinVertical(lipgloss.Left, tableBody, "", hint)

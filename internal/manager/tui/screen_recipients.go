@@ -163,6 +163,7 @@ func (m recipientsModel) View() string {
 
 	titleLabel := fmt.Sprintf("Recipient keys X25519 (%d)", len(m.rows))
 	title := titleBar(m.titleHints, titleLabel, []titleHint{
+		{Key: "↑↓", Label: " nav ", Cmd: func() tea.Cmd { return nil }},
 		{Key: "n", Label: " générer ", Cmd: keyCmd("n")},
 		{Key: "i", Label: " importer ", Cmd: keyCmd("i")},
 		{Key: "E", Label: " export .pub ", Cmd: keyCmd("E")},

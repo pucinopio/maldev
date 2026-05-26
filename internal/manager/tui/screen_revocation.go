@@ -169,6 +169,7 @@ func (m revocationModel) View() string {
 	// in full so a detail panel adds nothing. Both hints removed to match
 	// what's actually wired in Update().
 	title := titleBar(m.titleHints, titleLabel, []titleHint{
+		{Key: "↑↓", Label: " nav ", Cmd: func() tea.Cmd { return nil }},
 		{Key: "x", Label: " retirer ", Cmd: keyCmd("x")},
 		{Key: "E", Label: " export CRL ", Cmd: keyCmd("E")},
 		{Key: "r", Label: " rafraîchir", Cmd: keyCmd("r")},

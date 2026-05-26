@@ -6,7 +6,7 @@
             │  f all ││  l license ││  k key ││  s server ││  i identity ││  p probe │                                  
             └────────┘└────────────┘└────────┘└───────────┘└─────────────┘└──────────┘                                  
                                                                                                                         
-Audit (0)  [d] detail · [r] refresh · [pgup/pgdn] page                                                                  
+Audit (0)  [↑↓] nav · [d] detail · [r] refresh · [pgup/pgdn] page                                                       
  TIMESTAMP             KIND                  ACTOR           TARGET            NOTE                                     
                                                                                                                         
                                                                                                                         
