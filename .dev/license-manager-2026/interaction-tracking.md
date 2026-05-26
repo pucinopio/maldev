@@ -6,10 +6,67 @@ kb_verified: 124
 kb_total: 124
 ms_verified: 106
 ms_total: 106
-defects_open: 2
+defects_open: 10
 ---
 
-## Session 6 — fixes (2026-05-26)
+## Session 7 — operator third-pass manual test (2026-05-26)
+
+**Why the harness keeps missing these**: tui-verify's `ClickTarget` resolver
+renders the screen once, locates the target substring, computes the click
+coords from that snapshot, then injects the mouse event at the SAME coords.
+The handler hit-test typically uses identical layout math, so the spec
+PASSes — but the operator clicks at perceived positions which drift as the
+detail panel opens/closes, as the cursor row shifts the table cell layout,
+as the title-bar hints rewrap, etc.
+
+**Fix shipped this session**: a coordinate-stability invariant test per
+clickable area that asserts the hit-zone matches the rendered substring's
+exact span at multiple layout states (detail open vs closed, table cursor
+at row 0 vs row N, narrow vs wide window). Mismatch → spec fails.
+
+### Cross-cutting
+
+- [ ] **DS-T01** — arrow-up / arrow-down don't navigate in ANY table.
+      bubbles/table accepts these by default; something upstream
+      (rootModel? screen Update?) must be intercepting them. Audit the
+      key dispatch chain.
+- [ ] **DS-T02** — visual feedback still incomplete on some actions
+      (operator says re-issue confirmation closes silently, see DS-L04).
+
+### Licenses
+
+- [ ] **DS-L01** — detail-panel tab clicks ("Ident", "Bind", "PEM", "Audit",
+      "Chaîne") map to wrong indices; clicking elsewhere on the row sometimes
+      works "by accident". Click hit-zones likely use wrong Y offset or
+      tab labels' rendered widths don't match the hit-zone math.
+- [ ] **DS-L02** — filter chips ("all", "active", "expiring", "expired",
+      "revoked", "superseded") same symptom: click here goes there.
+- [ ] **DS-L03** — Chain tab content: implement REAL successor chain (no
+      more "Coming soon" or skeleton — read ReplacesID / find rows
+      where ReplacesID==this.ID, render walk-back + walk-forward).
+- [ ] **DS-L04** — `e` re-issue: popup opens, operator validates, the OK
+      overlay we added in C1 doesn't actually surface — the screen
+      handler for `ConfirmResultMsg{ID: OverlayIDLicenseReissue, Confirm: true}`
+      may not be wired in the screen, only the result-cmd is being
+      dropped by the dispatch chain.
+
+### Issuers
+
+- [ ] **DS-I01** — `d` détail still doesn't work for the operator. Probably
+      the table widget intercepts `d` before the screen-level case runs.
+- [ ] **DS-I02** — `a` activate flips the issuer in the table but the
+      Dashboard's "Clé d'émission active" card doesn't refresh. Same
+      pattern as D-S27 (server toggle) — need to fan an IssuersChangedMsg
+      that the dashboard listens for.
+- [ ] **DS-I03** — table needs a green-dot indicator column for the
+      active key (UX request, no existing test would catch it).
+- [ ] **DS-I04** — hint label mismatch: title bar shows `[x] retiré`
+      but the bottom status bar says `[x] retraité`. Pick one term and
+      apply everywhere.
+
+---
+
+
 
 ### Universal feedback pattern
 
