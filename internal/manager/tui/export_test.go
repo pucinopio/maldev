@@ -61,3 +61,34 @@ func UpdateServersModel(m serversModel, msg tea.Msg) (serversModel, tea.Cmd) {
 	}
 	return updated, cmd
 }
+
+// PushOverlayMsgForTest is the exported shape of pushOverlayMsg so black-box
+// tests can type-assert the message returned by screen Cmds.
+type PushOverlayMsgForTest struct{ Overlay Overlay }
+
+// AsPushOverlay converts a raw tea.Msg to PushOverlayMsgForTest if it is a
+// pushOverlayMsg, returning (msg, true) on success.
+func AsPushOverlay(msg tea.Msg) (PushOverlayMsgForTest, bool) {
+	if p, ok := msg.(pushOverlayMsg); ok {
+		return PushOverlayMsgForTest{Overlay: p.overlay}, true
+	}
+	return PushOverlayMsgForTest{}, false
+}
+
+// NewSelectOverlayForTest exposes newSelectOverlay for black-box tests.
+func NewSelectOverlayForTest(id, title string, options []SelectOption, initial string) Overlay {
+	return newSelectOverlay(id, title, options, initial)
+}
+
+// SelectOptionForTest re-exports SelectOption so tests can construct values
+// without importing the internal type via a type alias.
+type SelectOptionForTest = SelectOption
+
+// IPOptionsForTest exposes ipOptions for guard tests.
+func IPOptionsForTest() []SelectOption { return ipOptions() }
+
+// ServerTabWidthsForTest exposes the precomputed serverTabWidths array.
+func ServerTabWidthsForTest() [3]int { return serverTabWidths }
+
+// ServerRoleCacheForTest returns the serverRoleCache from a serversModel.
+func ServerRoleCacheForTest(m serversModel) [3]string { return m.serverRoleCache }

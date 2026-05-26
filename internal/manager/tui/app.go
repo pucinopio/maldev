@@ -739,6 +739,21 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 			}
 		}
 
+	case SelectResultMsg:
+		// "Autre…" sentinel: empty Value means the operator wants free-form input.
+		// Push an input overlay with the same ID so the existing handleServerEditBind
+		// path receives an InputResultMsg once the operator submits.
+		// Init() is stashed in pendingCmd because dispatchOverlayResult returns
+		// only rootModel; updateOverlay drains pendingCmd after the call.
+		if res.Value == "" && res.ID == OverlayIDServerEditBind {
+			ov := newInputOverlay(OverlayIDServerEditBind, "Bind address (saisie libre)", "127.0.0.1:8443", 64)
+			m.overlays = append(m.overlays, ov)
+			m.pendingCmd = ov.Init()
+			return m
+		}
+		// All other select results route through the same handlers as InputResultMsg.
+		return m.dispatchOverlayResult(InputResultMsg{ID: res.ID, Value: res.Value})
+
 	case InputResultMsg:
 		switch m.active {
 		case ViewIssuers:

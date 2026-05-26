@@ -1,14 +1,15 @@
 package tui
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"strings"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-
-	"context"
 
 	"github.com/NimbleMarkets/ntcharts/sparkline"
 
@@ -109,6 +110,32 @@ func serverAPIExamples(name, addr string) string {
 	return serverMeta["probe"].api(base)
 }
 
+// serverTabs is the single canonical tab definition used by both View() and
+// OnClick so the two sites cannot diverge. Each entry carries the sub-tab
+// discriminant, the server name, the keyboard shortcut key, and the display label.
+var serverTabs = [3]struct {
+	tab   serverSubTab
+	srv   string
+	key   string
+	label string
+}{
+	{serverTabRevocation, "revocation", "R", "Revocation"},
+	{serverTabHeartbeat, "heartbeat", "H", "Heartbeat"},
+	{serverTabProbe, "probe", "P", "Fingerprint probe"},
+}
+
+// serverTabWidths precomputes the pixel-width of each inactive tab cell so
+// OnClick's hot-path avoids calling lipgloss.Width on every mouse event.
+// Each cell is "[X] label ●" + Padding(0,1) = +2.
+var serverTabWidths = func() [3]int {
+	var w [3]int
+	for i, td := range serverTabs {
+		label := "[" + td.key + "] " + td.label + " ●"
+		w[i] = lipgloss.Width(label) + 2
+	}
+	return w
+}()
+
 // serversModel is the root model for the Servers screen (ViewServers).
 // It renders prototype sub-tabs (R/H/P) with a 2-column status+log layout.
 type serversModel struct {
@@ -118,14 +145,19 @@ type serversModel struct {
 	cards [3]*ServerCard
 	log   *serverLog
 
-	activeTab    serverSubTab   // R / H / P sub-tab
-	probeView    probeInnerView // Probe inner T / H / L view
+	activeTab    serverSubTab     // R / H / P sub-tab
+	probeView    probeInnerView   // Probe inner T / H / L view
 	probeTokens  []*ent.ProbeToken // populated when T view is active
 	probeHistory []*ent.ProbeToken // populated when H view is active
 
 	// adminTokens caches admin tokens by server name so the operator can
 	// retrieve them on demand with [t] after they were generated.
 	adminTokens map[string]string
+
+	// serverRoleCache holds the one-line French role description for each
+	// server, indexed by serverSubTab. Populated once in newServersModel so
+	// View() reads by index instead of calling serverDescriptionText on every frame.
+	serverRoleCache [3]string
 
 	// Per-server request-rate ring buffer (60 samples = 1 minute window).
 	// Each tick records the delta of Requests vs the previous tick.
@@ -138,6 +170,63 @@ type serversModel struct {
 
 var serverNames = [3]string{"revocation", "heartbeat", "probe"}
 
+// ipOptionsOnce caches the result of ipOptions across calls so repeated [e]
+// presses don't enumerate network interfaces on every keypress.
+var (
+	ipOptionsOnce  sync.Once
+	ipOptionsCached []SelectOption
+)
+
+// ipOptions returns the ordered list of bind-address choices for the select
+// overlay. Called at most once per process lifetime (interfaces don't change
+// without operator intervention). The list is:
+//   - 0.0.0.0  — all interfaces (default)
+//   - 127.0.0.1 — loopback only
+//   - each non-loopback, non-link-local IPv4/IPv6 unicast address from the host
+//   - "Autre…"  — falls through to a free-form input overlay
+func ipOptions() []SelectOption {
+	ipOptionsOnce.Do(func() {
+		opts := []SelectOption{
+			{Label: "0.0.0.0  — toutes les interfaces", Value: "0.0.0.0"},
+			{Label: "127.0.0.1 — loopback seulement", Value: "127.0.0.1"},
+		}
+		if addrs, err := net.InterfaceAddrs(); err == nil {
+			seen := map[string]bool{"0.0.0.0": true, "127.0.0.1": true, "::1": true}
+			for _, a := range addrs {
+				var ip net.IP
+				switch v := a.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+				}
+				if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+					continue
+				}
+				s := ip.String()
+				if seen[s] {
+					continue
+				}
+				seen[s] = true
+				opts = append(opts, SelectOption{Label: s, Value: s})
+			}
+		}
+		opts = append(opts, SelectOption{Label: "Autre… (saisie libre)", Value: ""})
+		ipOptionsCached = opts
+	})
+	return ipOptionsCached
+}
+
+// pushBindSelectCmd returns a tea.Cmd that opens the bind-address select overlay
+// for the given server name. If the operator picks "Autre…" (Value=="") the
+// overlay result routes back here and we push a fallback input overlay instead.
+func pushBindSelectCmd(name, currentAddr string) tea.Cmd {
+	return func() tea.Msg {
+		return pushOverlayMsg{newSelectOverlay(OverlayIDServerEditBind,
+			"Bind address · "+name, ipOptions(), currentAddr)}
+	}
+}
+
 func newServersModel(svc *service.Services, ctrl httpsrv.Controller) serversModel {
 	m := serversModel{
 		svc:         svc,
@@ -145,8 +234,9 @@ func newServersModel(svc *service.Services, ctrl httpsrv.Controller) serversMode
 		log:         newServerLog(),
 		adminTokens: make(map[string]string),
 	}
-	for i, name := range serverNames {
-		m.cards[i] = newServerCard(name)
+	for i, td := range serverTabs {
+		m.cards[i] = newServerCard(td.srv)
+		m.serverRoleCache[i] = serverDescriptionText(td.srv)
 	}
 	return m
 }
@@ -329,15 +419,11 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 					GlowMagent.Render(tok))}
 			}
 		case "e":
-			// Edit config: route to an input overlay that lets the operator
-			// change the bind address. Persisted via UpdateServerConfig once
-			// the result lands (handled in app.go).
+			// Edit config: open a select overlay listing known bind addresses.
+			// Operator can pick a host address or "Autre…" to free-type.
 			name := serverNames[m.activeTab]
-			return m, func() tea.Msg {
-				return pushOverlayMsg{newInputOverlay(OverlayIDServerEditBind,
-					"Edit "+name+" bind address",
-					"127.0.0.1:8443", 64)}
-			}
+			current := m.cards[m.activeTab].status.ListenAddr
+			return m, pushBindSelectCmd(name, current)
 		case "a":
 			// Auto-scroll toggle — flip the log's stick-to-bottom flag so the
 			// operator can pause / resume tail-follow without leaving the screen.
@@ -468,27 +554,15 @@ func (m serversModel) View() string {
 	}
 
 	// ── Sub-tab bar (R / H / P) ───────────────────────────────────────────
-	type tabDef struct {
-		key   string
-		id    serverSubTab
-		label string
-		cardI int
-	}
-	tabs := []tabDef{
-		{"R", serverTabRevocation, "Revocation", 0},
-		{"H", serverTabHeartbeat, "Heartbeat", 1},
-		{"P", serverTabProbe, "Fingerprint probe", 2},
-	}
-
 	var tabParts []string
-	for _, td := range tabs {
-		card := m.cards[td.cardI]
+	for i, td := range serverTabs {
+		card := m.cards[i]
 		running := card.status.Running
 		dot := Mute.Render("●")
 		if running {
 			dot = GlowGreen.Render("●")
 		}
-		active := m.activeTab == td.id
+		active := m.activeTab == td.tab
 		var tab string
 		if active {
 			tab = serverSubTabActive.Render(
@@ -561,14 +635,11 @@ func (m serversModel) View() string {
 		return "start"
 	}())
 	// one-line French role description shown at top of status box.
-	serverRole := Mute.Render(serverDescriptionText(serverNames[m.activeTab]))
+	// serverRoleCache is populated once in newServersModel — no per-frame lookup.
+	serverRole := Mute.Render(m.serverRoleCache[m.activeTab])
+	all := append([]string{GlowCyan.Render("Status") + "  " + hintStop, serverRole, ""}, statusLines...)
 	statusBox := BoxFocused.Width(m.width/2 - 3).Render(
-		lipgloss.JoinVertical(lipgloss.Left,
-			GlowCyan.Render("Status")+"  "+hintStop,
-			serverRole,
-			"",
-			lipgloss.JoinVertical(lipgloss.Left, statusLines...),
-		),
+		lipgloss.JoinVertical(lipgloss.Left, all...),
 	)
 
 	// ── Config box (left column bottom) ──────────────────────────────────
@@ -911,49 +982,13 @@ func serverCountLabel(statuses map[string]httpsrv.Status) string {
 // row 3=●/port line, row 4=stopped hint OR url, etc.
 func (m serversModel) OnClick(x, y, _ int) tea.Cmd {
 	// outer R/H/P sub-tab bar sits at Y=ChromeRows (row 4).
-	// Walk the rendered tab widths to find which tab was clicked.
+	// Walk the precomputed tab widths (serverTabWidths) to find which tab was clicked.
 	if y == ChromeRows {
-		type tabDef struct {
-			tab serverSubTab
-			srv string
-		}
-		tabs := []tabDef{
-			{serverTabRevocation, "revocation"},
-			{serverTabHeartbeat, "heartbeat"},
-			{serverTabProbe, "probe"},
-		}
-		// Reconstruct the visual widths of each tab cell by measuring the same
-		// strings rendered in View(). Active tab gets a bold underline border
-		// (NormalBorder bottom only) which changes the Padding; measure the
-		// inactive variant so the widths are consistent regardless of current state.
-		// The rendered tabs are joined horizontally; we walk them left-to-right.
 		cursor := 0
-		for _, td := range tabs {
-			// Inactive tab: Padding(0,1) + "[X] label ●" (no border adds height but not width).
-			label := "[" + func() string {
-				switch td.tab {
-				case serverTabRevocation:
-					return "R"
-				case serverTabHeartbeat:
-					return "H"
-				default:
-					return "P"
-				}
-			}() + "] " + func() string {
-				switch td.tab {
-				case serverTabRevocation:
-					return "Revocation"
-				case serverTabHeartbeat:
-					return "Heartbeat"
-				default:
-					return "Fingerprint probe"
-				}
-			}() + " ●"
-			// Padding(0,1) adds 2 chars (1 left + 1 right).
-			w := lipgloss.Width(label) + 2
+		for i, td := range serverTabs {
+			w := serverTabWidths[i]
 			if x >= cursor && x < cursor+w {
-				target := td.tab
-				srv := td.srv
+				target, srv := td.tab, td.srv
 				return func() tea.Msg {
 					return serverSubTabClickMsg{tab: target, srv: srv}
 				}
@@ -996,10 +1031,8 @@ func (m serversModel) OnClick(x, y, _ int) tea.Cmd {
 			return func() tea.Msg { return serverStartMsg{name: name} }
 		case "e":
 			name := serverNames[m.activeTab]
-			return func() tea.Msg {
-				return pushOverlayMsg{newInputOverlay(OverlayIDServerEditBind,
-					"Edit "+name+" bind address", "127.0.0.1:8443", 64)}
-			}
+			current := m.cards[m.activeTab].status.ListenAddr
+			return pushBindSelectCmd(name, current)
 		case "g":
 			name := serverNames[m.activeTab]
 			return func() tea.Msg {
@@ -1023,27 +1056,6 @@ func (m serversModel) OnClick(x, y, _ int) tea.Cmd {
 			return func() tea.Msg { return serverStopMsg{name: name} }
 		}
 		return func() tea.Msg { return serverStartMsg{name: name} }
-	}
-	if y != 4 {
-		return nil
-	}
-	labels := []struct {
-		label string
-		tab   serverSubTab
-		srv   string
-	}{
-		{"[R] Revocation ●", serverTabRevocation, "revocation"},
-		{"[H] Heartbeat ●", serverTabHeartbeat, "heartbeat"},
-		{"[P] Fingerprint probe ●", serverTabProbe, "probe"},
-	}
-	cursor := 0
-	for _, t := range labels {
-		w := lipgloss.Width(t.label) + 2 // 1 left + 1 right padding
-		if x >= cursor && x < cursor+w {
-			target, srv := t.tab, t.srv
-			return func() tea.Msg { return serverSubTabClickMsg{tab: target, srv: srv} }
-		}
-		cursor += w
 	}
 	return nil
 }
