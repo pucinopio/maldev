@@ -6,7 +6,61 @@ kb_verified: 124
 kb_total: 124
 ms_verified: 106
 ms_total: 106
+defects_open: 14
 ---
+
+## Session 4 — defect backlog from operator manual test (2026-05-26)
+
+Bindings that "PASS" via tui-verify (the KeyMsg reaches rootModel.Update)
+but the **downstream action doesn't actually happen**. The harness only
+asserts the message routes correctly; it doesn't check the post-state.
+These are the real-world defects to fix.
+
+### Licenses detail panel
+
+- [ ] **`d` toggle detail** — operator reports it doesn't work when
+      detail is already open. Investigate: table may consume 'd' or
+      panel doesn't re-render after toggle.
+- [ ] **`c` copy PEM (PEM tab)** — handler wired but operator reports
+      nothing happens. Probably copies wrong content or wrong moment.
+- [ ] **`e` (no handler)** — visible hint without code support.
+- [ ] **PEM tab `↑↓` scroll** — promised in hint, not wired.
+- [ ] **Audit tab `[r]` refresh** — promised, not wired (global `r`
+      refreshes dashboard, not this panel).
+- [ ] **Chain tab content** — explicit stub per code comment.
+
+### Revoke overlay
+
+- [ ] **Suggestion chip clicks map to wrong reason** — click handler
+      coords are wrong.
+
+### Issuers
+
+- [ ] **`E` export missing `.pub` extension** — append `.pub` when
+      operator omits it.
+- [ ] **`E` export silent on success** — push an OK overlay with the
+      written path.
+- [ ] **`d` détail** — operator reports broken.
+- [ ] **`e` éditer** — visible hint, no handler.
+- [ ] **Metadata layout erratic** — align to Licenses tabbed detail.
+- [ ] **ACTIVE pill border decalée** — single misaligned cell.
+
+### Why tui-verify missed these
+
+`ExpectMsgs: []string{"tea.KeyMsg"}` only proves the keystroke reaches
+`rootModel.Update`. It doesn't prove:
+- The screen's `case "x":` actually fires.
+- The action's side-effect happens (clipboard write, file write, panel
+  re-render).
+
+Fix: every screen-action spec gains a teatest-driven Live test that
+asserts the rendered output **after** the binding fires contains the
+expected substring (e.g. after `c` on PEM tab, a spy clipboard has the
+PEM; after `r` on audit tab, the listForTarget call fired and rows
+update).
+
+---
+
 
 # Interaction Tracking
 
