@@ -58,7 +58,7 @@ giving `Y=7-16=-9` after translation — also wrong.
 | D-S32 | ✓ fixed | `97e31d9` | `TestLive_ConfirmOverlay_OKButtonMouseDismisses` | Same abs Y=23 fix |
 | D-S33 | ✓ fixed | `97e31d9` | `TestLive_ConfirmOverlay_CancelButtonMouseDismisses` | Same abs Y=23 fix |
 | D-S34 | ✓ fixed | `be7ef75` | golden snapshot updated | `serverDescriptionText()` per server; rendered in status box |
-| D-S35 | ⚠ skipped | — | — | Requires custom select widget; architectural prerequisite |
+| D-S35 | ✓ fixed | `3dd34e9` | `TestLive_ServersEditBind_OpensSelectOverlay` | overlay_select.go + ipOptions() + SelectResultMsg routing |
 | D-S36 | ✓ fixed | `be7ef75` | — | `adminTokens` map + [T] key shows cached token on demand |
 | D-S37 | ✓ fixed | `be7ef75` | — | `serverAPIExamples()` + [i] key pushes curl examples overlay |
 | D-S38 | ✓ fixed | `be7ef75` | — | [q] QR renamed to [Q] in probe tokens hint bar |
@@ -67,11 +67,10 @@ giving `Y=7-16=-9` after translation — also wrong.
 | D-S41 | ✓ investigated | `600c1ea` | `TestTOTPQRFitsInMinDetailW` | Width(w) is outer box width, QR rendered naturally inside |
 | D-S42 | ✓ fixed | `14ee9be` | `TestEnsureExtension` | `ensureExtension(path, ".png")` in totp-export-png |
 | D-S43 | ✓ fixed | `600c1ea` | — | pgup/pgdn handlers in totpModel.Update |
-| D-S44 | ⚠ skipped | — | — | Requires gopdf/gofpdf dependency; architectural prerequisite |
+| D-S44 | ✓ fixed | `5bead56` | `TestExportTOTPPDF_WritesPDFFile` | totp_pdf.go + [P] key + gofpdf v1.16.2 |
 | D-S45 | ✓ fixed | `600c1ea` | — | boxApparence now shows [N][M][O] matching actual N/M/O key handlers |
 
-**Open defects**: 2 (D-S35 select widget, D-S44 PDF export — both require
-new dependencies or architectural work).
+**Open defects**: 0 — all session defects resolved.
 
 ### Commits
 
@@ -83,6 +82,8 @@ new dependencies or architectural work).
 | `600c1ea` | fix(tui): D-S39/D-S40/D-S41/D-S43/D-S45 — Servers/TOTP/Settings fixes |
 | `cdae5f6` | fix(tui): D-S28/D-S30 — recipients + identities edit key wired |
 | `c46cf5b` | refactor(tui): /simplify — remove dead rows var + unnecessary nil check |
+| `3dd34e9` | perf(tui): items 3+4 server_servers refactor + D-S35 IP select overlay |
+| `5bead56` | feat(tui): D-S44 — TOTP PDF export via [P] key + gofpdf |
 
 ### Universal feedback pattern summary
 
