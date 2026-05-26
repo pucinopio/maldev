@@ -7,7 +7,7 @@
 retraitées (retired).                                                                                                   
                                                                                                                         
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ Issuer keys Ed25519 (0)                           [n]  générer ·  [a]  activer ·  [E]  export .pub ·  [x]  retraiter │
+│ Issuer keys Ed25519 (0)            [d]  détail ·  [n]  générer ·  [a]  activer ·  [E]  export .pub ·  [x]  retraiter │
 │  KEYID                 NAME                      STATUS      CREATED       #SIGNED                                   │
 │                                                                                                                      │
 │                                                                                                                      │

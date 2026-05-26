@@ -9,6 +9,7 @@ import (
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -16,6 +17,10 @@ import (
 	"github.com/oioio-space/maldev/internal/manager/store/ent"
 	licenseent "github.com/oioio-space/maldev/internal/manager/store/ent/license"
 )
+
+// clipboardWriteAll is the clipboard write function. Tests swap it to spy on
+// what gets written without touching the real system clipboard.
+var clipboardWriteAll = func(s string) error { return clipboard.WriteAll(s) }
 
 // LicensesLoadedMsg carries the result of fetching all licenses.
 type LicensesLoadedMsg struct {
@@ -65,10 +70,13 @@ type licensesModel struct {
 	detailAuditErr     error             // surfaced in renderDetailAudit when the load fails
 	search             textinput.Model
 	table              table.Model
-	detail             bool
-	width              int
-	hgt                int
-	titleHints         *titleHintRow
+	// pemViewport scrolls the raw PEM text in the PEM detail tab.
+	// ↑/↓ are routed to it when detailTab == 2.
+	pemViewport viewport.Model
+	detail      bool
+	width       int
+	hgt         int
+	titleHints  *titleHintRow
 }
 
 func newLicensesModel(svc *service.Services) licensesModel {
@@ -94,7 +102,14 @@ func newLicensesModel(svc *service.Services) licensesModel {
 
 	// Default detail panel open (prototype shows it always-visible);
 	// the operator can collapse it with [d].
-	return licensesModel{svc: svc, table: t, search: ti, detail: true, titleHints: &titleHintRow{}}
+	return licensesModel{
+		svc:         svc,
+		table:       t,
+		search:      ti,
+		detail:      true,
+		titleHints:  &titleHintRow{},
+		pemViewport: viewport.New(80, 10),
+	}
 }
 
 // stretchLastColumn / emptyTableHint live in layout.go — shared by every
@@ -133,6 +148,7 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.hgt = msg.Height
+		m.pemViewport.Width = BoxedInner(msg.Width)
 		m.rebuildTable()
 		return m, nil
 
@@ -217,6 +233,10 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 			return m, nil
 		case "P":
 			m.detailTab = 2
+			if row := m.selectedRow(); row != nil {
+				m.pemViewport.SetContent(string(row.Pem))
+				m.pemViewport.GotoTop()
+			}
 			return m, nil
 		case "A":
 			m.detailTab = 3
@@ -244,10 +264,51 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 			if row == nil {
 				return m, nil
 			}
-			if err := clipboard.WriteAll(string(row.Pem)); err != nil {
+			if err := clipboardWriteAll(string(row.Pem)); err != nil {
 				return m, func() tea.Msg {
 					return pushOverlayMsg{newErrorOverlay("Clipboard Error", err.Error())}
 				}
+			}
+			return m, nil
+
+		case "e":
+			// Re-issue the selected licence: push a confirm overlay.
+			row := m.selectedRow()
+			if row == nil {
+				return m, nil
+			}
+			sub := fmt.Sprintf("Re-émettre la licence pour %q?\nUne nouvelle licence sera créée avec les mêmes bindings.", row.Subject)
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newConfirmOverlay("license-reissue", "Re-émettre la licence", sub, "re-émettre", "annuler", false)}
+			}
+
+		case "r":
+			// When the Audit detail tab is active, 'r' refreshes the audit list
+			// for the selected row rather than falling through to the global
+			// dashboard refresh that chrome.go handles.
+			if m.detail && m.detailTab == 3 {
+				row := m.selectedRow()
+				if row != nil {
+					m.detailAuditRows = nil
+					m.detailAuditLoading = true
+					return m, loadLicenseAuditCmd(m.svc, row)
+				}
+			}
+		}
+	}
+
+	// PEM tab arrow-key scroll: when detail is open on the PEM tab (2), up/down
+	// are intercepted here so the table below doesn't consume them as cursor moves.
+	if msg, ok := msg.(tea.KeyMsg); ok && m.detail && m.detailTab == 2 {
+		switch msg.Type {
+		case tea.KeyUp:
+			if m.pemViewport.Height > 0 {
+				m.pemViewport.LineUp(1)
+			}
+			return m, nil
+		case tea.KeyDown:
+			if m.pemViewport.Height > 0 {
+				m.pemViewport.LineDown(1)
 			}
 			return m, nil
 		}
@@ -673,15 +734,29 @@ func (m licensesModel) renderDetailBindings(row *ent.License) string {
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
-// renderDetailPEM displays the licence PEM text + a hint to copy.
+// renderDetailPEM displays the licence PEM text in a scrollable viewport.
+// ↑/↓ are routed to pemViewport by Update() when this tab is active.
 func (m licensesModel) renderDetailPEM(row *ent.License) string {
 	hint := HintKey.Render("[c]") + Dim.Render(" copier · ") +
 		HintKey.Render("↑↓") + Dim.Render(" scroll")
+	header := GlowCyan.Render("PEM signé") + "  " + hint
+
 	pem := string(row.Pem)
 	if pem == "" {
-		pem = Dim.Render("(PEM absent côté store — vérifie l'intégrité de la base ou re-émets la licence)")
+		return header + "\n" + Dim.Render("(PEM absent côté store — vérifie l'intégrité de la base ou re-émets la licence)")
 	}
-	return GlowCyan.Render("PEM signé") + "  " + hint + "\n" + Base.Render(pem)
+
+	// Keep the viewport content in sync with the selected row. The viewport is
+	// loaded on tab-open ('P' key) and here as a fallback for row switches.
+	if m.pemViewport.Height == 0 {
+		// Viewport not yet sized (e.g. no WindowSizeMsg received yet) — render plain.
+		return header + "\n" + Base.Render(pem)
+	}
+	// Re-set content if it has drifted (row selection changed while PEM tab open).
+	if m.pemViewport.TotalLineCount() == 0 {
+		m.pemViewport.SetContent(Base.Render(pem))
+	}
+	return header + "\n" + m.pemViewport.View()
 }
 
 // renderDetailAudit lists audit events for the selected licence. The list is

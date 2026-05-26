@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -13,6 +14,31 @@ import (
 	"github.com/oioio-space/maldev/internal/manager/service"
 	"github.com/oioio-space/maldev/internal/manager/store/ent"
 )
+
+// appendDotPubIfNeeded appends ".pub" to path when it does not already end
+// with that suffix (case-insensitive). This guards against the operator
+// omitting the extension when exporting an issuer public key.
+func appendDotPubIfNeeded(path string) string {
+	if strings.HasSuffix(strings.ToLower(path), ".pub") {
+		return path
+	}
+	return path + ".pub"
+}
+
+// issuerStatusInline renders a flat, one-line coloured status label for the
+// issuers detail panel. The bordered Pill* styles render on 3 rows which
+// breaks kvRow's single-line baseline — this helper matches the licStatusPill
+// pattern used by the Licenses screen.
+func issuerStatusInline(row *ent.Issuer) string {
+	switch {
+	case row.Active:
+		return GlowGreen.Render("● ACTIVE")
+	case row.RetiredAt != nil:
+		return GlowRed.Render("● RETIRED")
+	default:
+		return Mute.Render("● INACTIVE")
+	}
+}
 
 // IssuersLoadedMsg carries the result of fetching all issuers.
 type IssuersLoadedMsg struct {
@@ -115,6 +141,15 @@ func (m issuersModel) Update(msg tea.Msg) (issuersModel, tea.Cmd) {
 			}
 			return m, func() tea.Msg {
 				return pushOverlayMsg{newInputOverlay("issuer-export-pub", "Export Public Key", "/path/to/issuer.pub.pem", 256)}
+			}
+
+		case "e":
+			row := m.selectedRow()
+			if row == nil {
+				return m, nil
+			}
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newInputOverlay("issuer-rename", "Rename Issuer", row.Name, 64)}
 			}
 
 		case "K":
@@ -221,6 +256,7 @@ func (m issuersModel) View() string {
 
 	titleLabel := fmt.Sprintf("Issuer keys Ed25519 (%d)", len(m.rows))
 	title := titleBar(m.titleHints, titleLabel, []titleHint{
+		{Key: "d", Label: " détail ", Cmd: keyCmd("d")},
 		{Key: "n", Label: " générer ", Cmd: keyCmd("n")},
 		{Key: "a", Label: " activer ", Cmd: keyCmd("a")},
 		{Key: "E", Label: " export .pub ", Cmd: keyCmd("E")},
@@ -251,31 +287,26 @@ func (m issuersModel) View() string {
 func (m issuersModel) renderDetail() string {
 	row := m.selectedRow()
 	if row == nil {
-		return Dim.Render("  no selection")
+		hint := Dim.Render("aucune sélection — ") + HintKey.Render("[n]") + Dim.Render(" pour créer une clé")
+		return BoxStyle.Width(BoxedWidth(m.width)).Render(
+			lipgloss.JoinVertical(lipgloss.Left, Dim.Render("Détail issuer"), "", hint),
+		)
 	}
 
-	var statusPill string
-	switch {
-	case row.Active:
-		statusPill = PillActive.Render("ACTIVE")
-	case row.RetiredAt != nil:
-		statusPill = PillOff.Render("RETIRED")
-	default:
-		statusPill = PillOff.Render("INACTIVE")
-	}
+	const labelW = 10
 
-	// Left column: metadata KVs matching issuers.jsx expandedRowRender.
+	// Left column: canonical kvRow layout matching the Licenses identity tab.
 	colW := detailColW(m.width)
 	meta := lipgloss.JoinVertical(lipgloss.Left,
 		GlowCyan.Render("Métadonnées"),
-		kvRow("keyid", GlowCyan.Render(row.KeyID), 10),
-		kvRow("name", row.Name, 10),
-		kvRow("status", statusPill, 10),
-		kvRow("created", row.CreatedAt.Format("2006-01-02"), 10),
-		kvRow("db-id", row.ID.String(), 10),
+		kvRow("keyid", GlowCyan.Render(truncate(row.KeyID, colW-labelW)), labelW),
+		kvRow("name", truncate(row.Name, colW-labelW), labelW),
+		kvRow("status", issuerStatusInline(row), labelW),
+		kvRow("created", row.CreatedAt.Format("2006-01-02"), labelW),
+		kvRow("db-id", truncate(row.ID.String(), colW-labelW), labelW),
 	)
 
-	// Right column: actions matching issuers.jsx Actions section.
+	// Right column: action hints.
 	activeLabel := "désigner active"
 	if row.Active {
 		activeLabel = "déjà active (aucune action)"
@@ -283,9 +314,10 @@ func (m issuersModel) renderDetail() string {
 	actions := lipgloss.JoinVertical(lipgloss.Left,
 		GlowCyan.Render("Actions"),
 		HintKey.Render("[a]")+" "+Dim.Render(activeLabel),
+		HintKey.Render("[e]")+" "+Dim.Render("renommer"),
 		HintKey.Render("[E]")+" "+Dim.Render("exporter clé publique (.pub)"),
 		HintKey.Render("[K]")+" "+Dim.Render("exporter clé privée (.key) — confirmation"),
-		GlowRed.Render("[x]")+" "+Dim.Render("retirer (la clé reste vérifiable côté binaire)"),
+		GlowRed.Render("[x]")+" "+Dim.Render("retirer (clé reste vérifiable côté binaire)"),
 	)
 
 	colStyle := lipgloss.NewStyle().Width(colW)
@@ -321,7 +353,7 @@ func (m issuersModel) handleIssuerInputResult(res InputResultMsg) (issuersModel,
 			return m, nil
 		}
 		id := row.ID
-		path := res.Value
+		path := appendDotPubIfNeeded(res.Value)
 		return m, func() tea.Msg {
 			pem, err := m.svc.Issuer.ExportPublic(context.Background(), id)
 			if err != nil {
@@ -330,8 +362,18 @@ func (m issuersModel) handleIssuerInputResult(res InputResultMsg) (issuersModel,
 			if err := os.WriteFile(path, pem, 0o600); err != nil {
 				return pushOverlayMsg{newErrorOverlay("Write Error", err.Error())}
 			}
-			rows, err := m.svc.Issuer.List(context.Background())
-			return IssuersLoadedMsg{Rows: rows, Err: err}
+			return pushOverlayMsg{NewOKOverlay("Export OK", "Wrote "+path)}
+		}
+
+	case "issuer-rename":
+		if m.selectedRow() == nil || m.svc == nil {
+			return m, nil
+		}
+		// Rename is a stub until service.Issuer gains a Rename method.
+		// For now surface the new name in an OK overlay so the operator gets feedback.
+		newName := res.Value
+		return m, func() tea.Msg {
+			return pushOverlayMsg{NewOKOverlay("Rename", fmt.Sprintf("Renommé en %q (stub — service non implémenté).", newName))}
 		}
 	}
 	return m, nil

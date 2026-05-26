@@ -124,7 +124,14 @@ func (o *revokeOverlay) View() string {
 	// it would exceed the 56-cell room — in which case we split into rows
 	// using lipgloss.JoinHorizontal for proper multi-row layout).
 	const innerW = 56
-	const chipStartY = 11
+	// chipStartY is the overlay-relative Y of the first chip row.
+	// ModalDanger renders as border(1)+pad(1)+content+pad(1)+border(1) = content+4
+	// lines. lipgloss.Place(62, height, Center, Center, …) centers the modal
+	// vertically inside height=(18+len(rows)-1). For any len(rows), the modal is
+	// (12+len(rows)) lines tall and height is (18+len(rows)-1) = modal+2, so the
+	// vertical centering offset is always 1. chipStartY = placeOffset(1) +
+	// topBorder(1) + topPad(1) + contentLinesBefore(9) = 12.
+	const chipStartY = 12
 	const chipStartX = 3 // border(1) + padding(2)
 	o.chipRects = o.chipRects[:0]
 
