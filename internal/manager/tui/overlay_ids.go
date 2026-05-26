@@ -12,4 +12,15 @@ const (
 	OverlayIDServerEditBind  = "server-edit-bind"
 	OverlayIDAuditExportCSV  = "audit-export-csv"
 	OverlayIDAuditExportJSON = "audit-export-json"
+
+	OverlayIDLicenseReissue   = "license-reissue"
+	OverlayIDIssuerRename     = "issuer-rename"
+	OverlayIDIssuerExportPub  = "issuer-export-pub"
+	OverlayIDIssuerExportPriv = "issuer-export-priv"
+	OverlayIDIssuerRetire     = "issuer-retire"
+	OverlayIDRecipientRename  = "recipient-rename"
+	OverlayIDRecipientDelete  = "recipient-delete"
+	OverlayIDIdentityRename   = "identity-rename"
+	OverlayIDIdentityRegen    = "identity-regen"
+	OverlayIDIdentityDelete   = "identity-delete"
 )

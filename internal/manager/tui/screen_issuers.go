@@ -144,7 +144,7 @@ func (m issuersModel) Update(msg tea.Msg) (issuersModel, tea.Cmd) {
 				return m, nil
 			}
 			return m, func() tea.Msg {
-				return pushOverlayMsg{newInputOverlay("issuer-export-pub", "Export Public Key", "/path/to/issuer.pub.pem", 256)}
+				return pushOverlayMsg{newInputOverlay(OverlayIDIssuerExportPub, "Export Public Key", "/path/to/issuer.pub.pem", 256)}
 			}
 
 		case "e":
@@ -152,9 +152,7 @@ func (m issuersModel) Update(msg tea.Msg) (issuersModel, tea.Cmd) {
 			if row == nil {
 				return m, nil
 			}
-			return m, func() tea.Msg {
-				return pushOverlayMsg{newInputOverlay("issuer-rename", "Rename Issuer", row.Name, 64)}
-			}
+			return m, pushRenameOverlayCmd(OverlayIDIssuerRename, "Rename Issuer", row.Name, 64)
 
 		case "K":
 			row := m.selectedRow()
@@ -163,7 +161,7 @@ func (m issuersModel) Update(msg tea.Msg) (issuersModel, tea.Cmd) {
 			}
 			sub := fmt.Sprintf("Export private key for %q?\nThis reveals the signing key — store securely.", row.Name)
 			return m, func() tea.Msg {
-				return pushOverlayMsg{newConfirmOverlay("issuer-export-priv", "Export Private Key", sub, "export", "cancel", true)}
+				return pushOverlayMsg{newConfirmOverlay(OverlayIDIssuerExportPriv, "Export Private Key", sub, "export", "cancel", true)}
 			}
 
 		case "x":
@@ -173,7 +171,7 @@ func (m issuersModel) Update(msg tea.Msg) (issuersModel, tea.Cmd) {
 			}
 			sub := fmt.Sprintf("Retire issuer %q?\nIt will no longer be usable for new licences.", row.Name)
 			return m, func() tea.Msg {
-				return pushOverlayMsg{newConfirmOverlay("issuer-retire", "Retire Issuer", sub, "retire", "cancel", true)}
+				return pushOverlayMsg{newConfirmOverlay(OverlayIDIssuerRetire, "Retire Issuer", sub, "retire", "cancel", true)}
 			}
 
 		case "r":
@@ -351,7 +349,7 @@ func (m issuersModel) handleIssuerInputResult(res InputResultMsg) (issuersModel,
 			return IssuersLoadedMsg{Rows: rows, Err: err}
 		}
 
-	case "issuer-export-pub":
+	case OverlayIDIssuerExportPub:
 		row := m.selectedRow()
 		if row == nil || m.svc == nil {
 			return m, nil
@@ -369,16 +367,11 @@ func (m issuersModel) handleIssuerInputResult(res InputResultMsg) (issuersModel,
 			return pushOverlayMsg{NewOKOverlay("Export OK", "Wrote "+path)}
 		}
 
-	case "issuer-rename":
+	case OverlayIDIssuerRename:
 		if m.selectedRow() == nil || m.svc == nil {
 			return m, nil
 		}
-		// Rename is a stub until service.Issuer gains a Rename method.
-		// For now surface the new name in an OK overlay so the operator gets feedback.
-		newName := res.Value
-		return m, func() tea.Msg {
-			return pushOverlayMsg{NewOKOverlay("Rename", fmt.Sprintf("Renommé en %q (stub — service non implémenté).", newName))}
-		}
+		return m, stubRenameResultCmd(res.Value)
 	}
 	return m, nil
 }

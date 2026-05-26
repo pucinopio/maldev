@@ -279,7 +279,7 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 			}
 			sub := fmt.Sprintf("Re-émettre la licence pour %q?\nUne nouvelle licence sera créée avec les mêmes bindings.", row.Subject)
 			return m, func() tea.Msg {
-				return pushOverlayMsg{newConfirmOverlay("license-reissue", "Re-émettre la licence", sub, "re-émettre", "annuler", false)}
+				return pushOverlayMsg{newConfirmOverlay(OverlayIDLicenseReissue, "Re-émettre la licence", sub, "re-émettre", "annuler", false)}
 			}
 
 		case "r":

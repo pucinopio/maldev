@@ -93,9 +93,7 @@ func (m recipientsModel) Update(msg tea.Msg) (recipientsModel, tea.Cmd) {
 			if row == nil {
 				return m, nil
 			}
-			return m, func() tea.Msg {
-				return pushOverlayMsg{newInputOverlay("recipient-rename", "Rename Recipient", row.Name, 80)}
-			}
+			return m, pushRenameOverlayCmd(OverlayIDRecipientRename, "Rename Recipient", row.Name, 80)
 
 		case "E":
 			row := m.selectedRow()
@@ -113,7 +111,7 @@ func (m recipientsModel) Update(msg tea.Msg) (recipientsModel, tea.Cmd) {
 			}
 			sub := fmt.Sprintf("Delete recipient key %q?\nThis cannot be undone.", row.Name)
 			return m, func() tea.Msg {
-				return pushOverlayMsg{newConfirmOverlay("recipient-delete", "Delete Recipient", sub, "delete", "cancel", true)}
+				return pushOverlayMsg{newConfirmOverlay(OverlayIDRecipientDelete, "Delete Recipient", sub, "delete", "cancel", true)}
 			}
 
 		case "r":
@@ -230,12 +228,9 @@ func (m recipientsModel) renderDetail() string {
 // handleRecipientInputResult processes overlay results for the recipients screen.
 func (m recipientsModel) handleRecipientInputResult(res InputResultMsg) (recipientsModel, tea.Cmd) {
 	switch res.ID {
-	case "recipient-rename":
-		// D-S28: stub rename — Recipient service doesn't expose Rename yet.
-		newName := res.Value
-		return m, func() tea.Msg {
-			return pushOverlayMsg{NewOKOverlay("Rename", fmt.Sprintf("Renommé en %q (stub — service non implémenté).", newName))}
-		}
+	case OverlayIDRecipientRename:
+		// Stub rename — Recipient service doesn't expose Rename yet.
+		return m, stubRenameResultCmd(res.Value)
 
 	case "recipient-name":
 		if m.svc == nil {
@@ -275,7 +270,7 @@ func (m recipientsModel) handleRecipientInputResult(res InputResultMsg) (recipie
 
 // handleRecipientConfirmResult processes confirm overlay results.
 func (m recipientsModel) handleRecipientConfirmResult(res ConfirmResultMsg) (recipientsModel, tea.Cmd) {
-	if res.ID == "recipient-delete" && res.Confirm {
+	if res.ID == OverlayIDRecipientDelete && res.Confirm {
 		row := m.selectedRow()
 		if row == nil || m.svc == nil {
 			return m, nil

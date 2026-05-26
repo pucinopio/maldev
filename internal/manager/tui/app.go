@@ -689,9 +689,9 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 	case ConfirmResultMsg:
 		switch m.active {
 		case ViewLicenses:
-			// Re-issue (D-S16): the confirm overlay for "license-reissue" was pushed
+			// Re-issue (D-S16): the confirm overlay for OverlayIDLicenseReissue was pushed
 			// by the 'e' key but its result was never routed back to the screen.
-			if res.ID == "license-reissue" && res.Confirm {
+			if res.ID == OverlayIDLicenseReissue && res.Confirm {
 				updated, c := m.licenses.handleLicenseReissueConfirm(res)
 				m.licenses = updated
 				m.pendingCmd = c

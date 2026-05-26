@@ -93,9 +93,7 @@ func (m identitiesModel) Update(msg tea.Msg) (identitiesModel, tea.Cmd) {
 			if row == nil {
 				return m, nil
 			}
-			return m, func() tea.Msg {
-				return pushOverlayMsg{newInputOverlay("identity-rename", "Rename Identity", row.Name, 80)}
-			}
+			return m, pushRenameOverlayCmd(OverlayIDIdentityRename, "Rename Identity", row.Name, 80)
 
 		case "E":
 			row := m.selectedRow()
@@ -119,7 +117,7 @@ func (m identitiesModel) Update(msg tea.Msg) (identitiesModel, tea.Cmd) {
 				body = fmt.Sprintf("Regenerate identity %q?\nNo licences currently reference it.", row.Name)
 			}
 			return m, func() tea.Msg {
-				return pushOverlayMsg{newConfirmOverlay("identity-regen", "Regenerate Identity", body, "regenerate", "cancel", true)}
+				return pushOverlayMsg{newConfirmOverlay(OverlayIDIdentityRegen, "Regenerate Identity", body, "regenerate", "cancel", true)}
 			}
 
 		case "x":
@@ -134,7 +132,7 @@ func (m identitiesModel) Update(msg tea.Msg) (identitiesModel, tea.Cmd) {
 			}
 			sub := fmt.Sprintf("Delete identity %q?\nThis cannot be undone.", row.Name)
 			return m, func() tea.Msg {
-				return pushOverlayMsg{newConfirmOverlay("identity-delete", "Delete Identity", sub, "delete", "cancel", true)}
+				return pushOverlayMsg{newConfirmOverlay(OverlayIDIdentityDelete, "Delete Identity", sub, "delete", "cancel", true)}
 			}
 
 		case "r":
@@ -272,12 +270,9 @@ func (m identitiesModel) renderDetail() string {
 // handleIdentityInputResult processes overlay results for the identities screen.
 func (m identitiesModel) handleIdentityInputResult(res InputResultMsg) (identitiesModel, tea.Cmd) {
 	switch res.ID {
-	case "identity-rename":
-		// D-S30: stub rename — Identity service doesn't expose Rename yet.
-		newName := res.Value
-		return m, func() tea.Msg {
-			return pushOverlayMsg{NewOKOverlay("Rename", fmt.Sprintf("Renommé en %q (stub — service non implémenté).", newName))}
-		}
+	case OverlayIDIdentityRename:
+		// Stub rename — Identity service doesn't expose Rename yet.
+		return m, stubRenameResultCmd(res.Value)
 
 	case "identity-name":
 		if m.svc == nil {
@@ -318,7 +313,7 @@ func (m identitiesModel) handleIdentityInputResult(res InputResultMsg) (identiti
 // handleIdentityConfirmResult processes confirm overlay results.
 func (m identitiesModel) handleIdentityConfirmResult(res ConfirmResultMsg) (identitiesModel, tea.Cmd) {
 	switch res.ID {
-	case "identity-regen":
+	case OverlayIDIdentityRegen:
 		if !res.Confirm || m.svc == nil {
 			return m, nil
 		}
@@ -336,7 +331,7 @@ func (m identitiesModel) handleIdentityConfirmResult(res ConfirmResultMsg) (iden
 			return IdentitiesLoadedMsg{Rows: rows, Err: err}
 		}
 
-	case "identity-delete":
+	case OverlayIDIdentityDelete:
 		if !res.Confirm || m.svc == nil {
 			return m, nil
 		}
