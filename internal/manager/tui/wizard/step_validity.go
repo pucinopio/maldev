@@ -76,12 +76,16 @@ func (s *StepValidity) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 
 		// Duration shortcuts — ctrl-prefixed so they don't collide with digit
 		// entry inside the YYYY-MM-DD textinput. Always apply to the end date
-		// regardless of which field has focus, and blur the input so the new
-		// value is visible immediately.
+		// regardless of which field has focus.
+		// NOTE: ctrl+m is NOT usable — in POSIX terminals ctrl+m == \r == Enter
+		// (keyCR), so bubbletea's keyNames maps it to "enter" and the "enter"
+		// case above fires first (D-S20). Remapped to ctrl+d to avoid the
+		// collision. ctrl+d = keyEOT = "ctrl+d" in bubbletea's keyNames.
 		case "ctrl+w":
 			s.applyShortcut(7 * 24 * time.Hour)
 			return s, nil
-		case "ctrl+m":
+		case "ctrl+d":
+			// ctrl+d = +30 days (was ctrl+m which is identical to Enter).
 			s.applyShortcut(30 * 24 * time.Hour)
 			return s, nil
 		case "ctrl+y":
@@ -99,7 +103,7 @@ func (s *StepValidity) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 
 // OnClick maps clicks on the "shortcuts: ..." line to the preset they
 // describe. body-local coords; header(3) + 6 body lines → shortcuts row Y=9.
-// The line reads: "  shortcuts: ctrl+w +7d   ctrl+m +30d   ctrl+y +1y   ctrl+f forever".
+// The line reads: "  shortcuts: ctrl+w +7d   ctrl+d +30d   ctrl+y +1y   ctrl+f forever".
 func (s *StepValidity) OnClick(x, y int) tea.Cmd {
 	const shortcutsY = 9
 	if y != shortcutsY {
@@ -188,7 +192,7 @@ func (s *StepValidity) View() string {
 		endLabel,
 		"  " + s.endIn.View(),
 		"",
-		wizDim.Render("  shortcuts: ctrl+w +7d   ctrl+m +30d   ctrl+y +1y   ctrl+f forever"),
+		wizDim.Render("  shortcuts: ctrl+w +7d   ctrl+d +30d   ctrl+y +1y   ctrl+f forever"),
 		wizDim.Render("  tab switch field   enter confirm"),
 	}
 	if s.errMsg != "" {

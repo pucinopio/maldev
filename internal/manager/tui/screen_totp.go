@@ -339,7 +339,8 @@ func (m totpModel) handleTOTPInputResult(res InputResultMsg) (totpModel, tea.Cmd
 		if m.view == nil || m.view.QRImagePNG == nil {
 			return m, nil
 		}
-		path := res.Value
+		// Auto-append .png when the operator omits the extension (D-S42).
+		path := ensureExtension(res.Value, ".png")
 		png := m.view.QRImagePNG
 		return m, func() tea.Msg {
 			err := os.WriteFile(path, png, 0o600)

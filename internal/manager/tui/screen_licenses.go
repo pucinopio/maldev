@@ -833,6 +833,37 @@ func (m licensesModel) renderDetailChain(row *ent.License) string {
 	return strings.Join(lines, "\n")
 }
 
+// handleLicenseReissueConfirm is called when the operator confirms the
+// "license-reissue" overlay (D-S16). It calls svc.License.ReIssue and reloads
+// the list, surfacing an OK overlay on success or an error overlay on failure.
+func (m licensesModel) handleLicenseReissueConfirm(res ConfirmResultMsg) (licensesModel, tea.Cmd) {
+	if !res.Confirm {
+		return m, nil
+	}
+	row := m.selectedRow()
+	if row == nil || m.svc == nil {
+		return m, func() tea.Msg {
+			return pushOverlayMsg{NewOKOverlay("Re-émettre", "Re-émission (stub — aucun service ou aucune sélection).")}
+		}
+	}
+	svc := m.svc
+	oldID := row.ID
+	subject := row.Subject
+	return m, func() tea.Msg {
+		newLic, err := svc.License.ReIssue(context.Background(), oldID, service.ReIssueOptions{Actor: "operator"})
+		if err != nil {
+			return pushOverlayMsg{newErrorOverlay("Re-émission échouée", err.Error())}
+		}
+		rows, loadErr := svc.License.List(context.Background(), service.ListFilter{Limit: 500})
+		if loadErr != nil {
+			return LicensesLoadedMsg{Err: loadErr}
+		}
+		_ = subject
+		_ = newLic // QR overlay for the re-issued licence shown in a future commit.
+		return LicensesLoadedMsg{Rows: rows}
+	}
+}
+
 func (m licensesModel) handleRevokeResult(res RevokeConfirmedMsg) (licensesModel, tea.Cmd) {
 	if m.svc == nil {
 		return m, nil

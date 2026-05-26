@@ -15,15 +15,23 @@ import (
 	"github.com/oioio-space/maldev/internal/manager/store/ent"
 )
 
-// appendDotPubIfNeeded appends ".pub" to path when it does not already end
-// with that suffix (case-insensitive). This guards against the operator
-// omitting the extension when exporting an issuer public key.
-func appendDotPubIfNeeded(path string) string {
-	if strings.HasSuffix(strings.ToLower(path), ".pub") {
+// ensureExtension appends ext to path when the path does not already end with
+// that suffix (case-insensitive). It is the single helper shared by all
+// file-export paths that auto-append a file extension (D-S23, D-S31, D-S42).
+//
+//	ensureExtension("/tmp/key",          ".pub") → "/tmp/key.pub"
+//	ensureExtension("/tmp/key.pub",      ".pub") → "/tmp/key.pub"   (no-op)
+//	ensureExtension("/tmp/key.pub.pem",  ".pub") → "/tmp/key.pub.pem.pub"
+func ensureExtension(path, ext string) string {
+	if strings.HasSuffix(strings.ToLower(path), strings.ToLower(ext)) {
 		return path
 	}
-	return path + ".pub"
+	return path + ext
 }
+
+// appendDotPubIfNeeded is the backwards-compat alias kept for existing callers
+// and test assertions. New code should use ensureExtension directly.
+func appendDotPubIfNeeded(path string) string { return ensureExtension(path, ".pub") }
 
 // issuerStatusInline renders a flat, one-line coloured status label for the
 // issuers detail panel. The bordered Pill* styles render on 3 rows which

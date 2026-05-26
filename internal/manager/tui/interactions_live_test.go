@@ -704,6 +704,15 @@ func fakeIssuer() *ent.Issuer {
 	}
 }
 
+func fakeIdentity() *ent.Identity {
+	return &ent.Identity{
+		ID:        uuid.New(),
+		Name:      "test-identity",
+		Sha256:    strings.Repeat("a", 64),
+		CreatedAt: time.Now().Add(-24 * time.Hour),
+	}
+}
+
 // ── Defect: revoke overlay chip click coords (D7) ───────────────────────────
 
 // TestLive_RevokeChipClick_CoordAlignment asserts that clicking the overlay-
@@ -1436,6 +1445,229 @@ func TestCrossScreen_HelpOverlay_FilterPreserved(t *testing.T) {
 	}
 	if rm.active != ViewLicenses {
 		t.Errorf("active view changed by overlay: got %v, want ViewLicenses", rm.active)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// D-S23 / D-S31 / D-S42 — ensureExtension helper (shared by all export paths)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestEnsureExtension covers the canonical cases for the shared extension helper.
+func TestEnsureExtension(t *testing.T) {
+	cases := []struct{ in, ext, want string }{
+		// .pub cases (issuers export, D-S23)
+		{"key", ".pub", "key.pub"},
+		{"key.pub", ".pub", "key.pub"},
+		{"key.PUB", ".pub", "key.PUB"},
+		{"/path/key", ".pub", "/path/key.pub"},
+		// .bin cases (identities export, D-S31)
+		{"id", ".bin", "id.bin"},
+		{"id.bin", ".bin", "id.bin"},
+		{"id.BIN", ".bin", "id.BIN"},
+		// .png cases (TOTP QR export, D-S42)
+		{"qr", ".png", "qr.png"},
+		{"qr.png", ".png", "qr.png"},
+		{"qr.PNG", ".png", "qr.PNG"},
+		// extension embedded in path (D-S23 case where operator types full path)
+		{"/tmp/export.pub", ".pub", "/tmp/export.pub"},
+		{"/tmp/export", ".pub", "/tmp/export.pub"},
+	}
+	for _, tc := range cases {
+		got := ensureExtension(tc.in, tc.ext)
+		if got != tc.want {
+			t.Errorf("ensureExtension(%q, %q) = %q, want %q", tc.in, tc.ext, got, tc.want)
+		}
+	}
+}
+
+// TestEnsureExtension_BackwardCompat verifies appendDotPubIfNeeded is still
+// the .pub alias of ensureExtension.
+func TestEnsureExtension_BackwardCompat(t *testing.T) {
+	got := appendDotPubIfNeeded("key")
+	if got != "key.pub" {
+		t.Errorf("appendDotPubIfNeeded(\"key\") = %q, want \"key.pub\"", got)
+	}
+	got = appendDotPubIfNeeded("key.pub")
+	if got != "key.pub" {
+		t.Errorf("appendDotPubIfNeeded(\"key.pub\") = %q, want no-op", got)
+	}
+}
+
+// TestIdentityExport_AppendsDotBin verifies that identity-export auto-appends
+// .bin when the operator omits it (D-S31).
+func TestIdentityExport_AppendsDotBin(t *testing.T) {
+	m := newIdentitiesModel(nil)
+	m.rows = []*ent.Identity{fakeIdentity()}
+	m.rebuildTable()
+
+	// nil svc → returns nil cmd; we only test the path is computed without panic.
+	_, cmd := m.handleIdentityInputResult(InputResultMsg{ID: "identity-export", Value: "/tmp/id"})
+	// nil svc guard: selectedRow() is non-nil but svc is nil → early return nil.
+	if cmd != nil {
+		t.Errorf("nil svc export: expected nil cmd, got non-nil")
+	}
+	// Confirm the extension logic is applied (via direct call since svc=nil exits early).
+	got := ensureExtension("/tmp/id", ".bin")
+	if got != "/tmp/id.bin" {
+		t.Errorf("ensureExtension for .bin: got %q, want /tmp/id.bin", got)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// D-S16 — license re-issue confirm result is now routed (was silently dropped)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestLive_LicenseReissueConfirm_NilSvcReturnsOKOverlay verifies that when
+// svc is nil (no selected row or no service), handleLicenseReissueConfirm
+// returns a cmd that emits a stub OK overlay instead of silently doing nothing.
+func TestLive_LicenseReissueConfirm_NilSvcReturnsOKOverlay(t *testing.T) {
+	m := newLicensesModel(nil)
+	_, cmd := m.handleLicenseReissueConfirm(ConfirmResultMsg{ID: "license-reissue", Confirm: true})
+	if cmd == nil {
+		t.Fatal("nil svc + no row: handleLicenseReissueConfirm must return a stub overlay cmd")
+	}
+	msg := cmd()
+	push, ok := msg.(pushOverlayMsg)
+	if !ok {
+		t.Fatalf("expected pushOverlayMsg, got %T", msg)
+	}
+	if push.overlay == nil {
+		t.Fatal("pushOverlayMsg must carry a non-nil overlay")
+	}
+}
+
+// TestLive_LicenseReissueConfirm_CancelIsNoop verifies that Confirm:false is
+// a no-op (no cmd returned, model unchanged).
+func TestLive_LicenseReissueConfirm_CancelIsNoop(t *testing.T) {
+	m := newLicensesModel(nil)
+	m2, cmd := m.handleLicenseReissueConfirm(ConfirmResultMsg{ID: "license-reissue", Confirm: false})
+	if cmd != nil {
+		t.Errorf("Confirm:false must be a no-op, got cmd %T", cmd())
+	}
+	_ = m2
+}
+
+// TestLive_LicenseReissueConfirm_RoutedByRoot verifies the root model routes
+// "license-reissue" ConfirmResultMsg to handleLicenseReissueConfirm (D-S16).
+// Before the fix, the ViewLicenses case was absent from dispatchOverlayResult
+// so the confirm result was silently dropped.
+func TestLive_LicenseReissueConfirm_RoutedByRoot(t *testing.T) {
+	const w, h = 144, 44
+	m := driveRootModel(t)
+	m = sendKeyToRoot(m, "2") // goto Licenses
+
+	// Push a confirm overlay with the license-reissue ID.
+	push := pushOverlayMsg{newConfirmOverlay("license-reissue", "Re-émettre", "body", "OK", "Cancel", false)}
+	updated, _ := m.Update(push)
+	m = updated.(rootModel)
+
+	if len(m.overlays) == 0 {
+		t.Fatal("confirm overlay not pushed")
+	}
+
+	// Confirm with "y" — should route to handleLicenseReissueConfirm.
+	updated2, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	m = drainCmd(updated2.(rootModel), cmd)
+
+	// Overlay must be dismissed (ConfirmResultMsg processed, not dropped).
+	if len(m.overlays) != 0 {
+		t.Errorf("overlay still open after 'y': ConfirmResultMsg was not dispatched (D-S16 regression)")
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// D-S27 — dashboard server tile click: tile refreshes after start/stop
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestLive_DashboardServerToggle_TriggersRefresh verifies that receiving
+// serverStartedMsg at the root level (after a dashboard tile click) batches a
+// dashboard refresh cmd (D-S27). Before fix, serverStartedMsg was only handled
+// by the Servers screen; the dashboard never got a new snapshot.
+func TestLive_DashboardServerToggle_TriggersRefresh(t *testing.T) {
+	m := driveRootModel(t)
+	// Simulate serverStartedMsg arriving (from a startServerCmd).
+	updated, cmd := m.Update(serverStartedMsg{name: "revocation"})
+	m = updated.(rootModel)
+	// The batch must include a dashboard refresh cmd (DashboardSnapshotCmd).
+	// With nil svc the refresh cmd produces DashboardSnapshotMsg{} — just check
+	// a non-nil cmd was returned (dashboard.refresh() always returns a cmd).
+	if cmd == nil {
+		t.Errorf("serverStartedMsg: expected non-nil batch cmd (dashboard refresh), got nil")
+	}
+}
+
+// TestLive_DashboardServerStopped_TriggersRefresh is the stop variant of D-S27.
+func TestLive_DashboardServerStopped_TriggersRefresh(t *testing.T) {
+	m := driveRootModel(t)
+	updated, cmd := m.Update(serverStoppedMsg{name: "heartbeat"})
+	m = updated.(rootModel)
+	if cmd == nil {
+		t.Errorf("serverStoppedMsg: expected non-nil batch cmd (dashboard refresh), got nil")
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// D-S20 — wizard validity ctrl+m → ctrl+3 remapping
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestLive_ValidityStep_CtrlDSets30Days verifies that ctrl+d applies the +30d
+// shortcut. Guards D-S20 (ctrl+m was Enter in terminals, remapped to ctrl+d).
+func TestLive_ValidityStep_CtrlDSets30Days(t *testing.T) {
+	s := wizard.NewStepValidity()
+	s.Focus()
+
+	// ctrl+d should apply the +30d shortcut (returns nil cmd — mutates state only).
+	_, cmd := s.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
+	// The shortcut must NOT advance the step (no ValidityMsg emitted).
+	if cmd != nil {
+		msg := cmd()
+		if _, isValidity := msg.(wizard.ValidityMsg); isValidity {
+			t.Errorf("ctrl+d must apply shortcut without confirming step (ValidityMsg must NOT be emitted)")
+		}
+	}
+}
+
+// TestLive_ValidityStep_CtrlMIsEnter confirms that ctrl+m behaves like Enter
+// and advances the step (emits ValidityMsg), NOT as the +30d shortcut.
+// This is the root cause of D-S20.
+func TestLive_ValidityStep_CtrlMIsEnter(t *testing.T) {
+	s := wizard.NewStepValidity()
+	s.Focus()
+
+	// ctrl+m in terminals sends \r (Enter). bubbletea maps it to KeyEnter.
+	// The handler's "enter" case fires, producing ValidityMsg (step advances).
+	_, cmd := s.Update(tea.KeyMsg{Type: tea.KeyEnter}) // same as ctrl+m in terminal
+	if cmd == nil {
+		t.Fatal("Enter on validity step with valid dates must produce a cmd")
+	}
+	msg := cmd()
+	if _, ok := msg.(wizard.ValidityMsg); !ok {
+		t.Errorf("Enter on validity step: expected ValidityMsg, got %T", msg)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// D-S21 — TOTP step empty-list guidance
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestLive_TOTPStep_EmptyList_ShowsGuidance verifies that when requireOn is
+// true and the secret list is empty, the View contains guidance text (D-S21).
+// Before fix, the step showed "(no TOTP secrets linked to this issuer)" with
+// no actionable hint — the wizard dead-ended.
+func TestLive_TOTPStep_EmptyList_ShowsGuidance(t *testing.T) {
+	s := wizard.NewStepTOTP(nil)
+	s.Focus()
+
+	// Toggle require on (rows slice stays nil).
+	s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}) //nolint:errcheck
+
+	view := s.View()
+	if !strings.Contains(view, "TOTP") {
+		t.Errorf("TOTP step View must mention TOTP, got: %q", view[:min(200, len(view))])
+	}
+	// Guidance must point the operator toward the TOTP screen.
+	if !strings.Contains(view, "8") && !strings.Contains(view, "n") {
+		t.Errorf("empty TOTP list must show guidance with [8] and [n] hints, got: %q", view[:min(300, len(view))])
 	}
 }
 

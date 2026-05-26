@@ -311,6 +311,14 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, startServerCmd(m.httpsrv, msg.name)
 
+	case serverStartedMsg, serverStoppedMsg:
+		// D-S27: forward lifecycle events to the Servers screen so cards + log
+		// reflect the transition, then refresh the dashboard so the ON/OFF tile
+		// updates without requiring the operator to navigate away and back.
+		updated, cmd := m.servers.Update(msg)
+		m.servers = updated
+		return m, tea.Batch(cmd, m.dashboard.refresh())
+
 	case SwitchToLicensesMsg:
 		m.active = ViewLicenses
 		filterMap := map[string]licenseFilter{
@@ -680,6 +688,14 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 
 	case ConfirmResultMsg:
 		switch m.active {
+		case ViewLicenses:
+			// Re-issue (D-S16): the confirm overlay for "license-reissue" was pushed
+			// by the 'e' key but its result was never routed back to the screen.
+			if res.ID == "license-reissue" && res.Confirm {
+				updated, c := m.licenses.handleLicenseReissueConfirm(res)
+				m.licenses = updated
+				m.pendingCmd = c
+			}
 		case ViewIssuers:
 			// Retire confirm — no service call for retire yet (Phase 3 will add it).
 		case ViewRecipients:

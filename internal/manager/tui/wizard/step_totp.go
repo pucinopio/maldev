@@ -125,7 +125,14 @@ func (s *StepTOTP) View() string {
 	if s.requireOn {
 		lines = append(lines, wizFg.Render("  Select TOTP secret:"))
 		if len(s.rows) == 0 {
-			lines = append(lines, wizDim.Render("  (no TOTP secrets linked to this issuer)"))
+			// D-S21: dead-end fixed — guide the operator to create a secret
+			// in the TOTP screen (view 8) before returning to the wizard.
+			lines = append(lines,
+				wizDim.Render("  Aucun secret TOTP disponible."),
+				wizFg.Render("  → Ouvre l'onglet ")+"[8] TOTP"+wizFg.Render(", crée un secret avec ")+
+					"[n]"+wizFg.Render(", puis reviens ici."),
+				wizDim.Render("  (le wizard conserve ta progression)"),
+			)
 		} else {
 			for i, r := range s.rows {
 				label := "  " + r.AccountLabel

@@ -282,7 +282,8 @@ func (m identitiesModel) handleIdentityInputResult(res InputResultMsg) (identiti
 			return m, nil
 		}
 		id := row.ID
-		path := res.Value
+		// Auto-append .bin when the operator omits the extension (D-S31).
+		path := ensureExtension(res.Value, ".bin")
 		return m, func() tea.Msg {
 			data, err := m.svc.Identity.ExportBin(context.Background(), id)
 			if err != nil {
@@ -291,8 +292,7 @@ func (m identitiesModel) handleIdentityInputResult(res InputResultMsg) (identiti
 			if err := os.WriteFile(path, data, 0o600); err != nil {
 				return pushOverlayMsg{newErrorOverlay("Write Error", err.Error())}
 			}
-			rows, err := m.svc.Identity.List(context.Background())
-			return IdentitiesLoadedMsg{Rows: rows, Err: err}
+			return pushOverlayMsg{NewOKOverlay("Export OK", "Écrit → "+path)}
 		}
 	}
 	return m, nil
