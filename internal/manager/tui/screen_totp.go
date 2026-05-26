@@ -122,7 +122,6 @@ func (m totpModel) Update(msg tea.Msg) (totpModel, tea.Cmd) {
 		switch msg.String() {
 		// D-S43: pgup/pgdn scroll the TOTP list when there are many entries.
 		case "pgup":
-			rows := len(m.rows)
 			cur := m.table.Cursor()
 			if cur > 0 {
 				step := m.table.Height()
@@ -135,7 +134,6 @@ func (m totpModel) Update(msg tea.Msg) (totpModel, tea.Cmd) {
 				}
 				m.table.SetCursor(next)
 			}
-			_ = rows
 			return m, nil
 		case "pgdn":
 			rows := len(m.rows)

@@ -728,14 +728,12 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 				if err != nil {
 					m.overlays = append(m.overlays, newErrorOverlay("Regen failed", err.Error()))
 				} else {
-					// D-S36: persist token so [t] can show it on demand.
-					if m.servers.adminTokens == nil {
-						m.servers.adminTokens = make(map[string]string)
-					}
+					// D-S36: persist token so [T] can show it on demand.
+					// adminTokens is always initialised in newServersModel.
 					m.servers.adminTokens[serverName] = token
 					m.overlays = append(m.overlays, NewOKOverlay(
 						"Admin token regenerated",
-						"Nouveau token — récupérable avec [t] :\n\n"+GlowMagent.Render(token),
+						"Nouveau token — récupérable avec [T] :\n\n"+GlowMagent.Render(token),
 					))
 				}
 			}
