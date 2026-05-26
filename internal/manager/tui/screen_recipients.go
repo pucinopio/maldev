@@ -87,6 +87,16 @@ func (m recipientsModel) Update(msg tea.Msg) (recipientsModel, tea.Cmd) {
 				return pushOverlayMsg{newInputOverlay("recipient-name", "New Recipient Key", "name (e.g. customer-acme)", 80)}
 			}
 
+		case "e":
+			// D-S28: edit (rename) recipient — was missing, 'e' never handled.
+			row := m.selectedRow()
+			if row == nil {
+				return m, nil
+			}
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newInputOverlay("recipient-rename", "Rename Recipient", row.Name, 80)}
+			}
+
 		case "E":
 			row := m.selectedRow()
 			if row == nil {
@@ -220,6 +230,13 @@ func (m recipientsModel) renderDetail() string {
 // handleRecipientInputResult processes overlay results for the recipients screen.
 func (m recipientsModel) handleRecipientInputResult(res InputResultMsg) (recipientsModel, tea.Cmd) {
 	switch res.ID {
+	case "recipient-rename":
+		// D-S28: stub rename — Recipient service doesn't expose Rename yet.
+		newName := res.Value
+		return m, func() tea.Msg {
+			return pushOverlayMsg{NewOKOverlay("Rename", fmt.Sprintf("Renommé en %q (stub — service non implémenté).", newName))}
+		}
+
 	case "recipient-name":
 		if m.svc == nil {
 			return m, nil

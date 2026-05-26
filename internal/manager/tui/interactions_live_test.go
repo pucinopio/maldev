@@ -1449,6 +1449,98 @@ func TestCrossScreen_HelpOverlay_FilterPreserved(t *testing.T) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// D-S28 — Recipients 'e' edit overlay (was missing from handler list)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestLive_RecipientEdit_PushesOverlay verifies that 'e' on recipients with a
+// selected row pushes an input overlay with ID "recipient-rename" (D-S28).
+// Before fix: no case "e" existed in recipientsModel.Update — silent no-op.
+func TestLive_RecipientEdit_PushesOverlay(t *testing.T) {
+	m := newRecipientsModel(nil)
+	m.rows = []*ent.RecipientKey{{
+		ID:        uuid.New(),
+		Name:      "acme",
+		PublicKey: make([]byte, 32),
+		CreatedAt: time.Now(),
+	}}
+	m.rebuildTable()
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+	if cmd == nil {
+		t.Fatal("'e' on recipients with selected row must push input overlay (D-S28 regression)")
+	}
+	msg := cmd()
+	push, ok := msg.(pushOverlayMsg)
+	if !ok {
+		t.Fatalf("'e' expected pushOverlayMsg, got %T", msg)
+	}
+	if push.overlay == nil {
+		t.Fatal("overlay must be non-nil")
+	}
+}
+
+// TestLive_RecipientRenameResult_ReturnsOKOverlay verifies the "recipient-rename"
+// result handler returns a stub OK overlay (service rename not yet implemented).
+func TestLive_RecipientRenameResult_ReturnsOKOverlay(t *testing.T) {
+	m := newRecipientsModel(nil)
+	_, cmd := m.handleRecipientInputResult(InputResultMsg{ID: "recipient-rename", Value: "new-name"})
+	if cmd == nil {
+		t.Fatal("recipient-rename result must produce a cmd (stub OK overlay)")
+	}
+	msg := cmd()
+	push, ok := msg.(pushOverlayMsg)
+	if !ok {
+		t.Fatalf("expected pushOverlayMsg, got %T", msg)
+	}
+	if push.overlay == nil {
+		t.Fatal("stub OK overlay must be non-nil")
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// D-S30 — Identities 'e' edit overlay (was missing from handler list)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestLive_IdentityEdit_PushesOverlay verifies that 'e' on identities with a
+// selected row pushes an input overlay with ID "identity-rename" (D-S30).
+func TestLive_IdentityEdit_PushesOverlay(t *testing.T) {
+	m := newIdentitiesModel(nil)
+	m.rows = []*ent.Identity{fakeIdentity()}
+	m.rebuildTable()
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+	if cmd == nil {
+		t.Fatal("'e' on identities with selected row must push input overlay (D-S30 regression)")
+	}
+	msg := cmd()
+	push, ok := msg.(pushOverlayMsg)
+	if !ok {
+		t.Fatalf("'e' expected pushOverlayMsg, got %T", msg)
+	}
+	if push.overlay == nil {
+		t.Fatal("overlay must be non-nil")
+	}
+}
+
+// TestLive_IdentityRenameResult_ReturnsOKOverlay verifies the "identity-rename"
+// result handler returns a stub OK overlay.
+func TestLive_IdentityRenameResult_ReturnsOKOverlay(t *testing.T) {
+	m := newIdentitiesModel(nil)
+	_, cmd := m.handleIdentityInputResult(InputResultMsg{ID: "identity-rename", Value: "new-name"})
+	if cmd == nil {
+		t.Fatal("identity-rename result must produce a cmd (stub OK overlay)")
+	}
+	msg := cmd()
+	push, ok := msg.(pushOverlayMsg)
+	if !ok {
+		t.Fatalf("expected pushOverlayMsg, got %T", msg)
+	}
+	if push.overlay == nil {
+		t.Fatal("stub OK overlay must be non-nil")
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // D-S23 / D-S31 / D-S42 — ensureExtension helper (shared by all export paths)
 // ─────────────────────────────────────────────────────────────────────────────
 

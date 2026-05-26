@@ -748,10 +748,12 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 			m.issuers = updated
 			m.pendingCmd = c
 		case ViewRecipients:
+			// D-S28: recipient rename + export now routed via handleRecipientInputResult.
 			updated, c := m.recipients.handleRecipientInputResult(res)
 			m.recipients = updated
 			m.pendingCmd = c
 		case ViewIdentities:
+			// D-S30: identity rename + export now routed via handleIdentityInputResult.
 			updated, c := m.identities.handleIdentityInputResult(res)
 			m.identities = updated
 			m.pendingCmd = c

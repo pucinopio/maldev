@@ -87,6 +87,16 @@ func (m identitiesModel) Update(msg tea.Msg) (identitiesModel, tea.Cmd) {
 				return pushOverlayMsg{newInputOverlay("identity-name", "New Identity", "name (e.g. prod-binary-v1)", 80)}
 			}
 
+		case "e":
+			// D-S30: edit (rename) identity — was missing from handler list.
+			row := m.selectedRow()
+			if row == nil {
+				return m, nil
+			}
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newInputOverlay("identity-rename", "Rename Identity", row.Name, 80)}
+			}
+
 		case "E":
 			row := m.selectedRow()
 			if row == nil {
@@ -262,6 +272,13 @@ func (m identitiesModel) renderDetail() string {
 // handleIdentityInputResult processes overlay results for the identities screen.
 func (m identitiesModel) handleIdentityInputResult(res InputResultMsg) (identitiesModel, tea.Cmd) {
 	switch res.ID {
+	case "identity-rename":
+		// D-S30: stub rename — Identity service doesn't expose Rename yet.
+		newName := res.Value
+		return m, func() tea.Msg {
+			return pushOverlayMsg{NewOKOverlay("Rename", fmt.Sprintf("Renommé en %q (stub — service non implémenté).", newName))}
+		}
+
 	case "identity-name":
 		if m.svc == nil {
 			return m, nil
