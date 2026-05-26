@@ -231,6 +231,7 @@ func (m rootModel) Init() tea.Cmd {
 }
 
 func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	traceMsg("entry", msg)
 	dumpMsg(msg)
 	// Data-loaded messages always need to reach their owning screen — even
 	// when an overlay is currently on top — so the underlying list stays
