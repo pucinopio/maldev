@@ -365,10 +365,19 @@ func (m rootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.routeToActive(msg)
 	}
 
-	// NOTE: ViewSettings uses [1][2][3] as argon-preset hints and ViewServers
-	// uses 1-4 for log-filter — both collide with the global digit tab navigation
-	// below.  Fixing the collision requires renaming the per-screen shortcuts
-	// (tracked as D-S3/D-S5); for now the chrome digit shortcuts take precedence.
+	// screenConsumesDigit returns true when the active view binds the given digit
+	// for an in-screen action and chrome must NOT swallow it for tab-nav. Tracked
+	// as D-S3 (Settings argon presets [1][2][3]) and D-S5 (Servers log filter
+	// [1][2][3][4]). Keep this list in sync with the per-screen Update switches.
+	screenConsumesDigit := func(view ViewID, d string) bool {
+		switch view {
+		case ViewSettings:
+			return d == "1" || d == "2" || d == "3"
+		case ViewServers:
+			return d == "1" || d == "2" || d == "3" || d == "4"
+		}
+		return false
+	}
 
 	for i, id := range viewOrder {
 		// 0-9 keyboard nav: positions 1..9 use the matching digit, position 10
@@ -384,6 +393,10 @@ func (m rootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			continue // 11+ tabs are reachable only via tab/shift+tab
 		}
 		if msg.String() == digit {
+			// Defer to the screen when it owns the digit for an in-screen action.
+			if screenConsumesDigit(m.active, digit) {
+				break
+			}
 			prev := m.active
 			m.active = id
 			// Trigger initial load when switching to a screen for the first time.

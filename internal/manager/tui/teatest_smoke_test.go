@@ -103,11 +103,15 @@ func TestTeatest_TabNavigation(t *testing.T) {
 		{'4', "#SEALED"},          // recipients: column header (unique to recipients)
 		{'5', "SHA256"},           // identities: column header
 		{'6', "LICENSE"},          // revocation: column header
+		// '7' (Servers) and '0' (Settings) consume digits 1-4 / 1-3 respectively
+		// for in-screen actions (D-S3/D-S5). Press the '1' tab-nav BEFORE
+		// landing on either of those views, otherwise chrome correctly defers
+		// to the screen and the test reads stale output.
+		{'1', "Raccourcis"},       // dashboard: shortcuts box title re-rendered in diff
 		{'7', "Fingerprint probe"}, // servers: sub-tab label unique to servers screen
 		{'8', "secrets TOTP"},     // totp: intro text unique to the TOTP screen
 		{'9', "TIMESTAMP"},        // audit: column header
 		{'0', "default_issuer_name"}, // settings (10th tab): unique field label
-		{'1', "Raccourcis"}, // dashboard: shortcuts box title re-rendered in diff
 	}
 
 	m := tui.New(nil, nil, tui.SessionReady)

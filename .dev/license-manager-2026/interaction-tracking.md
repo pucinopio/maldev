@@ -6,7 +6,7 @@ kb_verified: 124
 kb_total: 124
 ms_verified: 106
 ms_total: 106
-defects_open: 2
+defects_open: 0
 ---
 
 ## Session 5 — autonomous defect hunt (2026-05-26)
@@ -15,8 +15,8 @@ defects_open: 2
 
 | Defect | Discovery method | Status |
 |---|---|---|
-| D-S3: settings `1/2/3` intercepted by chrome | Strategy 1 + code audit | Open — design collision; screen handler correct in isolation |
-| D-S5: servers `1/2/3/4` intercepted by chrome | Strategy 1 + code audit | Open — same root cause as D-S3 |
+| D-S3: settings `1/2/3` intercepted by chrome | Strategy 1 + code audit | Fixed — `screenConsumesDigit()` gating in `handleKey()` |
+| D-S5: servers `1/2/3/4` intercepted by chrome | Strategy 1 + code audit | Fixed — same `screenConsumesDigit()` mechanism |
 | D-S6: audit detail `r/E/J` consumed by viewport | Strategy 1 AssertOutput + Live test | Fixed: 6017323 |
 | D-S7: server `'s'` key never fires (button unfocused) | Code audit (Button.Update) | Fixed: 6017323 |
 | D-S8: `keyMsgFromLabel` nil for ctrl+X/shift+tab | Harness trace inspection | Fixed: 6017323 |
@@ -33,7 +33,7 @@ defects_open: 2
 | Chrome tab nav missing AssertOutput (×11) | Strategy 1 | Fixed: 9c6e1e2 (all chrome.tab.N.kb specs) |
 | Cross-screen filter/detail state preservation | Strategy 4 | Confirmed correct; 4 guard tests: 9c6e1e2 |
 
-**Total found: 17. Fixed: 15. Open: 2 (D-S3, D-S5 — design-level key collision).**
+**Total found: 17. Fixed: 17. Open: 0** (D-S3 + D-S5 resolved by `screenConsumesDigit` gating in commit applying to `handleKey()`).
 
 ### Open defects (2)
 
