@@ -75,6 +75,7 @@ TOOLS := \
     rshell \
     sleepmask-demo \
     test-report \
+    tui-orphan-scan \
     tui-snap \
     vmtest
 
@@ -199,6 +200,14 @@ snap: tui-snap
 # All views in sequence.
 snap-all: tui-snap
 	@for v in $(TUI_VIEWS); do bash scripts/tui-snap.sh $$v; done
+
+# Orphan-hint scan: report '[X]' hints visible in the rendered TUI that have
+# no matching key handler in their screen source. Reveals visual promises
+# the code never delivers (typical: dashboard Raccourcis cards offering
+# shortcuts that aren't wired).
+.PHONY: orphans
+orphans: tui-snap tui-orphan-scan
+	@./$(BIN)/tui-orphan-scan$(EXE)
 
 # ── VHS regression tapes ─────────────────────────────────────────────────────
 # Renders a recorded GIF of the TUI under deterministic input. Requires

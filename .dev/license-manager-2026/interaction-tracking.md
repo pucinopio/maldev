@@ -379,3 +379,35 @@ local hints surfaced via the title bar.
 3. Run the assertion: `go run ./cmd/tui-trace-assert <test-id>`.
 4. If green: edit this file, replace `☐` with `✓` in the matching row.
 5. Commit with subject `track(tui): <test-id> verified KB+MS`.
+
+---
+
+## Orphan-hint scan (run `make orphans`)
+
+Snapshot from commit `c61871b` — visual hints in `[X]` brackets that have no
+matching keyboard handler in the screen source. These are promises the UI
+makes that the code does not honour.
+
+### Real defects to fix
+
+| View | Orphan hints | Why | Fix |
+|---|---|---|---|
+| **dashboard** | `[n] [/] [x] [k] [i]` (and `[a] [e] [s] [u] [w]` on tiles) | The Raccourcis card promises `[n] nouvelle licence`, `[/] rechercher`, `[x] révoquer`, `[k] clés d'émission`, `[i] identity.bin`, plus tile hotkeys `[a]`, `[r]`, `[e]`, `[w]`, `[u]` — **none** are handled in `screen_dashboard.go` and the global keymap only handles `1-9`/`tab`/`?`/`q`/`r`/`A`/`Z`. | Wire each Raccourcis cell to its target view+action: `n` → push wizard, `/` → goto Licenses with search focused, `x` → goto Licenses with revoke overlay armed on last-active, `k` → goto Issuers, `i` → goto Identities with export-bin focused. Tile hotkeys: `a/r/e/w/u` → goto Licenses with the matching filter chip set. |
+| **audit** | `[pgup]` / `[pgdn]` | Bubbles/table handles these implicitly via the focused-table key map. | False positive — exclude from orphan scan in next iteration. |
+
+### Not yet inventoried (hints emitted only with seed data not present in default scan)
+
+The orphan scan with default seeds catches what renders in a "normal" state.
+Some hints only appear inside overlays / wizard steps / detail panels that
+aren't reached by the snap tool's first frame. Extend with `-keys` flag:
+
+```bash
+# Open licenses detail panel and re-scan
+./bin/tui-orphan-scan.exe -view licenses -keys "d"
+
+# Open wizard
+./bin/tui-orphan-scan.exe -view licenses -keys "n"
+```
+
+Each commit that fixes an orphan should re-run `make orphans` and trim this
+section so it stays a live defect list, not history.
