@@ -36,6 +36,56 @@ const (
 	probeViewLive
 )
 
+// serverDescriptionText returns the one-line French role description for the
+// named server. Shown at the top of the Status box (D-S34).
+func serverDescriptionText(name string) string {
+	switch name {
+	case "revocation":
+		return "Sert la CRL signée aux clients qui vérifient leurs licences."
+	case "heartbeat":
+		return "Reçoit les pings périodiques des licences actives (anti-replay)."
+	default:
+		return "Émet des tokens de probe + reçoit les rapports d'identification machine."
+	}
+}
+
+// serverAPIExamples returns example curl commands for each server (D-S37).
+func serverAPIExamples(name, addr string) string {
+	if addr == "" || addr == "—" {
+		addr = "localhost:8443"
+	}
+	base := "https://" + addr
+	switch name {
+	case "revocation":
+		return strings.Join([]string{
+			GlowCyan.Render("GET  ") + Mute.Render(base+"/crl"),
+			Dim.Render("  → Télécharge la CRL signée (DER ou PEM selon Accept:)"),
+			"",
+			GlowCyan.Render("POST ") + Mute.Render(base+"/revoke"),
+			Dim.Render("  Content-Type: application/json"),
+			Dim.Render(`  {"license_uuid":"…","reason":"…","actor":"operator"}`),
+			Dim.Render("  Authorization: Bearer <admin_token>"),
+		}, "\n")
+	case "heartbeat":
+		return strings.Join([]string{
+			GlowCyan.Render("POST ") + Mute.Render(base+"/heartbeat/<license_uuid>"),
+			Dim.Render("  Content-Type: application/json"),
+			Dim.Render(`  {"totp":"<6-digit>"}   // omit when TOTP not required`),
+			"",
+			GlowCyan.Render("GET  ") + Mute.Render(base+"/metrics"),
+			Dim.Render("  → Prometheus-compatible heartbeat counters"),
+		}, "\n")
+	default:
+		return strings.Join([]string{
+			GlowCyan.Render("GET  ") + Mute.Render(base+"/probe/<token>"),
+			Dim.Render("  → Échange one-shot; rapporte le fingerprint machine"),
+			"",
+			GlowCyan.Render("GET  ") + Mute.Render(base+"/probe/<token>/agent"),
+			Dim.Render("  → Agent long-poll (streaming fingerprint updates)"),
+		}, "\n")
+	}
+}
+
 // serversModel is the root model for the Servers screen (ViewServers).
 // It renders prototype sub-tabs (R/H/P) with a 2-column status+log layout.
 type serversModel struct {
@@ -50,6 +100,10 @@ type serversModel struct {
 	probeTokens  []*ent.ProbeToken // populated when T view is active
 	probeHistory []*ent.ProbeToken // populated when H view is active
 
+	// adminTokens caches admin tokens by server name so the operator can
+	// retrieve them on demand with [t] after they were generated (D-S36).
+	adminTokens map[string]string
+
 	// Per-server request-rate ring buffer (60 samples = 1 minute window).
 	// Each tick records the delta of Requests vs the previous tick.
 	reqHistory [3][60]float64
@@ -62,7 +116,12 @@ type serversModel struct {
 var serverNames = [3]string{"revocation", "heartbeat", "probe"}
 
 func newServersModel(svc *service.Services, ctrl httpsrv.Controller) serversModel {
-	m := serversModel{svc: svc, ctrl: ctrl, log: newServerLog()}
+	m := serversModel{
+		svc:         svc,
+		ctrl:        ctrl,
+		log:         newServerLog(),
+		adminTokens: make(map[string]string),
+	}
 	for i, name := range serverNames {
 		m.cards[i] = newServerCard(name)
 	}
@@ -220,8 +279,7 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 			m.log, _ = w.(*serverLog)
 			return m, cmd
 		case "g":
-			// Regenerate admin token for the active server. Stub for now —
-			// surface a confirm overlay so the user sees the action landed.
+			// Regenerate admin token for the active server.
 			name := serverNames[m.activeTab]
 			return m, func() tea.Msg {
 				body := fmt.Sprintf("Régénérer l'admin token de %s ?\n"+
@@ -229,6 +287,24 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 					"qui s'authentifient avec doivent être mis à jour.", name)
 				return pushOverlayMsg{newConfirmOverlay(OverlayIDServerRegenTok,
 					"Regenerate admin token", body, "regen", "annuler", true)}
+			}
+
+		case "T":
+			// D-S36: show cached admin token on demand ([T] = capital to avoid
+			// conflict with [t] probe inner-view tokens key).
+			name := serverNames[m.activeTab]
+			tok, ok := m.adminTokens[name]
+			if !ok || tok == "" {
+				return m, func() tea.Msg {
+					return pushOverlayMsg{newErrorOverlay("Token inconnu",
+						"Aucun token enregistré pour "+name+".\n"+
+							"Génère-le avec [g] pour le stocker dans cette session.")}
+				}
+			}
+			tok2 := tok
+			return m, func() tea.Msg {
+				return pushOverlayMsg{NewOKOverlay("Admin token · "+name,
+					GlowMagent.Render(tok2))}
 			}
 		case "e":
 			// Edit config: route to an input overlay that lets the operator
@@ -246,6 +322,17 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 			w, cmd := m.log.Update(serverLogAutoScrollMsg{})
 			m.log, _ = w.(*serverLog)
 			return m, cmd
+
+		case "i":
+			// D-S37: [i] API info — push a help overlay with curl examples for
+			// the active server. 'i' = info; doesn't conflict with any existing
+			// Servers key (a=auto-scroll, A=global startAll, s=start/stop, g=regen).
+			name := serverNames[m.activeTab]
+			addr := m.cards[m.activeTab].status.ListenAddr
+			examples := serverAPIExamples(name, addr)
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newErrorOverlay("API · "+name, examples)}
+			}
 		// Probe inner-view keys — only meaningful when the Probe sub-tab is
 		// active; on the other sub-tabs they fall through to the default
 		// dispatcher (the tea.Update loop below).
@@ -451,9 +538,12 @@ func (m serversModel) View() string {
 		}
 		return "start"
 	}())
+	// D-S34: one-line French role description shown at top of status box.
+	serverRole := Mute.Render(serverDescriptionText(serverNames[m.activeTab]))
 	statusBox := BoxFocused.Width(m.width/2 - 3).Render(
 		lipgloss.JoinVertical(lipgloss.Left,
 			GlowCyan.Render("Status")+"  "+hintStop,
+			serverRole,
 			"",
 			lipgloss.JoinVertical(lipgloss.Left, statusLines...),
 		),
@@ -617,8 +707,9 @@ func (m serversModel) renderLogPanel() string {
 // tokens. Columns mirror the prototype: TOKEN / LABEL / ISSUED / TTL / STATE.
 // Rows come from svc.Probe.History filtered to those still in waiting state.
 func (m serversModel) renderProbeTokens() string {
+	// D-S38: [q] for QR renamed to [Q] to avoid collision with global quit key.
 	hint := HintKey.Render("[n]") + Dim.Render(" générer · ") +
-		HintKey.Render("[q]") + Dim.Render(" QR · ") +
+		HintKey.Render("[Q]") + Dim.Render(" QR · ") +
 		HintKey.Render("[x]") + Dim.Render(" révoquer")
 	title := GlowCyan.Render(fmt.Sprintf("Tokens actifs (%d)", len(m.probeTokens)))
 	header := title + "  " + hint

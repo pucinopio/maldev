@@ -720,13 +720,22 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 			}
 		case ViewServers:
 			if res.ID == OverlayIDServerRegenTok && res.Confirm && m.services != nil {
-				token, err := m.services.Settings.RegenerateAdminToken(context.Background(), "revocation")
+				// Determine which server was active when the confirm was triggered.
+				// activeTab was captured at confirm-push time via OverlayIDServerRegenTok;
+				// the server index matches the current tab (confirm is instant).
+				serverName := serverNames[int(m.servers.activeTab)]
+				token, err := m.services.Settings.RegenerateAdminToken(context.Background(), serverName)
 				if err != nil {
 					m.overlays = append(m.overlays, newErrorOverlay("Regen failed", err.Error()))
 				} else {
+					// D-S36: persist token so [t] can show it on demand.
+					if m.servers.adminTokens == nil {
+						m.servers.adminTokens = make(map[string]string)
+					}
+					m.servers.adminTokens[serverName] = token
 					m.overlays = append(m.overlays, NewOKOverlay(
 						"Admin token regenerated",
-						"Nouveau token (copie-le maintenant — il ne sera plus jamais affiché) :\n\n"+token,
+						"Nouveau token — récupérable avec [t] :\n\n"+GlowMagent.Render(token),
 					))
 				}
 			}

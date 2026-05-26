@@ -6,7 +6,9 @@
 ──────────────────                                                                                                      
 ┌─────────────────────────────────────────────────────────┐  Live log · filter revocation  [c] clear · [a] auto-scroll  
 │ Status  [s] start                                       │  12:00:05  probe         error     bind: address already in 
-│                                                         │  use                                                        
+│ Sert la CRL signée aux clients qui vérifient leurs      │  use                                                        
+│ licences.                                               │                                                             
+│                                                         │                                                             
 │ ● [OFF]  port —                                         │                                                             
 │ — server stopped — start with  s                        │                                                             
 └─────────────────────────────────────────────────────────┘                                                             
@@ -19,8 +21,6 @@
 │                                                         │                                                             
 │ endpoint: /crl, /revoke (admin)                         │                                                             
 └─────────────────────────────────────────────────────────┘                                                             
-                                                                                                                        
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         

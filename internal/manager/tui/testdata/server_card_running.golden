@@ -6,6 +6,8 @@
 ──────────────────                                                                                                      
 ┌─────────────────────────────────────────────────────────┐  Live log · filter revocation  [c] clear · [a] auto-scroll  
 │ Status  [s] start                                       │  12:00:00  revocation    started   127.0.0.1:8443           
+│ Sert la CRL signée aux clients qui vérifient leurs      │                                                             
+│ licences.                                               │                                                             
 │                                                         │                                                             
 │ ● [OFF]  port —                                         │                                                             
 │ — server stopped — start with  s                        │                                                             
@@ -19,8 +21,6 @@
 │                                                         │                                                             
 │ endpoint: /crl, /revoke (admin)                         │                                                             
 └─────────────────────────────────────────────────────────┘                                                             
-                                                                                                                        
-                                                                                                                        
                                                                                                                         
                                                                                                                         
                                                                                                                         
