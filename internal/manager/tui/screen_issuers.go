@@ -29,10 +29,6 @@ func ensureExtension(path, ext string) string {
 	return path + ext
 }
 
-// appendDotPubIfNeeded is the backwards-compat alias kept for existing callers
-// and test assertions. New code should use ensureExtension directly.
-func appendDotPubIfNeeded(path string) string { return ensureExtension(path, ".pub") }
-
 // issuerStatusInline renders a flat, one-line coloured status label for the
 // issuers detail panel. The bordered Pill* styles render on 3 rows which
 // breaks kvRow's single-line baseline — this helper matches the licStatusPill
@@ -361,7 +357,7 @@ func (m issuersModel) handleIssuerInputResult(res InputResultMsg) (issuersModel,
 			return m, nil
 		}
 		id := row.ID
-		path := appendDotPubIfNeeded(res.Value)
+		path := ensureExtension(res.Value, ".pub")
 		return m, func() tea.Msg {
 			pem, err := m.svc.Issuer.ExportPublic(context.Background(), id)
 			if err != nil {

@@ -301,10 +301,9 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 							"Génère-le avec [g] pour le stocker dans cette session.")}
 				}
 			}
-			tok2 := tok
 			return m, func() tea.Msg {
 				return pushOverlayMsg{NewOKOverlay("Admin token · "+name,
-					GlowMagent.Render(tok2))}
+					GlowMagent.Render(tok))}
 			}
 		case "e":
 			// Edit config: route to an input overlay that lets the operator
@@ -901,7 +900,7 @@ func (m serversModel) OnClick(x, y, _ int) tea.Cmd {
 			{serverTabProbe, "probe"},
 		}
 		// Reconstruct the visual widths of each tab cell by measuring the same
-		// strings rendererd in View(). Active tab gets a bold underline border
+		// strings rendered in View(). Active tab gets a bold underline border
 		// (NormalBorder bottom only) which changes the Padding; measure the
 		// inactive variant so the widths are consistent regardless of current state.
 		// The rendered tabs are joined horizontally; we walk them left-to-right.

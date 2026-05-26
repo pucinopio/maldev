@@ -134,7 +134,7 @@ func (m totpModel) Update(msg tea.Msg) (totpModel, tea.Cmd) {
 				}
 				m.table.SetCursor(next)
 			}
-			return m, nil
+			return m, m.loadCursorDetail()
 		case "pgdn":
 			rows := len(m.rows)
 			cur := m.table.Cursor()

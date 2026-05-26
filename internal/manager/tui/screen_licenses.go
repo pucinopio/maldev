@@ -854,13 +854,9 @@ func (m licensesModel) handleLicenseReissueConfirm(res ConfirmResultMsg) (licens
 		if err != nil {
 			return pushOverlayMsg{newErrorOverlay("Re-émission échouée", err.Error())}
 		}
-		rows, loadErr := svc.License.List(context.Background(), service.ListFilter{Limit: 500})
-		if loadErr != nil {
-			return LicensesLoadedMsg{Err: loadErr}
-		}
-		_ = subject
-		_ = newLic // QR overlay for the re-issued licence shown in a future commit.
-		return LicensesLoadedMsg{Rows: rows}
+		return pushOverlayMsg{NewOKOverlay("Re-émission OK",
+			fmt.Sprintf("Nouvelle licence pour %q\nUUID: %s\n\nPress 'r' to refresh the list.",
+				subject, newLic.Row.LicenseUUID))}
 	}
 }
 

@@ -918,9 +918,9 @@ func TestLive_IssuerExportPub_ExtensionLogic(t *testing.T) {
 		{"/path/to/key.pub", "/path/to/key.pub"},
 	}
 	for _, tc := range cases {
-		got := appendDotPubIfNeeded(tc.input)
+		got := ensureExtension(tc.input, ".pub")
 		if got != tc.want {
-			t.Errorf("appendDotPubIfNeeded(%q) = %q, want %q", tc.input, got, tc.want)
+			t.Errorf("ensureExtension(%q, .pub) = %q, want %q", tc.input, got, tc.want)
 		}
 	}
 }
@@ -1572,18 +1572,9 @@ func TestEnsureExtension(t *testing.T) {
 	}
 }
 
-// TestEnsureExtension_BackwardCompat verifies appendDotPubIfNeeded is still
-// the .pub alias of ensureExtension.
-func TestEnsureExtension_BackwardCompat(t *testing.T) {
-	got := appendDotPubIfNeeded("key")
-	if got != "key.pub" {
-		t.Errorf("appendDotPubIfNeeded(\"key\") = %q, want \"key.pub\"", got)
-	}
-	got = appendDotPubIfNeeded("key.pub")
-	if got != "key.pub" {
-		t.Errorf("appendDotPubIfNeeded(\"key.pub\") = %q, want no-op", got)
-	}
-}
+// (TestEnsureExtension_BackwardCompat removed — appendDotPubIfNeeded alias
+// was deleted in the /simplify sweep; the table-driven test above and the
+// .bin/.png cases below cover all behaviour.)
 
 // TestIdentityExport_AppendsDotBin verifies that identity-export auto-appends
 // .bin when the operator omits it (D-S31).
