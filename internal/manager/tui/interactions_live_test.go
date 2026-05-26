@@ -89,7 +89,6 @@ func TestLive_QuitOverlayMouse_Confirm(t *testing.T) {
 		Y:      7,
 		Button: tea.MouseButtonLeft,
 		Action: tea.MouseActionPress,
-		Type:   tea.MouseLeft,
 	})
 	if cmd == nil {
 		t.Fatal("click on confirm half of quit overlay must return cmd")
@@ -113,7 +112,6 @@ func TestLive_QuitOverlayMouse_Cancel(t *testing.T) {
 		Y:      7,
 		Button: tea.MouseButtonLeft,
 		Action: tea.MouseActionPress,
-		Type:   tea.MouseLeft,
 	})
 	if cmd == nil {
 		t.Fatal("click on cancel half of quit overlay must return cmd")
@@ -133,7 +131,6 @@ func TestLive_QuitOverlayMouse_WrongRow(t *testing.T) {
 		Y:      3, // not the footer row
 		Button: tea.MouseButtonLeft,
 		Action: tea.MouseActionPress,
-		Type:   tea.MouseLeft,
 	})
 	if cmd != nil {
 		msg := cmd()
@@ -154,7 +151,6 @@ func TestLive_OKOverlayMouse_Dismiss(t *testing.T) {
 			Y:      pos[1],
 			Button: tea.MouseButtonLeft,
 			Action: tea.MouseActionPress,
-			Type:   tea.MouseLeft,
 		})
 		if cmd == nil {
 			t.Errorf("click (%d,%d): nil cmd", pos[0], pos[1])
@@ -424,7 +420,6 @@ func TestLive_FilePicker_MouseClick(t *testing.T) {
 		Y:      clickY,
 		Button: tea.MouseButtonLeft,
 		Action: tea.MouseActionPress,
-		Type:   tea.MouseLeft,
 	})
 	if cmd == nil {
 		t.Fatalf("mouse click on file row %d returned nil cmd", clickY)
@@ -1831,7 +1826,7 @@ func TestLive_ConfirmOverlay_OKButtonMouseDismisses(t *testing.T) {
 	}
 
 	absY := overlayButtonAbsY(h)
-	click := tea.MouseMsg{X: 40, Y: absY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress, Type: tea.MouseLeft}
+	click := tea.MouseMsg{X: 40, Y: absY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
 	updated, cmd := m.Update(click)
 	m = drainCmd(updated.(rootModel), cmd)
 
@@ -1848,7 +1843,7 @@ func TestLive_ConfirmOverlay_CancelButtonMouseDismisses(t *testing.T) {
 	m = pushConfirmOnRoot(t, m)
 
 	absY := overlayButtonAbsY(h)
-	click := tea.MouseMsg{X: 10, Y: absY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress, Type: tea.MouseLeft}
+	click := tea.MouseMsg{X: 10, Y: absY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
 	updated, cmd := m.Update(click)
 	m = drainCmd(updated.(rootModel), cmd)
 
@@ -1872,7 +1867,7 @@ func TestLive_InputOverlay_CancelButtonMouseDismisses(t *testing.T) {
 	}
 
 	absY := overlayButtonAbsY(h)
-	click := tea.MouseMsg{X: 10, Y: absY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress, Type: tea.MouseLeft}
+	click := tea.MouseMsg{X: 10, Y: absY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
 	updated2, cmd := m.Update(click)
 	m = drainCmd(updated2.(rootModel), cmd)
 
@@ -1889,7 +1884,7 @@ func TestLive_OverlayButton_WrongYIsNoop(t *testing.T) {
 	m = pushConfirmOnRoot(t, m)
 
 	// Y=19 → overlay-relative Y = 19 - 16 = 3 (title row, not button).
-	click := tea.MouseMsg{X: 40, Y: 19, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress, Type: tea.MouseLeft}
+	click := tea.MouseMsg{X: 40, Y: 19, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
 	updated, cmd := m.Update(click)
 	m = drainCmd(updated.(rootModel), cmd)
 

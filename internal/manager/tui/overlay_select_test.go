@@ -131,7 +131,6 @@ func TestSelectOverlay_MouseClickSelectsItem(t *testing.T) {
 		Y:      4, // second item (Beta)
 		Button: tea.MouseButtonLeft,
 		Action: tea.MouseActionPress,
-		Type:   tea.MouseLeft,
 	})
 	if cmd == nil {
 		t.Fatal("mouse click on item must return cmd")

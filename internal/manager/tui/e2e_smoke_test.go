@@ -55,7 +55,7 @@ func TestE2E_SmokeTUI(t *testing.T) {
 	t.Run("mouse click does not panic", func(t *testing.T) {
 		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
 		_ = m.View()
-		m, _ = m.Update(tea.MouseMsg{X: 60, Y: 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, Type: tea.MouseLeft})
+		m, _ = m.Update(tea.MouseMsg{X: 60, Y: 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
 		if got := m.View(); got == "" {
 			t.Fatal("post-click View() returned empty")
 		}
@@ -107,13 +107,11 @@ func TestE2E_TileClickNavigatesToLicenses(t *testing.T) {
 		X: 17, Y: 4,
 		Action: tea.MouseActionPress,
 		Button: tea.MouseButtonLeft,
-		Type:   tea.MouseLeft,
 	}
 	clickPress := tea.MouseMsg{
 		X: 17, Y: 4,
 		Action: tea.MouseActionPress,
 		Button: tea.MouseButtonLeft,
-		Type:   tea.MouseLeft,
 	}
 
 	for _, tc := range []struct {

@@ -151,7 +151,6 @@ func TestTeatest_MouseClickDoesNotPanic(t *testing.T) {
 		Y:      4,
 		Action: tea.MouseActionPress,
 		Button: tea.MouseButtonLeft,
-		Type:   tea.MouseLeft,
 	}, "rechercher dans subject")
 
 	tm.Send(tea.QuitMsg{})

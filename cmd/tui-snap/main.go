@@ -411,6 +411,5 @@ func mouseFromFlag(s string) (tea.MouseMsg, bool) {
 		Y:      y,
 		Action: tea.MouseActionRelease,
 		Button: btn,
-		Type:   tea.MouseLeft,
 	}, true
 }
