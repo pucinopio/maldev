@@ -1304,6 +1304,141 @@ func TestLive_WizardCtrlRight_AdvancesStep(t *testing.T) {
 	}
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Strategy 4 — Cross-screen state leakage
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestCrossScreen_LicensesFilterPreservedAfterNav verifies that the Licenses
+// filter chip is preserved after navigating away (tab '1' → dashboard) and
+// back (tab '2' → licenses). State must not leak or reset.
+func TestCrossScreen_LicensesFilterPreservedAfterNav(t *testing.T) {
+	m := New(nil, nil, SessionReady)
+	var tm tea.Model = m
+	tm, _ = tm.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
+
+	// Navigate to Licenses, set filter to revoked.
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) // all → active
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) // active → expiring
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) // expiring → expired
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) // expired → revoked
+
+	// Navigate away to dashboard.
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+
+	// Navigate back to licenses.
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+
+	rm, ok := tm.(rootModel)
+	if !ok {
+		t.Fatal("model is not rootModel")
+	}
+	if rm.licenses.filter != licFilterRevoked {
+		t.Errorf("filter after nav away+back = %v, want revoked", rm.licenses.filter)
+	}
+}
+
+// TestCrossScreen_LicensesDetailPreservedAfterNav verifies that the detail
+// panel open/closed state is preserved after navigating away and back.
+func TestCrossScreen_LicensesDetailPreservedAfterNav(t *testing.T) {
+	m := New(nil, nil, SessionReady)
+	var tm tea.Model = m
+	tm, _ = tm.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
+
+	// Licenses detail starts open. Close it with 'd'.
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}}) // close detail
+
+	rm := tm.(rootModel)
+	if rm.licenses.detail {
+		t.Fatal("precondition: detail must be closed after 'd'")
+	}
+
+	// Navigate away, then back.
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+
+	rm = tm.(rootModel)
+	if rm.licenses.detail {
+		t.Errorf("detail state leaked: was closed, now open after nav away+back")
+	}
+}
+
+// TestCrossScreen_AuditFilterPreservedAfterNav verifies that the audit
+// kind-filter is preserved after navigating to a different screen and back.
+func TestCrossScreen_AuditFilterPreservedAfterNav(t *testing.T) {
+	m := New(nil, nil, SessionReady)
+	var tm tea.Model = m
+	tm, _ = tm.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
+
+	// Navigate to Audit, set filter to "license" via 'l'.
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'9'}})
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+
+	rm := tm.(rootModel)
+	if rm.audit.filter != auditFilterLicense {
+		t.Fatalf("precondition: audit filter must be license after 'l', got %v", rm.audit.filter)
+	}
+
+	// Navigate to Dashboard and back to Audit.
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'9'}})
+
+	rm = tm.(rootModel)
+	if rm.audit.filter != auditFilterLicense {
+		t.Errorf("audit filter reset after nav: got %v, want auditFilterLicense", rm.audit.filter)
+	}
+}
+
+// TestCrossScreen_HelpOverlay_FilterPreserved verifies Strategy 5: opening
+// help overlay over Licenses with an active filter, then dismissing, leaves
+// the filter intact (no state mutation from the overlay layer).
+//
+// Note: the overlay dismiss path is async — esc causes the overlay's Update to
+// return a cmd that, when run, produces OverlayDoneMsg. That msg must be fed
+// back into rootModel.Update to actually pop the overlay. We simulate the
+// bubbletea event loop by executing the returned cmd manually.
+func TestCrossScreen_HelpOverlay_FilterPreserved(t *testing.T) {
+	m := New(nil, nil, SessionReady)
+	var tm tea.Model = m
+	tm, _ = tm.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
+
+	// Licenses with expiring filter.
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) // all → active
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}) // active → expiring
+
+	// Push help overlay ('?' key).
+	tm, _ = tm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+
+	rm := tm.(rootModel)
+	if len(rm.overlays) == 0 {
+		t.Fatal("help overlay must be on stack after '?'")
+	}
+
+	// Dismiss with esc: overlay.Update returns a cmd that produces OverlayDoneMsg.
+	// Execute one level deep to simulate the event loop.
+	var cmd tea.Cmd
+	tm, cmd = tm.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd != nil {
+		// Run the cmd to get OverlayDoneMsg and feed it back.
+		if msg := cmd(); msg != nil {
+			tm, _ = tm.Update(msg)
+		}
+	}
+
+	rm = tm.(rootModel)
+	if len(rm.overlays) != 0 {
+		t.Fatalf("overlay stack must be empty after esc+cmd; depth=%d", len(rm.overlays))
+	}
+	if rm.licenses.filter != licFilterExpiring {
+		t.Errorf("filter changed by help overlay: got %v, want expiring", rm.licenses.filter)
+	}
+	if rm.active != ViewLicenses {
+		t.Errorf("active view changed by overlay: got %v, want ViewLicenses", rm.active)
+	}
+}
+
 // liveTestStore opens an in-memory store pre-seeded with the given passphrase
 // so passphrase-prompt tests have a real canary to verify against.
 func liveTestStore(t *testing.T, pass string) *store.Store {

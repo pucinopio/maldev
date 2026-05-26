@@ -140,17 +140,19 @@ func resolveClickCoord(bin string, s spec, target string) (x, y int, err error) 
 func specs() []spec {
 	return []spec{
 		// ── Chrome (global) — tab navigation ──────────────────────────────
-		{ID: "chrome.tab.1.kb", View: "dashboard", Keys: "1", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'1' goto Dashboard"},
-		{ID: "chrome.tab.2.kb", View: "dashboard", Keys: "2", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'2' goto Licenses"},
-		{ID: "chrome.tab.3.kb", View: "dashboard", Keys: "3", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'3' goto Issuers"},
-		{ID: "chrome.tab.4.kb", View: "dashboard", Keys: "4", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'4' goto Recipients"},
-		{ID: "chrome.tab.5.kb", View: "dashboard", Keys: "5", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'5' goto Identities"},
-		{ID: "chrome.tab.6.kb", View: "dashboard", Keys: "6", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'6' goto Revocation"},
-		{ID: "chrome.tab.7.kb", View: "dashboard", Keys: "7", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'7' goto Servers"},
-		{ID: "chrome.tab.8.kb", View: "dashboard", Keys: "8", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'8' goto TOTP"},
-		{ID: "chrome.tab.9.kb", View: "dashboard", Keys: "9", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'9' goto Audit"},
-		{ID: "chrome.tab.next.kb", View: "dashboard", Keys: "tab", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "tab cycles to next view"},
-		{ID: "chrome.tab.prev.kb", View: "dashboard", Keys: "shift+tab", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "shift+tab cycles to prev view"},
+		// AssertOutput on each spec proves the correct screen rendered, not just
+		// that the key was processed.
+		{ID: "chrome.tab.1.kb", View: "dashboard", Keys: "1", ExpectMsgs: []string{"tea.KeyMsg"}, AssertOutput: "dashboard", Notes: "'1' goto Dashboard"},
+		{ID: "chrome.tab.2.kb", View: "dashboard", Keys: "2", ExpectMsgs: []string{"tea.KeyMsg"}, AssertOutput: "Licences", Notes: "'2' goto Licenses"},
+		{ID: "chrome.tab.3.kb", View: "dashboard", Keys: "3", ExpectMsgs: []string{"tea.KeyMsg"}, AssertOutput: "Issuer keys", Notes: "'3' goto Issuers"},
+		{ID: "chrome.tab.4.kb", View: "dashboard", Keys: "4", ExpectMsgs: []string{"tea.KeyMsg"}, AssertOutput: "Recipient keys", Notes: "'4' goto Recipients"},
+		{ID: "chrome.tab.5.kb", View: "dashboard", Keys: "5", ExpectMsgs: []string{"tea.KeyMsg"}, AssertOutput: "identity.bin", Notes: "'5' goto Identities"},
+		{ID: "chrome.tab.6.kb", View: "dashboard", Keys: "6", ExpectMsgs: []string{"tea.KeyMsg"}, AssertOutput: "Revocation", Notes: "'6' goto Revocation"},
+		{ID: "chrome.tab.7.kb", View: "dashboard", Keys: "7", ExpectMsgs: []string{"tea.KeyMsg"}, AssertOutput: "Revocation", Notes: "'7' goto Servers (sub-tab bar shows Revocation)"},
+		{ID: "chrome.tab.8.kb", View: "dashboard", Keys: "8", ExpectMsgs: []string{"tea.KeyMsg"}, AssertOutput: "secrets TOTP", Notes: "'8' goto TOTP"},
+		{ID: "chrome.tab.9.kb", View: "dashboard", Keys: "9", ExpectMsgs: []string{"tea.KeyMsg"}, AssertOutput: "Audit", Notes: "'9' goto Audit"},
+		{ID: "chrome.tab.next.kb", View: "dashboard", Keys: "tab", ExpectMsgs: []string{"tea.KeyMsg"}, AssertOutput: "Licences", Notes: "tab from Dashboard goes to Licenses"},
+		{ID: "chrome.tab.prev.kb", View: "dashboard", Keys: "shift+tab", ExpectMsgs: []string{"tea.KeyMsg"}, AssertOutput: "Settings", Notes: "shift+tab from Dashboard wraps to Settings"},
 		{
 			ID:         "chrome.help.kb",
 			View:       "dashboard",
