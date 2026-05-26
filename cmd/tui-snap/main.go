@@ -345,7 +345,8 @@ func buildSnapshotMsg(sd *seedData) cmds.DashboardSnapshotMsg {
 	return snap
 }
 
-// keyMsgFromLabel converts a label like "esc", "enter", "tab", "/" to tea.KeyMsg.
+// keyMsgFromLabel converts a label like "esc", "enter", "tab", "ctrl+c",
+// "ctrl+right", "shift+tab", "/" to tea.KeyMsg.
 func keyMsgFromLabel(label string) tea.Msg {
 	switch label {
 	case "esc":
@@ -354,8 +355,36 @@ func keyMsgFromLabel(label string) tea.Msg {
 		return tea.KeyMsg{Type: tea.KeyEnter}
 	case "tab":
 		return tea.KeyMsg{Type: tea.KeyTab}
+	case "shift+tab":
+		return tea.KeyMsg{Type: tea.KeyShiftTab}
 	case "backspace":
 		return tea.KeyMsg{Type: tea.KeyBackspace}
+	case "up":
+		return tea.KeyMsg{Type: tea.KeyUp}
+	case "down":
+		return tea.KeyMsg{Type: tea.KeyDown}
+	case "left":
+		return tea.KeyMsg{Type: tea.KeyLeft}
+	case "right":
+		return tea.KeyMsg{Type: tea.KeyRight}
+	case "ctrl+c":
+		return tea.KeyMsg{Type: tea.KeyCtrlC}
+	case "ctrl+right":
+		return tea.KeyMsg{Type: tea.KeyCtrlRight}
+	case "ctrl+left":
+		return tea.KeyMsg{Type: tea.KeyCtrlLeft}
+	case "ctrl+n":
+		return tea.KeyMsg{Type: tea.KeyCtrlN}
+	case "ctrl+p":
+		return tea.KeyMsg{Type: tea.KeyCtrlP}
+	case "ctrl+q":
+		return tea.KeyMsg{Type: tea.KeyCtrlQ}
+	case "ctrl+x":
+		return tea.KeyMsg{Type: tea.KeyCtrlX}
+	case "pgup":
+		return tea.KeyMsg{Type: tea.KeyPgUp}
+	case "pgdn":
+		return tea.KeyMsg{Type: tea.KeyPgDown}
 	default:
 		if len([]rune(label)) == 1 {
 			return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(label)}

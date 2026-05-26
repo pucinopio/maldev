@@ -138,6 +138,22 @@ func (m auditModel) Update(msg tea.Msg) (auditModel, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// r/E/J fire at all times — they must not be swallowed by the detail
+		// viewport when detail is open, otherwise refresh and export become
+		// unreachable with a panel on screen.
+		switch msg.String() {
+		case "r":
+			return m, listAuditCmd(m.svc)
+		case "E":
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newInputOverlay(OverlayIDAuditExportCSV, "Export CSV", "/path/to/audit.csv", 256)}
+			}
+		case "J":
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newInputOverlay(OverlayIDAuditExportJSON, "Export JSON", "/path/to/audit.json", 256)}
+			}
+		}
+
 		if m.detail {
 			switch msg.String() {
 			case "esc", "d":
@@ -169,19 +185,6 @@ func (m auditModel) Update(msg tea.Msg) (auditModel, tea.Cmd) {
 			m.detail = true
 			m.vp.SetContent(m.renderPayload(row))
 			return m, nil
-
-		case "r":
-			return m, listAuditCmd(m.svc)
-
-		case "E":
-			return m, func() tea.Msg {
-				return pushOverlayMsg{newInputOverlay(OverlayIDAuditExportCSV, "Export CSV", "/path/to/audit.csv", 256)}
-			}
-
-		case "J":
-			return m, func() tea.Msg {
-				return pushOverlayMsg{newInputOverlay(OverlayIDAuditExportJSON, "Export JSON", "/path/to/audit.json", 256)}
-			}
 		}
 	}
 

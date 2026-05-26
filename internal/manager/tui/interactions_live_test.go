@@ -21,6 +21,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/uuid"
 
+	httpsrvPkg "github.com/oioio-space/maldev/internal/manager/httpsrv"
 	"github.com/oioio-space/maldev/internal/manager/crypto"
 	"github.com/oioio-space/maldev/internal/manager/store"
 	"github.com/oioio-space/maldev/internal/manager/store/ent"
@@ -1065,6 +1066,243 @@ func TestLive_PassphrasePrompt_EmptyIsNoop(t *testing.T) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Session 5 — defect guard tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── D-S6: Audit detail-open consumes r/E/J via viewport ───────────────────
+
+// TestLive_AuditDetailOpen_RefreshStillWorks asserts that pressing 'r' while
+// the audit detail panel is open fires listAuditCmd, not a viewport scroll.
+// Before the fix the `if m.detail { … var cmd = m.vp.Update(msg); return … }`
+// block swallowed 'r' before the refresh case was reached.
+func TestLive_AuditDetailOpen_RefreshStillWorks(t *testing.T) {
+	m := newAuditModel(nil)
+	// Inject a fake row so selectedRow() is non-nil and 'd' opens detail.
+	m.rows = []*ent.AuditEvent{{}}
+	m.rebuildTable()
+	// Open the detail panel.
+	m.detail = true
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	if cmd == nil {
+		t.Fatal("'r' with detail open must emit listAuditCmd (non-nil cmd)")
+	}
+	msg := cmd()
+	if _, ok := msg.(AuditLoadedMsg); !ok {
+		t.Fatalf("'r' cmd produced %T, want AuditLoadedMsg", msg)
+	}
+}
+
+// TestLive_AuditDetailOpen_ExportCSVStillWorks asserts that 'E' while detail
+// is open fires the CSV export overlay cmd, not a viewport scroll.
+func TestLive_AuditDetailOpen_ExportCSVStillWorks(t *testing.T) {
+	m := newAuditModel(nil)
+	m.rows = []*ent.AuditEvent{{}}
+	m.rebuildTable()
+	m.detail = true
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'E'}})
+	if cmd == nil {
+		t.Fatal("'E' with detail open must emit pushOverlayMsg (non-nil cmd)")
+	}
+	msg := cmd()
+	po, ok := msg.(pushOverlayMsg)
+	if !ok {
+		t.Fatalf("'E' cmd produced %T, want pushOverlayMsg", msg)
+	}
+	if po.overlay == nil {
+		t.Fatal("'E' pushOverlayMsg has nil overlay")
+	}
+}
+
+// TestLive_AuditDetailOpen_ExportJSONStillWorks asserts that 'J' while detail
+// is open fires the JSON export overlay cmd, not a viewport scroll.
+func TestLive_AuditDetailOpen_ExportJSONStillWorks(t *testing.T) {
+	m := newAuditModel(nil)
+	m.rows = []*ent.AuditEvent{{}}
+	m.rebuildTable()
+	m.detail = true
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	if cmd == nil {
+		t.Fatal("'J' with detail open must emit pushOverlayMsg (non-nil cmd)")
+	}
+	if _, ok := cmd().(pushOverlayMsg); !ok {
+		t.Fatalf("'J' cmd produced %T, want pushOverlayMsg", cmd())
+	}
+}
+
+// ── D-S7: Server 's' key never fires (button not focused) ─────────────────
+
+// TestLive_ServersKeyS_StartStop asserts that pressing 's' on the servers
+// screen emits a non-nil cmd (startServerCmd) via the keyboard path.
+// Before the fix the 's' case only existed in OnClick (mouse), not in Update.
+func TestLive_ServersKeyS_StartStop(t *testing.T) {
+	ctrl := &mockServerCtrl{}
+	m := NewServersModelForTest(ctrl)
+	m = InitServersModel(m, 144, 44)
+
+	// Default: all servers stopped. 's' must emit a start cmd.
+	m.activeTab = serverTabRevocation
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	if cmd == nil {
+		t.Fatal("'s' with stopped server + ctrl must emit startServerCmd (non-nil cmd)")
+	}
+	// Execute the cmd — the underlying startServerCmd calls ctrl.Start(ctx, name).
+	// The mock records the call; the cmd returns serverStartedMsg or serverActionErrMsg.
+	msg := cmd()
+	switch msg.(type) {
+	case serverStartedMsg, serverActionErrMsg:
+		// both are valid outcomes from startServerCmd — mock returns nil error
+	default:
+		t.Fatalf("startServerCmd returned %T, want serverStartedMsg or serverActionErrMsg", msg)
+	}
+	if len(ctrl.started) == 0 {
+		t.Fatal("startServerCmd did not call ctrl.Start")
+	}
+	if ctrl.started[0] != "revocation" {
+		t.Errorf("started server = %q, want 'revocation'", ctrl.started[0])
+	}
+}
+
+// TestLive_ServersKeyS_NoCtrl asserts that 's' is a no-op when no controller
+// is wired (nil ctrl), preventing a nil-deref panic.
+func TestLive_ServersKeyS_NoCtrl(t *testing.T) {
+	m := newServersModel(nil, nil)
+	m.width, m.height = 144, 44
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	if cmd != nil {
+		t.Fatalf("'s' with nil ctrl must be a no-op, got non-nil cmd")
+	}
+}
+
+// mockServerCtrl is a minimal httpsrv.Controller for Start/Stop call recording.
+// It lives in package tui (internal test) so it references the unexported
+// httpsrv package via the same import path used by screen_servers.go.
+type mockServerCtrl struct {
+	started []string
+	stopped []string
+}
+
+func (c *mockServerCtrl) Start(_ context.Context, name string) error {
+	c.started = append(c.started, name)
+	return nil
+}
+func (c *mockServerCtrl) Stop(name string) error {
+	c.stopped = append(c.stopped, name)
+	return nil
+}
+func (c *mockServerCtrl) Statuses() map[string]httpsrvPkg.Status { return nil }
+func (c *mockServerCtrl) MergedEvents() <-chan httpsrvPkg.Event  { return nil }
+
+// ── D-S3/D-S5: chrome digit-key collision (design-level, documented Open) ─
+
+// TestLive_SettingsArgonKeyCollision documents that '1'/'2'/'3' on the Settings
+// screen are intercepted by chrome tab navigation before reaching settingsModel.
+// This is a known design defect (D-S3); the test records the current behaviour
+// so any future fix can be validated against it.
+func TestLive_SettingsArgonKeyCollision(t *testing.T) {
+	m := newSettingsModel(nil)
+	// Directly feed '1' to settingsModel.Update (bypassing chrome).
+	// The screen handler DOES process it correctly in isolation.
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	if cmd == nil {
+		t.Fatal("settingsModel.Update('1') must emit settingsSetArgonMsg (screen handles it in isolation)")
+	}
+	if _, ok := cmd().(settingsSetArgonMsg); !ok {
+		t.Fatalf("settingsModel '1' produced %T, want settingsSetArgonMsg", cmd())
+	}
+	// Document the defect: chrome intercepts '1' before the screen sees it when
+	// rootModel is in play.  The fix requires either: (a) excluding Settings from
+	// chrome digit-key interception, or (b) renaming the argon-preset shortcuts.
+	t.Log("D-S3: settings argon '1'/'2'/'3' work in isolation; chrome intercepts them in rootModel — open defect")
+}
+
+// TestLive_ServersLogFilterKeyCollision documents that '1'/'2'/'3'/'4' on the
+// Servers screen are intercepted by chrome tab navigation (D-S5). Direct
+// dispatch to serversModel (bypassing chrome) shows the screen handler works
+// correctly in isolation — the defect is solely in the chrome interception.
+func TestLive_ServersLogFilterKeyCollision(t *testing.T) {
+	m := newServersModel(nil, nil)
+	m.width, m.height = 144, 44
+	// '2' sent directly to serversModel (no chrome) must filter the log to
+	// "revocation" without changing the active sub-tab.
+	tabBefore := m.activeTab
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	if m.activeTab != tabBefore {
+		t.Errorf("activeTab changed from %d to %d; '2' must only filter the log", tabBefore, m.activeTab)
+	}
+	// D-S5: in rootModel, chrome intercepts '2' for tab navigation before this
+	// case is reached — the screen-level handler is correct but unreachable.
+}
+
+// ── D-S11: lic.detail.enter.kb missing AssertNotOutput ────────────────────
+
+// TestLive_LicensesDetailEnterCollapses verifies that pressing 'enter' on
+// Licenses (with detail defaulting open) collapses the detail panel.
+// Guards the lic.detail.enter.kb spec which had no side-effect assertion.
+func TestLive_LicensesDetailEnterCollapses(t *testing.T) {
+	m := newLicensesModel(nil)
+	if !m.detail {
+		t.Fatal("Licenses detail defaults to open (precondition)")
+	}
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.detail {
+		t.Fatal("'enter' must collapse the detail panel")
+	}
+}
+
+// ── D-S10: aud.detail.kb with no row must not open detail ─────────────────
+
+// TestLive_AuditDetailKey_NoRowIsNoop verifies that 'd' on Audit with no rows
+// leaves detail=false (it's a no-op when selectedRow() returns nil).
+func TestLive_AuditDetailKey_NoRowIsNoop(t *testing.T) {
+	m := newAuditModel(nil)
+	// No rows — selectedRow() returns nil.
+	if m.detail {
+		t.Fatal("audit detail must start closed")
+	}
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	if m.detail {
+		t.Fatal("'d' with no row must be a no-op; detail must remain closed")
+	}
+}
+
+// ── D-S9: wizard ctrl+c/ctrl+right/ctrl+left now fire via harness ─────────
+
+// TestLive_WizardCtrlC_ClosesWizard verifies that ctrl+c on the wizard model
+// causes it to emit WizardDoneMsg (cancel).  Previously keyMsgFromLabel("ctrl+c")
+// returned nil so the tui-verify spec never actually fired the key.
+func TestLive_WizardCtrlC_ClosesWizard(t *testing.T) {
+	m := newWizardModel(nil)
+	// Settle step 1 with an empty identity list so the wizard is usable.
+	m, _ = m.Update(wizard.IdentityLoadedMsg{})
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if cmd == nil {
+		t.Fatal("ctrl+c on wizard must emit a Cmd (WizardDoneMsg cancel path)")
+	}
+	msg := cmd()
+	if _, ok := msg.(WizardDoneMsg); !ok {
+		t.Fatalf("ctrl+c produced %T, want WizardDoneMsg", msg)
+	}
+}
+
+// TestLive_WizardCtrlRight_AdvancesStep verifies that ctrl+right advances the
+// wizard to the next step.  Previously keyMsgFromLabel("ctrl+right") returned
+// nil so the tui-verify wiz.next.kb spec never fired the key.
+func TestLive_WizardCtrlRight_AdvancesStep(t *testing.T) {
+	m := newWizardModel(nil)
+	m, _ = m.Update(wizard.IdentityLoadedMsg{})
+	before := m.step
+
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlRight})
+	if m.step == before {
+		t.Fatalf("ctrl+right did not advance step: still %d", m.step)
+	}
+}
 
 // liveTestStore opens an in-memory store pre-seeded with the given passphrase
 // so passphrase-prompt tests have a real canary to verify against.

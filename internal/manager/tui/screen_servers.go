@@ -170,6 +170,18 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
+		// Start/stop the active-tab server — keyboard mirror of the card button.
+		// The card's Button widget only fires via mouse (no focus management);
+		// this case gives operators a keyboard shortcut that always works.
+		case "s":
+			name := serverNames[m.activeTab]
+			if m.ctrl == nil {
+				return m, nil
+			}
+			if m.cards[m.activeTab].status.Running {
+				return m, stopServerCmd(m.ctrl, name)
+			}
+			return m, startServerCmd(m.ctrl, name)
 		// Sub-tab selection — R/H/P matches prototype hotkeys.
 		case "R":
 			m.activeTab = serverTabRevocation

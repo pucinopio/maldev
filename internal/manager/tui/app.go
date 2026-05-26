@@ -365,6 +365,11 @@ func (m rootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.routeToActive(msg)
 	}
 
+	// NOTE: ViewSettings uses [1][2][3] as argon-preset hints and ViewServers
+	// uses 1-4 for log-filter — both collide with the global digit tab navigation
+	// below.  Fixing the collision requires renaming the per-screen shortcuts
+	// (tracked as D-S3/D-S5); for now the chrome digit shortcuts take precedence.
+
 	for i, id := range viewOrder {
 		// 0-9 keyboard nav: positions 1..9 use the matching digit, position 10
 		// (and beyond) wraps to "0" so we keep a single-key shortcut for every

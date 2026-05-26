@@ -313,7 +313,15 @@ func specs() []spec {
 			AssertNotOutput: "Détail licence",
 			Notes:           "'d' toggles detail panel — AssertNotOutput proves panel actually closed",
 		},
-		{ID: "lic.detail.enter.kb", View: "licenses", Keys: "2 enter", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'enter' toggles detail panel"},
+		{
+			ID:              "lic.detail.enter.kb",
+			View:            "licenses",
+			Keys:            "2 enter",
+			ExpectMsgs:      []string{"tea.KeyMsg"},
+			// 'enter' collapses the always-open detail panel; the panel header must vanish.
+			AssertNotOutput: "Détail licence",
+			Notes:           "'enter' collapses detail panel — AssertNotOutput proves panel closed",
+		},
 		{
 			ID:           "lic.detail.tab.i.kb",
 			View:         "licenses",
@@ -627,11 +635,23 @@ func specs() []spec {
 		{ID: "srv.tab.r.kb", View: "servers", Keys: "7 R", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'R' switches to Revocation sub-tab"},
 		{ID: "srv.tab.h.kb", View: "servers", Keys: "7 H", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'H' switches to Heartbeat sub-tab"},
 		{ID: "srv.tab.p.kb", View: "servers", Keys: "7 P", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'P' switches to Probe sub-tab"},
-		{ID: "srv.probe.1.kb", View: "servers", Keys: "7 1", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'1' on Servers filters log to all"},
-		{ID: "srv.probe.2.kb", View: "servers", Keys: "7 2", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'2' on Servers filters log to revocation"},
-		{ID: "srv.probe.3.kb", View: "servers", Keys: "7 3", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'3' on Servers filters log to heartbeat"},
-		{ID: "srv.probe.4.kb", View: "servers", Keys: "7 4", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'4' on Servers filters log to probe"},
-		{ID: "srv.startstop.kb", View: "servers", Keys: "7 s", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'s' start/stop selected server — no-op without controller"},
+		// D-S5: '1'-'4' on Servers are intercepted by chrome tab-navigation
+		// (open design defect); the specs document this by asserting the key
+		// reaches the rootModel trace (which it does via the tab-nav handler).
+		{ID: "srv.probe.1.kb", View: "servers", Keys: "7 1", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "D-S5: '1' intercepted by chrome tab-nav — open defect; key reaches model"},
+		{ID: "srv.probe.2.kb", View: "servers", Keys: "7 2", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "D-S5: '2' intercepted by chrome tab-nav — open defect"},
+		{ID: "srv.probe.3.kb", View: "servers", Keys: "7 3", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "D-S5: '3' intercepted by chrome tab-nav — open defect"},
+		{ID: "srv.probe.4.kb", View: "servers", Keys: "7 4", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "D-S5: '4' intercepted by chrome tab-nav — open defect"},
+		{
+			ID:           "srv.startstop.kb",
+			View:         "servers",
+			Keys:         "7 s",
+			ExpectMsgs:   []string{"tea.KeyMsg"},
+			// 's' is now wired in serversModel.Update; without a controller it's a
+			// no-op so the Servers screen stays visible (no navigation side-effect).
+			AssertOutput: "[s] start",
+			Notes:        "D-S7 fixed: 's' keyboard start/stop wired in serversModel.Update",
+		},
 		{ID: "srv.edit.kb", View: "servers", Keys: "7 e", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'e' pushes input overlay for bind address"},
 		{ID: "srv.regentoken.kb", View: "servers", Keys: "7 g", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'g' pushes confirm overlay to regen admin token"},
 		{ID: "srv.clearlog.kb", View: "servers", Keys: "7 c", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'c' clears live-log buffer"},
@@ -715,13 +735,32 @@ func specs() []spec {
 		{ID: "aud.filter.s.kb", View: "audit", Keys: "9 s", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'s' sets audit filter to server"},
 		{ID: "aud.filter.i.kb", View: "audit", Keys: "9 i", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'i' sets audit filter to identity"},
 		{ID: "aud.filter.p.kb", View: "audit", Keys: "9 p", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'p' sets audit filter to probe"},
-		{ID: "aud.detail.kb", View: "audit", Keys: "9 d", ExpectMsgs: []string{"tea.KeyMsg"}, Notes: "'d' toggles detail panel (no-op without row)"},
+		{
+			ID:              "aud.detail.kb",
+			View:            "audit",
+			Keys:            "9 d",
+			ExpectMsgs:      []string{"tea.KeyMsg"},
+			// D-S10: 'd' with no rows is a no-op; the detail viewport must NOT appear.
+			AssertNotOutput: "payload",
+			Notes:           "D-S10: 'd' with no row is a no-op — AssertNotOutput guards regression",
+		},
 		{
 			ID:         "aud.refresh.kb",
 			View:       "audit",
 			Keys:       "9 r",
 			ExpectMsgs: []string{"tea.KeyMsg"},
 			Notes:      "'r' on Audit triggers listAuditCmd",
+		},
+		// D-S6 guard: 'r' must still reach listAuditCmd even when detail panel is open.
+		// The prior bug: `if m.detail { vp.Update(msg); return }` swallowed 'r'.
+		// Without a seed row 'd' is a no-op so detail stays closed; the spec
+		// verifies the message reaches the model (content-level guard in Live tests).
+		{
+			ID:         "aud.refresh.detail.kb",
+			View:       "audit",
+			Keys:       "9 r",
+			ExpectMsgs: []string{"tea.KeyMsg"},
+			Notes:      "D-S6 fixed: 'r' fires listAuditCmd regardless of detail state",
 		},
 		{
 			ID:         "aud.export.csv.kb",
@@ -985,25 +1024,33 @@ func specs() []spec {
 			Notes:      "'2 n' opens wizard overlay; esc on step1 cancels (WizardDoneMsg)",
 		},
 		{
+			// D-S8 fixed: keyMsgFromLabel now handles ctrl+c.  Wizard overlay is
+			// not composited in the snap (pushOverlayMsg cmd not run), so the
+			// side-effect is verified by TestLive_WizardCtrlC_ClosesWizard.
 			ID:         "wiz.ctrlquit.kb",
 			View:       "licenses",
 			Keys:       "2 n ctrl+c",
 			ExpectMsgs: []string{"tea.KeyMsg"},
-			Notes:      "ctrl+c force-quits wizard",
+			Notes:      "D-S8 fixed: ctrl+c now fires; cancel verified by Live test",
 		},
 		{
+			// D-S8 fixed: keyMsgFromLabel now handles ctrl+right.
+			// The wizard overlay is not composited in the snap (cmd not run), so we
+			// assert the key reaches the root model trace — the Live test
+			// TestLive_WizardCtrlRight_AdvancesStep verifies the actual step advance.
 			ID:         "wiz.next.kb",
 			View:       "licenses",
 			Keys:       "2 n ctrl+right",
 			ExpectMsgs: []string{"tea.KeyMsg"},
-			Notes:      "ctrl+right advances to next step",
+			Notes:      "D-S8 fixed: ctrl+right now fires; step-advance verified by Live test",
 		},
 		{
+			// D-S8 fixed: keyMsgFromLabel now handles ctrl+left.
 			ID:         "wiz.prev.kb",
 			View:       "licenses",
 			Keys:       "2 n ctrl+right ctrl+left",
 			ExpectMsgs: []string{"tea.KeyMsg"},
-			Notes:      "ctrl+left retreats to prev step (after advancing once)",
+			Notes:      "D-S8 fixed: ctrl+left now fires; step-retreat verified by Live test",
 		},
 		// Wizard sidebar click — standalone wizard view for coord resolution.
 		{
