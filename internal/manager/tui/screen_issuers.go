@@ -17,7 +17,7 @@ import (
 
 // ensureExtension appends ext to path when the path does not already end with
 // that suffix (case-insensitive). It is the single helper shared by all
-// file-export paths that auto-append a file extension (D-S23, D-S31, D-S42).
+// file-export paths that auto-append a file extension.
 //
 //	ensureExtension("/tmp/key",          ".pub") → "/tmp/key.pub"
 //	ensureExtension("/tmp/key.pub",      ".pub") → "/tmp/key.pub"   (no-op)

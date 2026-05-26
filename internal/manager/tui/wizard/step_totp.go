@@ -125,7 +125,7 @@ func (s *StepTOTP) View() string {
 	if s.requireOn {
 		lines = append(lines, wizFg.Render("  Select TOTP secret:"))
 		if len(s.rows) == 0 {
-			// D-S21: dead-end fixed — guide the operator to create a secret
+			// dead-end fixed — guide the operator to create a secret
 			// in the TOTP screen (view 8) before returning to the wizard.
 			lines = append(lines,
 				wizDim.Render("  Aucun secret TOTP disponible."),

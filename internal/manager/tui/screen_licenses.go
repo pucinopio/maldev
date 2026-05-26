@@ -834,7 +834,7 @@ func (m licensesModel) renderDetailChain(row *ent.License) string {
 }
 
 // handleLicenseReissueConfirm is called when the operator confirms the
-// "license-reissue" overlay (D-S16). It calls svc.License.ReIssue and reloads
+// "license-reissue" overlay. It calls svc.License.ReIssue and reloads
 // the list, surfacing an OK overlay on success or an error overlay on failure.
 func (m licensesModel) handleLicenseReissueConfirm(res ConfirmResultMsg) (licensesModel, tea.Cmd) {
 	if !res.Confirm {

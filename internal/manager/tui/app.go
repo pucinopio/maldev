@@ -312,7 +312,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, startServerCmd(m.httpsrv, msg.name)
 
 	case serverStartedMsg, serverStoppedMsg:
-		// D-S27: forward lifecycle events to the Servers screen so cards + log
+		// forward lifecycle events to the Servers screen so cards + log
 		// reflect the transition, then refresh the dashboard so the ON/OFF tile
 		// updates without requiring the operator to navigate away and back.
 		updated, cmd := m.servers.Update(msg)
@@ -375,7 +375,7 @@ func (m rootModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// screenConsumesDigit returns true when the active view binds the given digit
 	// for an in-screen action and chrome must NOT swallow it for tab-nav. Tracked
-	// as D-S3 (Settings argon presets [1][2][3]) and D-S5 (Servers log filter
+	// as (Settings argon presets [1][2][3]) and (Servers log filter
 	// [1][2][3][4]). Keep this list in sync with the per-screen Update switches.
 	screenConsumesDigit := func(view ViewID, d string) bool {
 		switch view {
@@ -689,7 +689,7 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 	case ConfirmResultMsg:
 		switch m.active {
 		case ViewLicenses:
-			// Re-issue (D-S16): the confirm overlay for OverlayIDLicenseReissue was pushed
+			// Re-issue: the confirm overlay for OverlayIDLicenseReissue was pushed
 			// by the 'e' key but its result was never routed back to the screen.
 			if res.ID == OverlayIDLicenseReissue && res.Confirm {
 				updated, c := m.licenses.handleLicenseReissueConfirm(res)
@@ -728,7 +728,7 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 				if err != nil {
 					m.overlays = append(m.overlays, newErrorOverlay("Regen failed", err.Error()))
 				} else {
-					// D-S36: persist token so [T] can show it on demand.
+					// persist token so [T] can show it on demand.
 					// adminTokens is always initialised in newServersModel.
 					m.servers.adminTokens[serverName] = token
 					m.overlays = append(m.overlays, NewOKOverlay(
@@ -746,12 +746,12 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 			m.issuers = updated
 			m.pendingCmd = c
 		case ViewRecipients:
-			// D-S28: recipient rename + export now routed via handleRecipientInputResult.
+			// recipient rename + export now routed via handleRecipientInputResult.
 			updated, c := m.recipients.handleRecipientInputResult(res)
 			m.recipients = updated
 			m.pendingCmd = c
 		case ViewIdentities:
-			// D-S30: identity rename + export now routed via handleIdentityInputResult.
+			// identity rename + export now routed via handleIdentityInputResult.
 			updated, c := m.identities.handleIdentityInputResult(res)
 			m.identities = updated
 			m.pendingCmd = c

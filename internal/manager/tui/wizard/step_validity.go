@@ -79,7 +79,7 @@ func (s *StepValidity) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 		// regardless of which field has focus.
 		// NOTE: ctrl+m is NOT usable — in POSIX terminals ctrl+m == \r == Enter
 		// (keyCR), so bubbletea's keyNames maps it to "enter" and the "enter"
-		// case above fires first (D-S20). Remapped to ctrl+d to avoid the
+		// case above fires first. Remapped to ctrl+d to avoid the
 		// collision. ctrl+d = keyEOT = "ctrl+d" in bubbletea's keyNames.
 		case "ctrl+w":
 			s.applyShortcut(7 * 24 * time.Hour)

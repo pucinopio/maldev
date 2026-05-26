@@ -88,7 +88,7 @@ func (m recipientsModel) Update(msg tea.Msg) (recipientsModel, tea.Cmd) {
 			}
 
 		case "e":
-			// D-S28: edit (rename) recipient — was missing, 'e' never handled.
+			// edit (rename) recipient — was missing, 'e' never handled.
 			row := m.selectedRow()
 			if row == nil {
 				return m, nil

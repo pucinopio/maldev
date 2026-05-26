@@ -88,7 +88,7 @@ func (m identitiesModel) Update(msg tea.Msg) (identitiesModel, tea.Cmd) {
 			}
 
 		case "e":
-			// D-S30: edit (rename) identity — was missing from handler list.
+			// edit (rename) identity — was missing from handler list.
 			row := m.selectedRow()
 			if row == nil {
 				return m, nil
@@ -294,7 +294,7 @@ func (m identitiesModel) handleIdentityInputResult(res InputResultMsg) (identiti
 			return m, nil
 		}
 		id := row.ID
-		// Auto-append .bin when the operator omits the extension (D-S31).
+		// Auto-append .bin when the operator omits the extension.
 		path := ensureExtension(res.Value, ".bin")
 		return m, func() tea.Msg {
 			data, err := m.svc.Identity.ExportBin(context.Background(), id)

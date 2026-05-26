@@ -428,7 +428,7 @@ func (m settingsModel) boxCycleVieServeurs(w int, r *ent.Setting) string {
 }
 
 func (m settingsModel) boxApparence(w int) string {
-	// D-S45: theme keys are N/M/O (not 1/2/3 which set argon preset).
+	// theme keys are N/M/O (not 1/2/3 which set argon preset).
 	// The View now matches the keyboard handler so pressing [N] sets neon, etc.
 	themes := []string{
 		GlowGreen.Render("●") + " " + HintKey.Render("[N]") + " " + GlowGreen.Render("neon"),

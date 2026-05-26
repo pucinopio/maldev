@@ -36,54 +36,77 @@ const (
 	probeViewLive
 )
 
-// serverDescriptionText returns the one-line French role description for the
-// named server. Shown at the top of the Status box (D-S34).
-func serverDescriptionText(name string) string {
-	switch name {
-	case "revocation":
-		return "Sert la CRL signée aux clients qui vérifient leurs licences."
-	case "heartbeat":
-		return "Reçoit les pings périodiques des licences actives (anti-replay)."
-	default:
-		return "Émet des tokens de probe + reçoit les rapports d'identification machine."
-	}
+// serverMetaEntry consolidates per-server static metadata: role description
+// shown atop the Status box, plus the API-examples template fed an address.
+type serverMetaEntry struct {
+	role string                  // one-line French role description
+	api  func(base string) string // API-examples body, parameterised by base URL
 }
 
-// serverAPIExamples returns example curl commands for each server (D-S37).
+// serverMeta keys every per-server static data the Servers screen needs.
+// New servers go here; serverDescription/serverAPIExamples are thin views.
+var serverMeta = map[string]serverMetaEntry{
+	"revocation": {
+		role: "Sert la CRL signée aux clients qui vérifient leurs licences.",
+		api: func(base string) string {
+			return strings.Join([]string{
+				GlowCyan.Render("GET  ") + Mute.Render(base+"/crl"),
+				Dim.Render("  → Télécharge la CRL signée (DER ou PEM selon Accept:)"),
+				"",
+				GlowCyan.Render("POST ") + Mute.Render(base+"/revoke"),
+				Dim.Render("  Content-Type: application/json"),
+				Dim.Render(`  {"license_uuid":"…","reason":"…","actor":"operator"}`),
+				Dim.Render("  Authorization: Bearer <admin_token>"),
+			}, "\n")
+		},
+	},
+	"heartbeat": {
+		role: "Reçoit les pings périodiques des licences actives (anti-replay).",
+		api: func(base string) string {
+			return strings.Join([]string{
+				GlowCyan.Render("POST ") + Mute.Render(base+"/heartbeat/<license_uuid>"),
+				Dim.Render("  Content-Type: application/json"),
+				Dim.Render(`  {"totp":"<6-digit>"}   // omit when TOTP not required`),
+				"",
+				GlowCyan.Render("GET  ") + Mute.Render(base+"/metrics"),
+				Dim.Render("  → Prometheus-compatible heartbeat counters"),
+			}, "\n")
+		},
+	},
+	"probe": {
+		role: "Émet des tokens de probe + reçoit les rapports d'identification machine.",
+		api: func(base string) string {
+			return strings.Join([]string{
+				GlowCyan.Render("GET  ") + Mute.Render(base+"/probe/<token>"),
+				Dim.Render("  → Échange one-shot; rapporte le fingerprint machine"),
+				"",
+				GlowCyan.Render("GET  ") + Mute.Render(base+"/probe/<token>/agent"),
+				Dim.Render("  → Agent long-poll (streaming fingerprint updates)"),
+			}, "\n")
+		},
+	},
+}
+
+// serverDescriptionText looks up the role description for name. Unknown names
+// fall back to the probe entry (matches the pre-table switch default).
+func serverDescriptionText(name string) string {
+	if m, ok := serverMeta[name]; ok {
+		return m.role
+	}
+	return serverMeta["probe"].role
+}
+
+// serverAPIExamples returns the curl-examples body for name parameterised by
+// the listen addr.
 func serverAPIExamples(name, addr string) string {
 	if addr == "" || addr == "—" {
 		addr = "localhost:8443"
 	}
 	base := "https://" + addr
-	switch name {
-	case "revocation":
-		return strings.Join([]string{
-			GlowCyan.Render("GET  ") + Mute.Render(base+"/crl"),
-			Dim.Render("  → Télécharge la CRL signée (DER ou PEM selon Accept:)"),
-			"",
-			GlowCyan.Render("POST ") + Mute.Render(base+"/revoke"),
-			Dim.Render("  Content-Type: application/json"),
-			Dim.Render(`  {"license_uuid":"…","reason":"…","actor":"operator"}`),
-			Dim.Render("  Authorization: Bearer <admin_token>"),
-		}, "\n")
-	case "heartbeat":
-		return strings.Join([]string{
-			GlowCyan.Render("POST ") + Mute.Render(base+"/heartbeat/<license_uuid>"),
-			Dim.Render("  Content-Type: application/json"),
-			Dim.Render(`  {"totp":"<6-digit>"}   // omit when TOTP not required`),
-			"",
-			GlowCyan.Render("GET  ") + Mute.Render(base+"/metrics"),
-			Dim.Render("  → Prometheus-compatible heartbeat counters"),
-		}, "\n")
-	default:
-		return strings.Join([]string{
-			GlowCyan.Render("GET  ") + Mute.Render(base+"/probe/<token>"),
-			Dim.Render("  → Échange one-shot; rapporte le fingerprint machine"),
-			"",
-			GlowCyan.Render("GET  ") + Mute.Render(base+"/probe/<token>/agent"),
-			Dim.Render("  → Agent long-poll (streaming fingerprint updates)"),
-		}, "\n")
+	if m, ok := serverMeta[name]; ok {
+		return m.api(base)
 	}
+	return serverMeta["probe"].api(base)
 }
 
 // serversModel is the root model for the Servers screen (ViewServers).
@@ -101,7 +124,7 @@ type serversModel struct {
 	probeHistory []*ent.ProbeToken // populated when H view is active
 
 	// adminTokens caches admin tokens by server name so the operator can
-	// retrieve them on demand with [t] after they were generated (D-S36).
+	// retrieve them on demand with [t] after they were generated.
 	adminTokens map[string]string
 
 	// Per-server request-rate ring buffer (60 samples = 1 minute window).
@@ -290,7 +313,7 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 			}
 
 		case "T":
-			// D-S36: show cached admin token on demand ([T] = capital to avoid
+			// show cached admin token on demand ([T] = capital to avoid
 			// conflict with [t] probe inner-view tokens key).
 			name := serverNames[m.activeTab]
 			tok, ok := m.adminTokens[name]
@@ -323,14 +346,14 @@ func (m serversModel) Update(msg tea.Msg) (serversModel, tea.Cmd) {
 			return m, cmd
 
 		case "i":
-			// D-S37: [i] API info — push a help overlay with curl examples for
-			// the active server. 'i' = info; doesn't conflict with any existing
+			// [i] API info — push a help overlay with curl examples for the
+			// active server. 'i' = info; doesn't conflict with any existing
 			// Servers key (a=auto-scroll, A=global startAll, s=start/stop, g=regen).
 			name := serverNames[m.activeTab]
 			addr := m.cards[m.activeTab].status.ListenAddr
 			examples := serverAPIExamples(name, addr)
 			return m, func() tea.Msg {
-				return pushOverlayMsg{newErrorOverlay("API · "+name, examples)}
+				return pushOverlayMsg{NewOKOverlay("API · "+name, examples)}
 			}
 		// Probe inner-view keys — only meaningful when the Probe sub-tab is
 		// active; on the other sub-tabs they fall through to the default
@@ -537,7 +560,7 @@ func (m serversModel) View() string {
 		}
 		return "start"
 	}())
-	// D-S34: one-line French role description shown at top of status box.
+	// one-line French role description shown at top of status box.
 	serverRole := Mute.Render(serverDescriptionText(serverNames[m.activeTab]))
 	statusBox := BoxFocused.Width(m.width/2 - 3).Render(
 		lipgloss.JoinVertical(lipgloss.Left,
@@ -706,7 +729,7 @@ func (m serversModel) renderLogPanel() string {
 // tokens. Columns mirror the prototype: TOKEN / LABEL / ISSUED / TTL / STATE.
 // Rows come from svc.Probe.History filtered to those still in waiting state.
 func (m serversModel) renderProbeTokens() string {
-	// D-S38: [q] for QR renamed to [Q] to avoid collision with global quit key.
+	// [q] for QR renamed to [Q] to avoid collision with global quit key.
 	hint := HintKey.Render("[n]") + Dim.Render(" générer · ") +
 		HintKey.Render("[Q]") + Dim.Render(" QR · ") +
 		HintKey.Render("[x]") + Dim.Render(" révoquer")
@@ -887,7 +910,7 @@ func serverCountLabel(statuses map[string]httpsrv.Status) string {
 // Inside the status box: row 0=top border, row 1=title row, row 2=blank,
 // row 3=●/port line, row 4=stopped hint OR url, etc.
 func (m serversModel) OnClick(x, y, _ int) tea.Cmd {
-	// D-S39: outer R/H/P sub-tab bar sits at Y=ChromeRows (row 4).
+	// outer R/H/P sub-tab bar sits at Y=ChromeRows (row 4).
 	// Walk the rendered tab widths to find which tab was clicked.
 	if y == ChromeRows {
 		type tabDef struct {

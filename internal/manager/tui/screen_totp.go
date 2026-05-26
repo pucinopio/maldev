@@ -120,7 +120,7 @@ func (m totpModel) Update(msg tea.Msg) (totpModel, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		// D-S43: pgup/pgdn scroll the TOTP list when there are many entries.
+		// pgup/pgdn scroll the TOTP list when there are many entries.
 		case "pgup":
 			cur := m.table.Cursor()
 			if cur > 0 {
@@ -322,7 +322,7 @@ func (m totpModel) renderDetailSide(w int) string {
 		)
 	}
 	title := Dim.Render("QR · ") + GlowCyan.Render(m.view.AccountLabel)
-	// D-S41: render QR at its natural width inside a padding wrapper rather
+	// render QR at its natural width inside a padding wrapper rather
 	// than inside a Width()-constrained box. Width() wraps every line to w
 	// cells which shifts the QR half-block art to the right when the box
 	// border+padding overhead is counted against the inner text budget.
@@ -331,7 +331,7 @@ func (m totpModel) renderDetailSide(w int) string {
 	hint := HintKey.Render("[E]") + Dim.Render(" PNG  ·  ") +
 		Dim.Render("secret: ") + Mute.Render(m.view.Secret)
 	inner := lipgloss.JoinVertical(lipgloss.Left, title, "", qr, "", hint)
-	// D-S40: use the same BoxFocused style but without Width() override so the
+	// use the same BoxFocused style but without Width() override so the
 	// two columns stay flush — lipgloss JoinHorizontal aligns tops, not heights,
 	// so we rely on the parent caller (View) to equalise heights if needed.
 	return BoxFocused.Width(w).Render(inner)
@@ -376,7 +376,7 @@ func (m totpModel) handleTOTPInputResult(res InputResultMsg) (totpModel, tea.Cmd
 		if m.view == nil || m.view.QRImagePNG == nil {
 			return m, nil
 		}
-		// Auto-append .png when the operator omits the extension (D-S42).
+		// Auto-append .png when the operator omits the extension.
 		path := ensureExtension(res.Value, ".png")
 		png := m.view.QRImagePNG
 		return m, func() tea.Msg {
