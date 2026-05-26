@@ -805,21 +805,32 @@ func loadLicenseAuditCmd(svc *service.Services, row *ent.License) tea.Cmd {
 	}
 }
 
-// renderDetailChain renders the parent → here → successors lineage. The ent
-// schema doesn't model parent/successor links yet, so this is a stub that
-// surfaces what we DO know (PayloadKind + status superseded warning).
+// renderDetailChain renders the parent → here → successors lineage.
+// The ent schema does not model parent/successor links yet; this render
+// surfaces what IS known (uuid, subject, status) inside a structured
+// placeholder so the tab is informative rather than an empty stub.
 func (m licensesModel) renderDetailChain(row *ent.License) string {
-	var b strings.Builder
-	b.WriteString(GlowCyan.Render("Chaîne de succession") + "\n\n")
-	b.WriteString(Dim.Render("  parent → ") + Mute.Render("aucun (racine)") + "\n")
-	b.WriteString("  " + GlowMagent.Render(row.LicenseUUID[:8]+"…") + " " +
-		Dim.Render("("+row.Subject+")") + "\n")
-	b.WriteString(Dim.Render("  successeurs → ") + Mute.Render("aucun") + "\n")
-	if row.Status == "superseded" {
-		b.WriteString("\n" + GlowYellow.Render("⚠ cette licence est SUPERSEDED — re-émets le successeur le plus récent."))
+	header := GlowCyan.Render("Chaîne de succession") + "  " +
+		Mute.Render("(liens parent/successeur — à venir)")
+
+	// Skeleton table: PARENT / THIS / SUCCESSORS rows.
+	// labelW matches the 14-cell gutter used by renderDetailBody's kvRows.
+	const labelW = 14
+	divider := Dim.Render(strings.Repeat("─", BoxedInner(m.width)))
+	parentRow := kvRow("parent", Mute.Render("aucun (racine)"), labelW)
+	thisRow := kvRow("cette lic.", GlowMagent.Render(row.LicenseUUID[:8]+"…")+" "+Dim.Render(row.Subject), labelW)
+	succRow := kvRow("successeurs", Mute.Render("aucun enregistré"), labelW)
+
+	lines := []string{header, "", parentRow, divider, thisRow, divider, succRow}
+
+	if row.Status == licenseent.StatusSuperseded {
+		lines = append(lines, "",
+			GlowYellow.Render("cette licence est SUPERSEDED — re-émettre le successeur le plus récent"))
 	}
-	b.WriteString("\n" + Mute.Render("  (parent/successor links pas encore modélisés dans le schéma ent — stub)"))
-	return b.String()
+	lines = append(lines, "",
+		Dim.Render("  Liens parent/successeur seront peuplés une fois le champ successor_id ajouté au schéma ent."))
+
+	return strings.Join(lines, "\n")
 }
 
 func (m licensesModel) handleRevokeResult(res RevokeConfirmedMsg) (licensesModel, tea.Cmd) {
