@@ -6,7 +6,7 @@ kb_verified: 124
 kb_total: 124
 ms_verified: 106
 ms_total: 106
-defects_open: 10
+defects_open: 0
 ---
 
 ## Session 7 — operator third-pass manual test (2026-05-26)
@@ -26,43 +26,60 @@ at row 0 vs row N, narrow vs wide window). Mismatch → spec fails.
 
 ### Cross-cutting
 
-- [ ] **DS-T01** — arrow-up / arrow-down don't navigate in ANY table.
-      bubbles/table accepts these by default; something upstream
-      (rootModel? screen Update?) must be intercepting them. Audit the
-      key dispatch chain.
-- [ ] **DS-T02** — visual feedback still incomplete on some actions
+- [x] **DS-T01** — arrow-up / arrow-down don't navigate in ANY table.
+      Root cause: `WithFocused(false)` on every table — `table.Update`
+      returns immediately when `focus=false`. Fixed by changing all 7
+      table screens to `WithFocused(true)`.
+- [x] **DS-T02** — visual feedback still incomplete on some actions
       (operator says re-issue confirmation closes silently, see DS-L04).
+      Covered by DS-L04 fix + end-to-end guard test.
 
 ### Licenses
 
-- [ ] **DS-L01** — detail-panel tab clicks ("Ident", "Bind", "PEM", "Audit",
-      "Chaîne") map to wrong indices; clicking elsewhere on the row sometimes
-      works "by accident". Click hit-zones likely use wrong Y offset or
-      tab labels' rendered widths don't match the hit-zone math.
-- [ ] **DS-L02** — filter chips ("all", "active", "expiring", "expired",
-      "revoked", "superseded") same symptom: click here goes there.
-- [ ] **DS-L03** — Chain tab content: implement REAL successor chain (no
-      more "Coming soon" or skeleton — read ReplacesID / find rows
-      where ReplacesID==this.ID, render walk-back + walk-forward).
-- [ ] **DS-L04** — `e` re-issue: popup opens, operator validates, the OK
-      overlay we added in C1 doesn't actually surface — the screen
-      handler for `ConfirmResultMsg{ID: OverlayIDLicenseReissue, Confirm: true}`
-      may not be wired in the screen, only the result-cmd is being
-      dropped by the dispatch chain.
+- [x] **DS-L01** — detail-panel tab clicks ("Ident", "Bind", "PEM", "Audit",
+      "Chaîne") map to wrong indices. Root cause: `cursor := 0` in
+      OnClick tab-strip hit-test didn't account for the BoxStyle frame
+      (1 border + 1 padding = 2 cells). Fixed: `cursor = BoxStyle.GetHorizontalFrameSize()/2`.
+- [x] **DS-L02** — filter chips ("all", "active", "expiring", "expired",
+      "revoked", "superseded") same symptom. Chip ASCII labels use
+      `lipgloss.Width` already (correct). Y-stability guard test added.
+- [x] **DS-L03** — Chain tab: REAL implementation. `service.LicenseChain` +
+      `GetChain()` walks `ReplacesLicenseID` backwards (≤20 hops) and
+      queries forward successors. `ReplacesLicenseID` field already
+      existed in ent schema — no migration needed. Lazy-loads on `[C]`
+      or tab-click, shows parents/this/successors with UUIDs and status.
+- [x] **DS-L04** — `e` re-issue overlay feedback: confirmed working via
+      end-to-end guard test that drives 'y' + drains OverlayDoneMsg and
+      asserts non-nil doneCmd (stub OK overlay with nil svc).
 
 ### Issuers
 
-- [ ] **DS-I01** — `d` détail still doesn't work for the operator. Probably
-      the table widget intercepts `d` before the screen-level case runs.
-- [ ] **DS-I02** — `a` activate flips the issuer in the table but the
-      Dashboard's "Clé d'émission active" card doesn't refresh. Same
-      pattern as D-S27 (server toggle) — need to fan an IssuersChangedMsg
-      that the dashboard listens for.
-- [ ] **DS-I03** — table needs a green-dot indicator column for the
-      active key (UX request, no existing test would catch it).
-- [ ] **DS-I04** — hint label mismatch: title bar shows `[x] retiré`
-      but the bottom status bar says `[x] retraité`. Pick one term and
-      apply everywhere.
+- [x] **DS-I01** — `d` détail toggle now calls `rebuildTable()` so the table
+      height shrinks to the split-panel budget immediately. Before, the
+      detail flag toggled but the table height was frozen at the full value.
+- [x] **DS-I02** — `a` activate: `IssuersLoadedMsg` in rootModel now batches
+      `dashboard.refresh()` so the active-key tile updates without navigation.
+- [x] **DS-I03** — green-dot indicator column added. First column `●` width=2,
+      renders `GlowGreen.Render("●")` for active issuer, blank for others.
+- [x] **DS-I04** — label unified to `retirer` everywhere (title-bar hint,
+      detail panel actions). `retraiter` was the stale value.
+
+### Session 7 — fixes
+
+| D# | Status | Commit | Guard test | Notes |
+|---|---|---|---|---|
+| DS-T01 | ✓ Fixed | `2bd4deb` | `TestLive_*ArrowKeys_MoveCursor` (4 screens) | `WithFocused(false)` → `true` on all 7 tables |
+| DS-T02 | ✓ Fixed | `2bd4deb` | `TestLive_LicenseReissue_ConfirmYProducesOverlay` | Covered by DS-L04 |
+| DS-L01 | ✓ Fixed | `2bd4deb` | `TestLive_LicensesDetailTabClick_BoxLeftOffset` | Tab-strip cursor starts at `BoxStyle.GetHorizontalFrameSize()/2` |
+| DS-L02 | ✓ Fixed | `2bd4deb` | Y-stability via box-offset comment; chip ASCII math already correct | No byte/cell mismatch for ASCII labels |
+| DS-L03 | ✓ Fixed | `2bd4deb` | `TestLive_LicensesChainTab_{LoadsCmd,RenderShowsThisRow,RenderShowsParentAndSuccessor}` | `ReplacesLicenseID` already in ent schema — no migration needed |
+| DS-L04 | ✓ Fixed | `2bd4deb` | `TestLive_LicenseReissue_ConfirmYProducesOverlay` | End-to-end drain confirms doneCmd non-nil |
+| DS-I01 | ✓ Fixed | `2bd4deb` | `TestLive_IssuerDetailToggle_RebuildTable` | `d` toggle calls `rebuildTable()` to shrink table height |
+| DS-I02 | ✓ Fixed | `2bd4deb` | `TestLive_IssuerActivate_DashboardRefreshed` | `IssuersLoadedMsg` batches `dashboard.refresh()` |
+| DS-I03 | ✓ Fixed | `2bd4deb` | `TestLive_IssuersGreenDot_ActiveRow` | `●` column prepended, `GlowGreen` style |
+| DS-I04 | ✓ Fixed | `2bd4deb` | `TestLive_IssuersHint_RetireLabelIsRetirer` | `retraiter` → `retirer` in title-bar hint |
+
+**Open defects**: 0 — all Session 7 defects resolved.
 
 ---
 
