@@ -1,0 +1,12 @@
+# Force LF for files where line-endings affect test correctness.
+# Snapshot/golden test fixtures must round-trip identically on Windows and
+# Linux — without this, Windows checkouts with core.autocrlf=true convert
+# them to CRLF on disk, breaking every snapshot test (see Session 0004
+# diagnosis at .dev/license-manager-2026/RESUME.md).
+*.golden text eol=lf
+
+# Tape files (charmbracelet/vhs) — same reason.
+*.tape   text eol=lf
+
+# Shell scripts must stay LF or bash chokes on the carriage return.
+*.sh     text eol=lf
