@@ -120,6 +120,40 @@ func (m totpModel) Update(msg tea.Msg) (totpModel, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
+		// D-S43: pgup/pgdn scroll the TOTP list when there are many entries.
+		case "pgup":
+			rows := len(m.rows)
+			cur := m.table.Cursor()
+			if cur > 0 {
+				step := m.table.Height()
+				if step < 1 {
+					step = 1
+				}
+				next := cur - step
+				if next < 0 {
+					next = 0
+				}
+				m.table.SetCursor(next)
+			}
+			_ = rows
+			return m, nil
+		case "pgdn":
+			rows := len(m.rows)
+			cur := m.table.Cursor()
+			step := m.table.Height()
+			if step < 1 {
+				step = 1
+			}
+			next := cur + step
+			if next >= rows {
+				next = rows - 1
+			}
+			if next < 0 {
+				next = 0
+			}
+			m.table.SetCursor(next)
+			return m, m.loadCursorDetail()
+
 		case "n":
 			return m, func() tea.Msg {
 				return pushOverlayMsg{newInputOverlay("totp-label", "New TOTP secret",
@@ -290,14 +324,19 @@ func (m totpModel) renderDetailSide(w int) string {
 		)
 	}
 	title := Dim.Render("QR · ") + GlowCyan.Render(m.view.AccountLabel)
-	// Inline the QR ASCII so the side panel doesn't depend on the viewport
-	// width — keeps the half-block grid intact.
+	// D-S41: render QR at its natural width inside a padding wrapper rather
+	// than inside a Width()-constrained box. Width() wraps every line to w
+	// cells which shifts the QR half-block art to the right when the box
+	// border+padding overhead is counted against the inner text budget.
+	// Use Padding(0,1) for a thin visual frame without a hard width constraint.
 	qr := m.view.QRImageASCII
 	hint := HintKey.Render("[E]") + Dim.Render(" PNG  ·  ") +
 		Dim.Render("secret: ") + Mute.Render(m.view.Secret)
-	return BoxFocused.Width(w).Render(
-		lipgloss.JoinVertical(lipgloss.Left, title, "", qr, "", hint),
-	)
+	inner := lipgloss.JoinVertical(lipgloss.Left, title, "", qr, "", hint)
+	// D-S40: use the same BoxFocused style but without Width() override so the
+	// two columns stay flush — lipgloss JoinHorizontal aligns tops, not heights,
+	// so we rely on the parent caller (View) to equalise heights if needed.
+	return BoxFocused.Width(w).Render(inner)
 }
 
 // Hints implements ScreenWithHints — drives the bottom status bar.

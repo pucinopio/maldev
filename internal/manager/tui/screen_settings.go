@@ -428,11 +428,12 @@ func (m settingsModel) boxCycleVieServeurs(w int, r *ent.Setting) string {
 }
 
 func (m settingsModel) boxApparence(w int) string {
-	// Borderless theme markers (same reason as boxArgonPreset).
+	// D-S45: theme keys are N/M/O (not 1/2/3 which set argon preset).
+	// The View now matches the keyboard handler so pressing [N] sets neon, etc.
 	themes := []string{
-		GlowGreen.Render("●") + " " + HintKey.Render("[1]") + " " + GlowGreen.Render("neon"),
-		Mute.Render(" ") + " " + HintKey.Render("[2]") + " " + Mute.Render("mono"),
-		Mute.Render(" ") + " " + HintKey.Render("[3]") + " " + Mute.Render("nord-soft"),
+		GlowGreen.Render("●") + " " + HintKey.Render("[N]") + " " + GlowGreen.Render("neon"),
+		Mute.Render(" ") + " " + HintKey.Render("[M]") + " " + Mute.Render("mono"),
+		Mute.Render(" ") + " " + HintKey.Render("[O]") + " " + Mute.Render("nord-soft"),
 	}
 	body := Dim.Render("thème : ") + strings.Join(themes, "  ") + "\n" +
 		settingsToggle("bold + couleur saturée (équivalent glow en TUI)", true) + "\n" +

@@ -888,6 +888,58 @@ func serverCountLabel(statuses map[string]httpsrv.Status) string {
 // Inside the status box: row 0=top border, row 1=title row, row 2=blank,
 // row 3=●/port line, row 4=stopped hint OR url, etc.
 func (m serversModel) OnClick(x, y, _ int) tea.Cmd {
+	// D-S39: outer R/H/P sub-tab bar sits at Y=ChromeRows (row 4).
+	// Walk the rendered tab widths to find which tab was clicked.
+	if y == ChromeRows {
+		type tabDef struct {
+			tab serverSubTab
+			srv string
+		}
+		tabs := []tabDef{
+			{serverTabRevocation, "revocation"},
+			{serverTabHeartbeat, "heartbeat"},
+			{serverTabProbe, "probe"},
+		}
+		// Reconstruct the visual widths of each tab cell by measuring the same
+		// strings rendererd in View(). Active tab gets a bold underline border
+		// (NormalBorder bottom only) which changes the Padding; measure the
+		// inactive variant so the widths are consistent regardless of current state.
+		// The rendered tabs are joined horizontally; we walk them left-to-right.
+		cursor := 0
+		for _, td := range tabs {
+			// Inactive tab: Padding(0,1) + "[X] label ●" (no border adds height but not width).
+			label := "[" + func() string {
+				switch td.tab {
+				case serverTabRevocation:
+					return "R"
+				case serverTabHeartbeat:
+					return "H"
+				default:
+					return "P"
+				}
+			}() + "] " + func() string {
+				switch td.tab {
+				case serverTabRevocation:
+					return "Revocation"
+				case serverTabHeartbeat:
+					return "Heartbeat"
+				default:
+					return "Fingerprint probe"
+				}
+			}() + " ●"
+			// Padding(0,1) adds 2 chars (1 left + 1 right).
+			w := lipgloss.Width(label) + 2
+			if x >= cursor && x < cursor+w {
+				target := td.tab
+				srv := td.srv
+				return func() tea.Msg {
+					return serverSubTabClickMsg{tab: target, srv: srv}
+				}
+			}
+			cursor += w
+		}
+	}
+
 	// Probe inner-tab strip on the active Probe sub-tab: lives at Y=5 (top
 	// row of the right column, just below the outer sub-tab bar at Y=4).
 	if m.activeTab == serverTabProbe && y == 5 {
