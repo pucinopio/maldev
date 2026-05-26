@@ -1439,6 +1439,157 @@ func TestCrossScreen_HelpOverlay_FilterPreserved(t *testing.T) {
 	}
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// D-S26 / D-S29 / D-S32 / D-S33 — overlay button mouse coordinate fix
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Root cause: confirm/input overlay buttons are at overlay-relative Y=7.
+// At h=44 the coordinate translation in updateOverlay subtracts
+// topY=(44-12)/2=16, so absolute Y must be 16+7=23.
+// The previous tui-verify specs used Y=19 which translated to overlay-relative
+// Y=3 (the title row) — no button fired.
+
+// overlayButtonAbsY returns the absolute terminal Y of the button row for a
+// 12-line overlay at terminal height h.
+func overlayButtonAbsY(h int) int {
+	const ovH = 12
+	topY := (h - ovH) / 2
+	if topY < 0 {
+		topY = 0
+	}
+	return topY + 7 // footer is at overlay-relative Y=7
+}
+
+// TestLive_OverlayButtonCoordFormula — at h=44 the absolute button Y is 23.
+// This is the invariant used by tui-verify ov.confirm.ok.ms / .cancel.ms.
+func TestLive_OverlayButtonCoordFormula(t *testing.T) {
+	got := overlayButtonAbsY(44)
+	if got != 23 {
+		t.Errorf("overlayButtonAbsY(44) = %d, want 23 (topY=16, footer at overlay-rel Y=7)", got)
+	}
+}
+
+// driveRootModel constructs a ready rootModel at 144×44 and returns it.
+func driveRootModel(t *testing.T) rootModel {
+	t.Helper()
+	m := New(nil, nil, SessionReady)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
+	return updated.(rootModel)
+}
+
+// pushConfirmOnRoot pushes a confirmOverlay onto the root model overlay stack
+// and returns the updated model. The overlay dismissal is tested by the caller.
+func pushConfirmOnRoot(t *testing.T, m rootModel) rootModel {
+	t.Helper()
+	msg := pushOverlayMsg{newConfirmOverlay("guard-test", "Test", "body", "OK", "Cancel", false)}
+	updated, _ := m.Update(msg)
+	return updated.(rootModel)
+}
+
+// drainCmd executes cmd (if non-nil), feeds the result back into m, and
+// returns the updated model. Simulates one tick of the bubbletea event loop.
+func drainCmd(m rootModel, cmd tea.Cmd) rootModel {
+	if cmd == nil {
+		return m
+	}
+	msg := cmd()
+	if msg == nil {
+		return m
+	}
+	updated, _ := m.Update(msg)
+	return updated.(rootModel)
+}
+
+// TestLive_ConfirmOverlay_OKButtonMouseDismisses — clicking the OK button at
+// the correct absolute Y=23 dismisses the overlay. Guards D-S26, D-S29.
+// Before fix: clicking at Y=19 hit the title row (overlay-rel Y=3) and the
+// overlay handler's `if m.Y != 7` rejected the click → overlay stayed open.
+func TestLive_ConfirmOverlay_OKButtonMouseDismisses(t *testing.T) {
+	const h = 44
+	m := driveRootModel(t)
+	m = sendKeyToRoot(m, "3") // goto Issuers
+	m = pushConfirmOnRoot(t, m)
+
+	if len(m.overlays) == 0 {
+		t.Fatal("precondition: no overlay on stack")
+	}
+
+	absY := overlayButtonAbsY(h)
+	click := tea.MouseMsg{X: 40, Y: absY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress, Type: tea.MouseLeft}
+	updated, cmd := m.Update(click)
+	m = drainCmd(updated.(rootModel), cmd)
+
+	if len(m.overlays) != 0 {
+		t.Errorf("overlay still on stack after OK click at abs Y=%d; want 0 overlays", absY)
+	}
+}
+
+// TestLive_ConfirmOverlay_CancelButtonMouseDismisses — clicking Cancel at
+// abs Y=23 also dismisses the overlay (result=false). Guards D-S26.
+func TestLive_ConfirmOverlay_CancelButtonMouseDismisses(t *testing.T) {
+	const h = 44
+	m := driveRootModel(t)
+	m = pushConfirmOnRoot(t, m)
+
+	absY := overlayButtonAbsY(h)
+	click := tea.MouseMsg{X: 10, Y: absY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress, Type: tea.MouseLeft}
+	updated, cmd := m.Update(click)
+	m = drainCmd(updated.(rootModel), cmd)
+
+	if len(m.overlays) != 0 {
+		t.Errorf("overlay still on stack after Cancel click, want 0 overlays")
+	}
+}
+
+// TestLive_InputOverlay_CancelButtonMouseDismisses — clicking Cancel on an
+// input overlay at abs Y=23 dismisses it. Guards D-S29, D-S32, D-S33.
+func TestLive_InputOverlay_CancelButtonMouseDismisses(t *testing.T) {
+	const h = 44
+	m := driveRootModel(t)
+
+	msg := pushOverlayMsg{newInputOverlay("guard-input", "Test Input", "ph", 100)}
+	updated, _ := m.Update(msg)
+	m = updated.(rootModel)
+
+	if len(m.overlays) == 0 {
+		t.Fatal("input overlay not pushed")
+	}
+
+	absY := overlayButtonAbsY(h)
+	click := tea.MouseMsg{X: 10, Y: absY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress, Type: tea.MouseLeft}
+	updated2, cmd := m.Update(click)
+	m = drainCmd(updated2.(rootModel), cmd)
+
+	if len(m.overlays) != 0 {
+		t.Errorf("input overlay still on stack after Cancel click at abs Y=%d", absY)
+	}
+}
+
+// TestLive_OverlayButton_WrongYIsNoop — clicking at the old (wrong) abs Y=19
+// must NOT dismiss the overlay. This is the regression guard that proves
+// Y=19 was the bug (before fix, the test would fail here).
+func TestLive_OverlayButton_WrongYIsNoop(t *testing.T) {
+	m := driveRootModel(t)
+	m = pushConfirmOnRoot(t, m)
+
+	// Y=19 → overlay-relative Y = 19 - 16 = 3 (title row, not button).
+	click := tea.MouseMsg{X: 40, Y: 19, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress, Type: tea.MouseLeft}
+	updated, cmd := m.Update(click)
+	m = drainCmd(updated.(rootModel), cmd)
+
+	if len(m.overlays) == 0 {
+		t.Errorf("overlay dismissed at wrong Y=19 — coordinate translation is still broken")
+	}
+}
+
+// sendKeyToRoot delivers a single rune key to the rootModel and drains the
+// resulting cmd (one level deep). Returns the updated model.
+func sendKeyToRoot(m rootModel, key string) rootModel {
+	km := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
+	updated, cmd := m.Update(km)
+	return drainCmd(updated.(rootModel), cmd)
+}
+
 // liveTestStore opens an in-memory store pre-seeded with the given passphrase
 // so passphrase-prompt tests have a real canary to verify against.
 func liveTestStore(t *testing.T, pass string) *store.Store {

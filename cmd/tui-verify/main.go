@@ -1145,45 +1145,54 @@ func specs() []spec {
 			Notes:      "esc cancels confirm overlay",
 			Seed:       "scripts/tui-snap-seeds/issuers.json",
 		},
+		// ov.confirm.ok.ms / ov.confirm.cancel.ms — absolute Y for the button row.
+		// Overlay is 12 lines; at h=44 topY=(44-12)/2=16; footer at overlay-rel Y=7
+		// → absolute Y = 16+7 = 23.  Previous Y=19 landed on the title (row 3), so
+		// clicks never reached the button handler (D-S26, D-S29, D-S32, D-S33).
 		{
 			ID:         "ov.confirm.ok.ms",
 			View:       "issuers",
 			Keys:       "3 x",
-			Mouse:      "40,19,left",
+			Mouse:      "40,23,left",
 			ExpectMsgs: []string{"tea.MouseMsg"},
-			Notes:      "click right half of confirm footer confirms",
-			Seed:       "scripts/tui-snap-seeds/issuers.json",
+			// Overlay dismissed → issuers screen reappears (no longer shows modal scrim).
+			AssertOutput: "Issuer keys",
+			Notes:        "D-S26 fixed: click right half of confirm footer at correct abs Y=23 confirms + dismisses overlay",
+			Seed:         "scripts/tui-snap-seeds/issuers.json",
 		},
 		{
 			ID:         "ov.confirm.cancel.ms",
 			View:       "issuers",
 			Keys:       "3 x",
-			Mouse:      "10,19,left",
+			Mouse:      "10,23,left",
 			ExpectMsgs: []string{"tea.MouseMsg"},
-			Notes:      "click left half of confirm footer cancels",
-			Seed:       "scripts/tui-snap-seeds/issuers.json",
+			// Overlay dismissed → issuers screen reappears.
+			AssertOutput: "Issuer keys",
+			Notes:        "D-S26 fixed: click left half of confirm footer at correct abs Y=23 cancels + dismisses overlay",
+			Seed:         "scripts/tui-snap-seeds/issuers.json",
 		},
-		// Confirm yes/no via ClickTarget — use standalone overlay-confirm for coord resolution,
-		// then fire the click against the issuers root-model run (which has the overlay open).
+		// ov.confirm.yes.ms / ov.confirm.no.ms — absolute coords, not SnapView.
+		// SnapView sent overlay-relative Y as absolute Y which then got translated to
+		// a negative offset and never matched the handler (root cause of D-S26).
 		{
-			ID:          "ov.confirm.yes.ms",
-			View:        "issuers",
-			Keys:        "3 x",
-			SnapView:    "overlay-confirm",
-			Seed:        "scripts/tui-snap-seeds/issuers.json",
-			ClickTarget: "Confirmer",
-			ExpectMsgs:  []string{"tea.MouseMsg"},
-			Notes:       "click Confirmer in confirm overlay footer (coord from standalone overlay-confirm)",
+			ID:           "ov.confirm.yes.ms",
+			View:         "issuers",
+			Keys:         "3 x",
+			Mouse:        "40,23,left",
+			Seed:         "scripts/tui-snap-seeds/issuers.json",
+			ExpectMsgs:   []string{"tea.MouseMsg"},
+			AssertOutput: "Issuer keys",
+			Notes:        "D-S26 fixed: confirm click at abs Y=23 dismisses overlay (was: SnapView sent wrong coords)",
 		},
 		{
-			ID:          "ov.confirm.no.ms",
-			View:        "issuers",
-			Keys:        "3 x",
-			SnapView:    "overlay-confirm",
-			Seed:        "scripts/tui-snap-seeds/issuers.json",
-			ClickTarget: "Annuler",
-			ExpectMsgs:  []string{"tea.MouseMsg"},
-			Notes:       "click Annuler in confirm overlay footer (coord from standalone overlay-confirm)",
+			ID:           "ov.confirm.no.ms",
+			View:         "issuers",
+			Keys:         "3 x",
+			Mouse:        "10,23,left",
+			Seed:         "scripts/tui-snap-seeds/issuers.json",
+			ExpectMsgs:   []string{"tea.MouseMsg"},
+			AssertOutput: "Issuer keys",
+			Notes:        "D-S26 fixed: cancel click at abs Y=23 dismisses overlay (was: SnapView sent wrong coords)",
 		},
 
 		// ── Overlay: input ────────────────────────────────────────────────
@@ -1201,23 +1210,27 @@ func specs() []spec {
 			ExpectMsgs: []string{"tea.KeyMsg"},
 			Notes:      "enter on empty input overlay is a no-op",
 		},
+		// ov.input.cancel.ms — absolute Y=23 (same geometry as confirm overlay).
+		// Previous Y=19 landed on the title row, not the button (D-S29, D-S32, D-S33).
 		{
-			ID:         "ov.input.cancel.ms",
+			ID:           "ov.input.cancel.ms",
+			View:         "issuers",
+			Keys:         "3 n",
+			Mouse:        "10,23,left",
+			ExpectMsgs:   []string{"tea.MouseMsg"},
+			AssertOutput: "Issuer keys",
+			Notes:        "D-S29 fixed: click left half of input footer at abs Y=23 cancels + dismisses overlay",
+		},
+		// ov.input.submit.ms — absolute coords; SnapView approach was broken.
+		// Input overlay has empty textinput, so clicking Submit is a no-op (value empty);
+		// assert MouseMsg arrived (same as previous test intent, now at correct Y).
+		{
+			ID:         "ov.input.submit.ms",
 			View:       "issuers",
 			Keys:       "3 n",
-			Mouse:      "10,19,left",
+			Mouse:      "40,23,left",
 			ExpectMsgs: []string{"tea.MouseMsg"},
-			Notes:      "click left half of input footer cancels",
-		},
-		// Input overlay submit via ClickTarget — standalone overlay-input for coords.
-		{
-			ID:          "ov.input.submit.ms",
-			View:        "issuers",
-			Keys:        "3 n",
-			SnapView:    "overlay-input",
-			ClickTarget: "Confirmer",
-			ExpectMsgs:  []string{"tea.MouseMsg"},
-			Notes:       "click Confirmer in input overlay footer (coord from standalone overlay-input)",
+			Notes:      "D-S29 fixed: click right half of input footer at abs Y=23 (empty input → no-op, but coords are correct)",
 		},
 
 		// ── Overlay: error ────────────────────────────────────────────────
