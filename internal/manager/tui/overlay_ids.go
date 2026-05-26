@@ -13,6 +13,8 @@ const (
 	OverlayIDAuditExportCSV  = "audit-export-csv"
 	OverlayIDAuditExportJSON = "audit-export-json"
 
+	OverlayIDTOTPExportPDF    = "totp-export-pdf"
+
 	OverlayIDLicenseReissue   = "license-reissue"
 	OverlayIDIssuerRename     = "issuer-rename"
 	OverlayIDIssuerExportPub  = "issuer-export-pub"

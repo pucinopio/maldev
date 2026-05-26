@@ -33,6 +33,12 @@ type totpQRExportedMsg struct {
 	Err  error
 }
 
+// totpPDFExportedMsg signals a PDF export completed (or failed).
+type totpPDFExportedMsg struct {
+	Path string
+	Err  error
+}
+
 type totpModel struct {
 	svc        *service.Services
 	rows       []*ent.TOTPSecret
@@ -114,6 +120,14 @@ func (m totpModel) Update(msg tea.Msg) (totpModel, tea.Cmd) {
 			return pushOverlayMsg{NewOKOverlay("QR exported", "Saved to "+msg.Path)}
 		}
 
+	case totpPDFExportedMsg:
+		if msg.Err != nil {
+			return m, func() tea.Msg { return pushOverlayMsg{newErrorOverlay("PDF export failed", msg.Err.Error())} }
+		}
+		return m, func() tea.Msg {
+			return pushOverlayMsg{NewOKOverlay("PDF exported", msg.Path)}
+		}
+
 	case tableSelectRowMsg:
 		m.table.SetCursor(msg.row)
 		return m, m.loadCursorDetail()
@@ -176,6 +190,16 @@ func (m totpModel) Update(msg tea.Msg) (totpModel, tea.Cmd) {
 			return m, func() tea.Msg {
 				return pushOverlayMsg{newInputOverlay("totp-export-png", "Export QR PNG",
 					"/path/to/qr.png", 256)}
+			}
+		case "P":
+			// [P] PDF export — distinct from [E] PNG export and from lowercase [p]
+			// which is unused. Uppercase avoids collision with global tab nav.
+			if m.view == nil {
+				return m, nil
+			}
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newInputOverlay(OverlayIDTOTPExportPDF,
+					"Export TOTP PDF", "/path/to/totp.pdf", 256)}
 			}
 		case "r":
 			return m, listTOTPCmd(m.svc)
@@ -278,6 +302,7 @@ func (m totpModel) View() string {
 	title := titleBar(m.titleHints, titleLabel, []titleHint{
 		{Key: "n", Label: " générer ", Cmd: keyCmd("n")},
 		{Key: "E", Label: " export QR PNG ", Cmd: keyCmd("E")},
+		{Key: "P", Label: " export PDF ", Cmd: keyCmd("P")},
 		{Key: "x", Label: " supprimer ", Cmd: keyCmd("x")},
 		{Key: "r", Label: " rafraîchir", Cmd: keyCmd("r")},
 	}, 0, listInnerW)
@@ -342,6 +367,7 @@ func (m totpModel) Hints() []string {
 	return []string{
 		"n nouveau TOTP",
 		"E export QR PNG",
+		"P export PDF",
 		"x supprimer",
 		"r rafraîchir",
 		"q quitter",
@@ -382,6 +408,17 @@ func (m totpModel) handleTOTPInputResult(res InputResultMsg) (totpModel, tea.Cmd
 		return m, func() tea.Msg {
 			err := os.WriteFile(path, png, 0o600)
 			return totpQRExportedMsg{Path: path, Err: err}
+		}
+
+	case OverlayIDTOTPExportPDF:
+		if m.view == nil {
+			return m, nil
+		}
+		path := ensureExtension(res.Value, ".pdf")
+		v := m.view
+		return m, func() tea.Msg {
+			err := exportTOTPPDF(v, path)
+			return totpPDFExportedMsg{Path: path, Err: err}
 		}
 	}
 	return m, nil

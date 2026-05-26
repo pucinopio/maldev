@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/oioio-space/maldev/internal/manager/httpsrv"
+	"github.com/oioio-space/maldev/internal/manager/service"
 )
 
 // SetTitleBarClock replaces the clock used by renderTitleBar with fn and
@@ -92,3 +93,20 @@ func ServerTabWidthsForTest() [3]int { return serverTabWidths }
 
 // ServerRoleCacheForTest returns the serverRoleCache from a serversModel.
 func ServerRoleCacheForTest(m serversModel) [3]string { return m.serverRoleCache }
+
+// ExportTOTPPDFForTest exposes exportTOTPPDF for black-box tests.
+func ExportTOTPPDFForTest(v *service.TOTPSecretView, path string) error {
+	return exportTOTPPDF(v, path)
+}
+
+// EnsureExtensionForTest exposes ensureExtension for black-box tests.
+func EnsureExtensionForTest(path, ext string) string { return ensureExtension(path, ext) }
+
+// NewTOTPModelForTest constructs a totpModel with the given services (may be nil).
+func NewTOTPModelForTest(svc *service.Services) totpModel { return newTOTPModel(svc) }
+
+// SetTOTPViewForTest injects a TOTPSecretView into a totpModel and returns the updated model.
+func SetTOTPViewForTest(m totpModel, v *service.TOTPSecretView) totpModel {
+	m.view = v
+	return m
+}
