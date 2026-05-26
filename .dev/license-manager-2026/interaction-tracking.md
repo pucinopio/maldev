@@ -6,7 +6,112 @@ kb_verified: 124
 kb_total: 124
 ms_verified: 106
 ms_total: 106
-defects_open: 0
+defects_open: 36
+---
+
+## Session 6 — operator second-pass manual test (2026-05-26)
+
+**Universal pattern requirement** (cross-cutting):
+- Every user action MUST produce a visible feedback.
+- Delete / create actions MUST show a success confirmation overlay.
+- Refresh actions MUST show a spinner or "loading…" indicator.
+
+**Why tests missed these (Session 5 harness was insufficient)**: the
+`AssertOutput` field added in commit `c882e42` was applied to only ~10
+specs. The vast majority of `tea.KeyMsg`-only specs still don't prove
+the action's visible effect. The fix for the harness gap: every
+overlay-pushing or service-mutating spec must carry an `AssertOutput`
+that proves the *next state* is reached, not just that the msg arrives.
+
+### Licenses detail panel
+
+- [ ] **D-S14** filter chips `all` / `active` / `expiring` / `expired` /
+      `revoked` / `superseded` don't work in detail mode
+- [ ] **D-S15** keys `d`, `c`, `e`, arrow-up, arrow-down don't work in
+      detail mode (only `x` works) — looks like detail viewport eats
+      everything
+- [ ] **D-S16** `e` re-issue: popup shows but Confirm:true is a no-op,
+      no licence actually re-issued
+- [ ] **D-S17** PEM tab: `c` copy + `↑↓` scroll don't fire (Session 4
+      "fixed" them but operator says still broken — viewport not
+      receiving keys because detail panel eats them upstream)
+- [ ] **D-S18** Audit tab: `r` refresh doesn't fire (same reason)
+- [ ] **D-S19** Chain tab: implement properly (operator wants real
+      lineage, not a skeleton)
+
+### Wizard
+
+- [ ] **D-S20** step 5 Validity: `ctrl+m` doesn't toggle "forever";
+      instead advances to the next step
+- [ ] **D-S21** step 7 TOTP: doesn't offer to *create* a TOTP secret
+      when the list is empty; the wizard dead-ends
+
+### Revoke overlay
+
+- [ ] **D-S22** suggestion chip clicks still map to the wrong reason
+      (after the Session 4 `chipStartY 11→12` fix, operator reports
+      it's *still* wrong — possibly the X-offset per chip is wrong too,
+      or the lipgloss.Place re-centre shifts coordinates again)
+
+### Issuers
+
+- [ ] **D-S23** `E` export: `.pub` extension wasn't actually appended
+      (Session 4 "fixed" it; operator says it's still missing)
+- [ ] **D-S24** `d` détail still doesn't work (Session 4 claimed it
+      worked because the test passed; the operator's reality says no)
+- [ ] **D-S25** `e` éditer popup opens but Confirm:true doesn't rename
+- [ ] **D-S26** `e` éditer popup mouse: y/n/OK/Cancel buttons not
+      clickable
+
+### Dashboard
+
+- [ ] **D-S27** Server ON/OFF tile click triggers Start/Stop but the
+      tile doesn't update — the status reload msg is dropped or the
+      tile rebuilds from stale data
+
+### Recipients
+
+- [ ] **D-S28** `d` détail and `e` éditer don't fire
+- [ ] **D-S29** `e` popup mouse buttons not clickable
+
+### Identities
+
+- [ ] **D-S30** `d` détail and `e` éditer don't fire
+- [ ] **D-S31** `n` create: `.bin` extension not auto-appended
+- [ ] **D-S32** `R` régénérer popup: buttons not clickable
+- [ ] **D-S33** `x` delete popup: buttons not clickable
+
+### Servers
+
+- [ ] **D-S34** per-server explanation text missing (operator wants
+      a short description of each server's role)
+- [ ] **D-S35** no IP dropdown for listen address; operator wants a
+      configurable select with `0.0.0.0` default
+- [ ] **D-S36** admin token shown once then lost; operator wants to
+      retrieve it on demand
+- [ ] **D-S37** no example curl / API definitions to drive each server
+- [ ] **D-S38** Fingerprint sub-tab: `q` for QR collides with global
+      `q` for quit
+- [ ] **D-S39** sub-tabs `T` / `H` / `L` (Tokens/History/Live) not
+      clickable
+
+### TOTP
+
+- [ ] **D-S40** box frames not aligned (magic-number drift); enforce
+      `lipgloss.Height` equalization
+- [ ] **D-S41** QR display shifted right when rendered
+- [ ] **D-S42** QR export: `.png` extension not auto-appended
+- [ ] **D-S43** TOTP list not scrollable when there are many entries
+- [ ] **D-S44** add PDF export (well-formatted, with QR + metadata)
+
+### Settings
+
+- [ ] **D-S45** majority of action keys are silent / no-op; audit each
+      and either wire or remove the corresponding hint
+
+---
+
+
 ---
 
 ## Session 5 — autonomous defect hunt (2026-05-26)
