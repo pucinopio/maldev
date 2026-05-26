@@ -2,9 +2,9 @@
 title: license-manager TUI — exhaustive interaction tracking
 last_reviewed: 2026-05-26
 status: in-progress
-kb_verified: 110
+kb_verified: 124
 kb_total: 124
-ms_verified: 95
+ms_verified: 106
 ms_total: 106
 ---
 

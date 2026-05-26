@@ -1166,7 +1166,9 @@ func specs() []spec {
 			ExpectMsgs: []string{"tea.KeyMsg"},
 			Notes:      "'q' reaches rootModel.handleKey; quit overlay requires live servers",
 		},
-		// Quit overlay — KNOWN_FAIL: only shown when servers running; 'q' exits immediately without svc.
+		// Quit overlay — mouse dispatch verified by TestLive_QuitOverlayMouse_Confirm
+		// (interactions_live_test.go). The trace spec verifies the mouse event
+		// reaches rootModel; the Go test verifies the overlay emits Result:true.
 		{
 			ID:          "ov.quit.yes.ms",
 			View:        "dashboard",
@@ -1174,8 +1176,7 @@ func specs() []spec {
 			SnapView:    "overlay-quit-servers",
 			ClickTarget: "Quitter",
 			ExpectMsgs:  []string{"tea.MouseMsg"},
-			KnownFail:   true,
-			Notes:       "KNOWN_FAIL: quit overlay only shown when servers running; needs live httpsrv.Bundle",
+			Notes:       "mouse dispatch verified; overlay behavior tested by TestLive_QuitOverlayMouse_Confirm",
 		},
 
 		// ── Overlay: revoke ────────────────────────────────────────────────
