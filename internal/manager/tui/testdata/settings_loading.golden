@@ -7,7 +7,7 @@
             └────────┘└────────────┘└────────┘└───────────┘└─────────────┘└──────────┘                                  
                                                                                                                         
 Audit (0)  [↑↓] nav · [d] detail · [r] refresh · [pgup/pgdn] page                                                       
- TIMESTAMP             KIND                  ACTOR           TARGET            NOTE                                     
+ TIMESTAMP  KIND             ACTOR             TARGET                        NOTE                                       
                                                                                                                         
                                                                                                                         
                                aucun évènement — l'historique s'enrichit à chaque action                                

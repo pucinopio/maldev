@@ -567,35 +567,64 @@ func TestInteractions_AuditFilterChips(t *testing.T) {
 // click should fire licenseFilterClickMsg with the right enum.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// TestInteractions_LicenseFilterChips drives the chip-bar hit-test from the
+// geometry actually recorded by renderFilterBar — NOT from a reverse-engineered
+// formula in the test (which is what hid the off-by-tens drift on the topRow:
+// the prior test mirrored the broken `cursor=1` cursor used by OnClick).
 func TestInteractions_LicenseFilterChips(t *testing.T) {
 	m := newLicensesModel(nil)
 	_ = renderListScreen(t, ViewLicenses, &m)
-	// chip pill rows are at TopChromeRows + 1 (leading blank), 3 rows tall.
-	// Middle row is the clickable label.
-	const chipMidY = TopChromeRows + 2
-	// OnClick mirrors renderFilterBar's cursor=1 + per-pill (label+4 border/pad) + 1 sep.
-	allFilters := []licenseFilter{
-		licFilterAll, licFilterActive, licFilterExpiring,
-		licFilterExpired, licFilterRevoked, licFilterSuperseded,
+	if m.chipHits == nil || len(m.chipHits.hits) == 0 {
+		t.Fatalf("chipHits not populated by View() — renderFilterBar regression")
 	}
-	cursor := 1
-	for _, f := range allFilters {
-		w := len(f.String()) + 4
-		hitX := cursor + w/2
-		cmd := m.OnClick(hitX, chipMidY, 144)
+	for _, h := range m.chipHits.hits {
+		hitX := (h.x0 + h.x1) / 2
+		hitY := (m.chipHits.y0 + m.chipHits.y1) / 2
+		cmd := m.OnClick(hitX, hitY, 144)
 		if cmd == nil {
-			t.Errorf("licenses chip %q: OnClick(%d,%d) returned nil", f.String(), hitX, chipMidY)
-			cursor += w + 1
+			t.Errorf("chip %q: OnClick(%d,%d) returned nil (chipHits range [%d,%d))",
+				h.f.String(), hitX, hitY, h.x0, h.x1)
 			continue
 		}
-		msg := cmd()
-		fm, ok := msg.(licenseFilterClickMsg)
+		fm, ok := cmd().(licenseFilterClickMsg)
 		if !ok {
-			t.Errorf("licenses chip %q: cmd produced %T, want licenseFilterClickMsg", f.String(), msg)
-		} else if fm.f != f {
-			t.Errorf("licenses chip %q: filter = %v, want %v", f.String(), fm.f, f)
+			t.Errorf("chip %q: produced wrong msg type", h.f.String())
+		} else if fm.f != h.f {
+			t.Errorf("chip %q: msg.f = %v, want %v", h.f.String(), fm.f, h.f)
 		}
-		cursor += w + 1
+	}
+}
+
+// TestInteractions_LicenseFilterChips_CompactMode exercises the inline-fallback
+// chip layout that activates on narrow terminals. Pre-2026-05 this branch had
+// zero click-test coverage — OnClick reused the bordered-mode geometry, so the
+// chip click target was off by the bordered/inline width delta.
+func TestInteractions_LicenseFilterChips_CompactMode(t *testing.T) {
+	m := newLicensesModel(nil)
+	// 80 cells forces the compact path: bordered chips render ~110 cells wide
+	// which exceeds m.width - 35 = 45.
+	m.width = 80
+	m.hgt = 44
+	_ = m.View() // populate chipHits
+
+	if m.chipHits == nil || len(m.chipHits.hits) == 0 {
+		t.Fatalf("compact mode: chipHits not populated")
+	}
+	// Compact mode must record a single-row y range — bordered would be 3 rows.
+	if got := m.chipHits.y1 - m.chipHits.y0; got != 0 {
+		t.Fatalf("compact y range = %d, want 0 (single row)", got)
+	}
+	for _, h := range m.chipHits.hits {
+		hitX := (h.x0 + h.x1) / 2
+		cmd := m.OnClick(hitX, m.chipHits.y0, 80)
+		if cmd == nil {
+			t.Errorf("compact chip %q: OnClick miss at x=%d", h.f.String(), hitX)
+			continue
+		}
+		fm, ok := cmd().(licenseFilterClickMsg)
+		if !ok || fm.f != h.f {
+			t.Errorf("compact chip %q: wrong filter, got %v", h.f.String(), fm.f)
+		}
 	}
 }
 

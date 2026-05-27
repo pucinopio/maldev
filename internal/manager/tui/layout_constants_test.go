@@ -33,6 +33,9 @@ func TestLayoutConstants(t *testing.T) {
 	if ChromeRows != 4 {
 		t.Errorf("ChromeRows = %d, want 4 (title+tabs+breadcrumb+statusbar)", ChromeRows)
 	}
+	if ContentReservedRows != 5 {
+		t.Errorf("ContentReservedRows = %d, want 5 (ChromeRows + statusbar)", ContentReservedRows)
+	}
 	if w, h := BoxFrame(); w != 4 || h != 2 {
 		t.Errorf("BoxFrame() = (%d, %d), want (4, 2) — BoxStyle border+padding changed?", w, h)
 	}

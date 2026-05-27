@@ -1876,6 +1876,7 @@ func TestE2E_RecipientsDetailPanel(t *testing.T) {
 	rm, _ = rm.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	rm, _ = rm.Update(listRecipientsCmd(svc)())
 	rm.detail = true
+	rm.rebuildTable() // detail toggle in the real app fires through Update [d]; force a rebuild here so tableH halves and leaves space for the detail clip.
 	got := rm.View()
 
 	for _, label := range []string{"Détail", "acme-recipient", "Actions", "[E]", "[K]", "[x]"} {
@@ -1897,6 +1898,7 @@ func TestE2E_IdentitiesDetailPanel(t *testing.T) {
 	im, _ = im.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
 	im, _ = im.Update(listIdentitiesCmd(svc)())
 	im.detail = true
+	im.rebuildTable() // same contract as the recipients test — force a rebuild so the table height shrinks to make room for the detail panel.
 	got := im.View()
 
 	for _, label := range []string{"Détail", "prod-binary-v1", "Actions", "[E]", "[R]", "[x]"} {
@@ -2874,11 +2876,9 @@ func TestE2E_ClickabilityMatrix(t *testing.T) {
 				t.Errorf("expected ViewLicenses after tab click, got %s", rootOf(t, a).active)
 			}
 		}},
-		{ViewLicenses, toView(ViewLicenses, '2'), "filter chip[active]", 12, 5, func(t *testing.T, _, a tea.Model) {
-			if rootOf(t, a).licenses.filter == licFilterAll {
-				t.Errorf("expected filter changed after chip click")
-			}
-		}},
+		// License filter-chip click coverage lives in TestE2E_LicenseFilterChipClick,
+		// which derives the click X from chipHits instead of hardcoding a number
+		// that mirrored the pre-2026-05 broken handler formula.
 		{ViewServers, toView(ViewServers, '7'), "sub-tab [H] Heartbeat", 22, 4, func(t *testing.T, _, a tea.Model) {
 			if rootOf(t, a).servers.activeTab != serverTabHeartbeat {
 				t.Errorf("expected Heartbeat tab after click")
@@ -3024,9 +3024,21 @@ func TestE2E_LicenseFilterChipClick(t *testing.T) {
 	var m tea.Model = New(nil, nil, SessionReady)
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 160, Height: 50})
 	m = driveRune(m, '2') // Licenses
-	// First chip (`all`) is at x≈1..7 on row Y=3. Click "active" at ~x=12.
+	// chipHits is populated during licensesModel.View(); rendering once now
+	// guarantees the geometry is recorded before we read it.
+	_ = m.View()
+	// Resolve the *actual* chip X from chipHits instead of hardcoding a number
+	// that mirrors the broken handler. Aim at the "active" chip — second entry
+	// in the recorded slice.
+	r := rootOf(t, m)
+	if r.licenses.chipHits == nil || len(r.licenses.chipHits.hits) < 2 {
+		t.Fatalf("chipHits not populated after switching to Licenses screen")
+	}
+	target := r.licenses.chipHits.hits[1]
+	hitX := (target.x0 + target.x1) / 2
+	hitY := (r.licenses.chipHits.y0 + r.licenses.chipHits.y1) / 2
 	updated, cmd := m.Update(tea.MouseMsg{
-		X: 12, Y: 5,
+		X: hitX, Y: hitY,
 		Button: tea.MouseButtonLeft,
 		Action: tea.MouseActionPress,
 	})
@@ -3036,9 +3048,9 @@ func TestE2E_LicenseFilterChipClick(t *testing.T) {
 		}
 	}
 	m = updated
-	r := rootOf(t, m)
-	if r.licenses.filter == licFilterAll {
-		t.Errorf("expected click on `active` chip to change filter, still licFilterAll")
+	r = rootOf(t, m)
+	if r.licenses.filter != target.f {
+		t.Errorf("clicked chip %v at (%d,%d), filter = %v", target.f, hitX, hitY, r.licenses.filter)
 	}
 }
 

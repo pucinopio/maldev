@@ -991,16 +991,20 @@ func TestLive_IssuerDetailToggle(t *testing.T) {
 	m := newIssuersModel(nil)
 	m.width, m.hgt = 144, 44
 
-	// detail starts false. Press 'd' — should open.
-	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	// detail starts true (operator-visible by default, matches the licenses
+	// screen). Press 'd' — should close.
 	if !m.detail {
-		t.Fatal("first 'd': detail should be true")
+		t.Fatal("issuers detail must default to true")
 	}
-
-	// Press 'd' again — should close.
 	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 	if m.detail {
-		t.Fatal("second 'd': detail should be false")
+		t.Fatal("first 'd': detail should be false")
+	}
+
+	// Press 'd' again — should reopen.
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	if !m.detail {
+		t.Fatal("second 'd': detail should be true")
 	}
 }
 
@@ -1980,6 +1984,10 @@ func TestLive_IssuerDetailToggle_RebuildTable(t *testing.T) {
 	m.width = 144
 	m.hgt = 44
 	m.rows = []*ent.Issuer{fakeIssuer()}
+	// Detail defaults to true now (operator-visible); collapse first so the
+	// "open detail shrinks table" invariant can be exercised in the same shape
+	// as the licenses screen test.
+	m.detail = false
 	m.rebuildTable()
 
 	heightBefore := m.table.Height()
