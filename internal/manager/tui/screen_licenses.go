@@ -3,6 +3,8 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -81,6 +83,40 @@ type licensesModel struct {
 	width       int
 	hgt         int
 	titleHints  *titleHintRow
+	// chipHits records the absolute X-range of each filter chip after the most
+	// recent View() so OnClick can hit-test against the geometry that was
+	// actually rendered — including the compact-fallback inline layout used on
+	// narrow terminals. Pre-2026-05 the click handler reverse-engineered the
+	// formula and the matching test mirrored the same broken formula, so neither
+	// of them caught the real off-by-tens drift caused by the search/count
+	// columns sitting to the left of the chips.
+	chipHits *chipHitRow
+}
+
+// chipHit is one (filter, rendered span) record produced by renderFilterBar.
+type chipHit struct {
+	f      licenseFilter
+	x0, x1 int
+}
+
+// chipHitRow stores the chip-bar Y range plus per-chip X-ranges. Like
+// titleHintRow it's held by pointer so the populated layout survives the
+// value-receiver Update/View round-trip.
+type chipHitRow struct {
+	y0, y1 int
+	hits   []chipHit
+}
+
+func (c *chipHitRow) hit(x, y int) (licenseFilter, bool) {
+	if c == nil || y < c.y0 || y > c.y1 {
+		return 0, false
+	}
+	for _, h := range c.hits {
+		if x >= h.x0 && x < h.x1 {
+			return h.f, true
+		}
+	}
+	return 0, false
 }
 
 func newLicensesModel(svc *service.Services) licensesModel {
@@ -112,6 +148,7 @@ func newLicensesModel(svc *service.Services) licensesModel {
 		search:      ti,
 		detail:      true,
 		titleHints:  &titleHintRow{},
+		chipHits:    &chipHitRow{},
 		pemViewport: viewport.New(80, 10),
 	}
 }
@@ -153,6 +190,26 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 		m.width = msg.Width
 		m.hgt = msg.Height
 		m.pemViewport.Width = BoxedInner(msg.Width)
+		// Viewport height MUST sit inside the detail panel's slice of the
+		// remaining screen budget — otherwise the bottom of the box renders
+		// beyond row m.hgt-1 and the root chrome's clampToHeight truncates it
+		// silently, making any scroll invisible. Reservation breakdown
+		// (licences screen with detail open):
+		//   ChromeRows(4) + leading blank(1) + topRow(3, bordered chips) +
+		//   blank(1) + table-box overhead (top+title+bottom = 3) +
+		//   detail-box overhead (top+header+blank+bottom = 4) = 16
+		// Then split the remaining vertical space 50/50 between table and
+		// detail body, and reserve 1 line inside the detail body for the
+		// "PEM signé [c] copier ..." header.
+		const layoutReservation = 17
+		half := (msg.Height - layoutReservation) / 2
+		if half < 4 {
+			half = 4
+		}
+		m.pemViewport.Height = half - 1
+		if m.pemViewport.Height < 3 {
+			m.pemViewport.Height = 3
+		}
 		m.rebuildTable()
 		return m, nil
 
@@ -180,8 +237,16 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 
 	case licenseDetailTabClickMsg:
 		m.detailTab = msg.tab
-		// Audit tab (3) and Chain tab (4) load lazily — same path as keyboard shortcuts.
+		// PEM (2) / Audit (3) / Chain (4) load lazily — same paths as the
+		// keyboard shortcuts. Without this case 2 a mouse-click on [P] used
+		// to show an empty viewport because renderDetailPEM's SetContent
+		// fallback ran on a value-receiver and the mutation was discarded.
 		switch msg.tab {
+		case 2:
+			if row := m.selectedRow(); row != nil {
+				m.pemViewport.SetContent(Base.Render(string(row.Pem)))
+				m.pemViewport.GotoTop()
+			}
 		case 3:
 			if row := m.selectedRow(); row != nil {
 				m.detailAuditRows = nil
@@ -210,8 +275,38 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 		m.detailChainLoading = false
 		return m, nil
 
+	case licenseImportPickedMsg:
+		svc := m.svc
+		path := msg.path
+		return m, func() tea.Msg {
+			pem, err := os.ReadFile(path)
+			if err != nil {
+				return pushOverlayMsg{newErrorOverlay("Import — read", err.Error())}
+			}
+			if svc == nil {
+				return pushOverlayMsg{newErrorOverlay("Import", "service indisponible")}
+			}
+			row, err := svc.License.Import(context.Background(), pem, filepath.Base(path), "operator")
+			if err != nil {
+				return pushOverlayMsg{newErrorOverlay("Import licence", err.Error())}
+			}
+			return licenseImportedMsg{row: row}
+		}
+
+	case licenseImportedMsg:
+		// Trigger reload so the table shows the newly imported row.
+		return m, ListLicensesCmd(m.svc)
+
 	case tableSelectRowMsg:
 		m.table.SetCursor(msg.row)
+		// Keep the PEM preview in sync with the new selection when the PEM
+		// tab is currently open (mouse click on a different row).
+		if m.detail && m.detailTab == 2 {
+			if row := m.selectedRow(); row != nil {
+				m.pemViewport.SetContent(Base.Render(string(row.Pem)))
+				m.pemViewport.GotoTop()
+			}
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -252,7 +347,7 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 		case "P":
 			m.detailTab = 2
 			if row := m.selectedRow(); row != nil {
-				m.pemViewport.SetContent(string(row.Pem))
+				m.pemViewport.SetContent(Base.Render(string(row.Pem)))
 				m.pemViewport.GotoTop()
 			}
 			return m, nil
@@ -271,6 +366,25 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 
 		case "n":
 			return m, openWizardCmd(m.svc)
+
+		case "i":
+			// Import a PEM-encoded licence from disk. The picker emits a
+			// licenseImportPickedMsg that Update handles below.
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newFilePickerOverlay(func(path string) tea.Cmd {
+					return func() tea.Msg { return licenseImportPickedMsg{path: path} }
+				})}
+			}
+
+		case "E":
+			// Export the selected licence to a .pem file. Symmetrical to [E]
+			// on the issuers screen which exports the public key.
+			if m.selectedRow() == nil {
+				return m, nil
+			}
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newInputOverlay(OverlayIDLicenseExport, "Export licence (.pem)", "/path/to/license.pem", 256)}
+			}
 
 		case "x":
 			row := m.selectedRow()
@@ -319,25 +433,52 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 		}
 	}
 
-	// PEM tab arrow-key scroll: when detail is open on the PEM tab (2), up/down
-	// are intercepted here so the table below doesn't consume them as cursor moves.
+	// PEM tab key dispatch — TWO concurrent affordances per the truth table
+	// in screen_licenses_keytable_test.go:
+	//
+	//   1) ↑/↓ STILL navigate the licences table (consistent with every
+	//      other tab — operator expectation is preserved). The PEM viewport
+	//      is auto-reloaded on cursor change below, so the preview tracks
+	//      the selection.
+	//   2) j/k/space/b/pgup/pgdown/g/G scroll the PEM viewport. Multiple
+	//      bindings are layered: Windows Terminal and tmux often capture
+	//      PgUp/PgDn for their own scrollback, but the alphabetic vim/less
+	//      keys always reach the app.
+	//
+	// Crucially this block does NOT intercept ↑/↓ — those fall through to
+	// the table.Update call below so the cursor moves.
 	if msg, ok := msg.(tea.KeyMsg); ok && m.detail && m.detailTab == 2 {
-		switch msg.Type {
-		case tea.KeyUp:
-			if m.pemViewport.Height > 0 {
-				m.pemViewport.LineUp(1)
-			}
+		switch msg.String() {
+		case "k":
+			m.pemViewport.LineUp(3)
 			return m, nil
-		case tea.KeyDown:
-			if m.pemViewport.Height > 0 {
-				m.pemViewport.LineDown(1)
-			}
+		case "j":
+			m.pemViewport.LineDown(3)
+			return m, nil
+		case "pgup", "b":
+			m.pemViewport.HalfViewUp()
+			return m, nil
+		case "pgdown", " ":
+			m.pemViewport.HalfViewDown()
+			return m, nil
+		case "home", "g":
+			m.pemViewport.GotoTop()
+			return m, nil
+		case "end", "G":
+			m.pemViewport.GotoBottom()
 			return m, nil
 		}
 	}
 
+	prevCursor := m.table.Cursor()
 	var cmd tea.Cmd
 	m.table, cmd = m.table.Update(msg)
+	if m.detail && m.detailTab == 2 && m.table.Cursor() != prevCursor {
+		if row := m.selectedRow(); row != nil {
+			m.pemViewport.SetContent(Base.Render(string(row.Pem)))
+			m.pemViewport.GotoTop()
+		}
+	}
 	return m, cmd
 }
 
@@ -394,34 +535,56 @@ func (m *licensesModel) visibleRows() []*ent.License {
 
 func (m *licensesModel) rebuildTable() {
 	visible := m.visibleRows()
-	rows := make([]table.Row, 0, len(visible))
 	now := time.Now()
+	raw := make([][]string, 0, len(visible))
 	for _, r := range visible {
 		status := string(r.Status)
-		expires := r.NotAfter.Format("2006-01-02")
 		if r.NotAfter.Before(now) && r.Status == licenseent.StatusActive {
 			status = "expired"
 		}
-		audience := strings.Join(r.Audience, ",")
-		if len(audience) > 14 {
-			audience = audience[:13] + "…"
-		}
-		features := strings.Join(r.Features, ",")
-		if len(features) > 18 {
-			features = features[:17] + "…"
-		}
-		rows = append(rows, table.Row{
-			status, r.Subject, audience, r.IssuerName, expires, features,
+		raw = append(raw, []string{
+			status,
+			r.Subject,
+			strings.Join(r.Audience, ","),
+			r.IssuerName,
+			r.NotAfter.Format("2006-01-02"),
+			strings.Join(r.Features, ","),
 		})
 	}
 
-	// Fixed overhead = ChromeRows + box vertical frame (border above/below).
-	_, boxV := BoxFrame()
-	tableH := clampTableHeight(m.hgt-ChromeRows-boxV, m.detail, len(rows) == 0)
+	// Auto-size: ideals derived from header+content (cap 60). Weights:
+	// STATUS/EXPIRES fixed-format → 0; SUBJECT biggest share; AUDIENCE+
+	// FEATURES grow on lists; KEYID grows modestly. setAutoFitRows commits
+	// the rows post-truncation in one shot.
+	setAutoFitRows(&m.table, BoxedInner(m.width), []int{0, 3, 2, 1, 0, 2}, raw, 60)
 
-	m.table.SetRows(rows)
+	// Use the same layout-reservation budget as WindowSizeMsg uses for the
+	// PEM viewport so table + detail body together fit exactly under the
+	// root chrome's clampToHeight ceiling (m.hgt - ChromeRows). Pre-fix
+	// clampTableHeight subtracted only ChromeRows + boxV (= 6) which is way
+	// less than the real overhead (= 16 with detail open), so the table
+	// over-reserved and pushed the detail panel past the screen bottom.
+	const layoutReservation = 17
+	var tableH int
+	switch {
+	case len(raw) == 0:
+		tableH = 1
+	case m.detail:
+		half := (m.hgt - layoutReservation) / 2
+		if half < 3 {
+			half = 3
+		}
+		tableH = half
+	default:
+		// No detail panel — let the table take the full body minus chrome
+		// and the table-box frame (top border + title + bottom border = 3).
+		_, boxV := BoxFrame()
+		tableH = m.hgt - ChromeRows - boxV - 3 - 4 // 4 = topRow(3) + leading blank(1)
+		if tableH < 3 {
+			tableH = 3
+		}
+	}
 	m.table.SetHeight(tableH)
-	stretchLastColumn(&m.table, BoxedInner(m.width))
 }
 
 func (m licensesModel) View() string {
@@ -449,6 +612,23 @@ func (m licensesModel) View() string {
 	searchSegment := lipgloss.NewStyle().Width(searchW).Render(searchInput)
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top,
 		" ", searchSegment, "  ", Dim.Render(count), "  ", chips)
+	// Record the absolute X-offset of the chip block so OnClick can map the
+	// chip-local hit X-ranges produced by renderFilterBar back to screen
+	// coordinates. Mirrors the JoinHorizontal layout: 1 leading space +
+	// searchW + 2 + countW + 2.
+	if m.chipHits != nil {
+		offset := 1 + searchW + 2 + countW + 2
+		for i := range m.chipHits.hits {
+			m.chipHits.hits[i].x0 += offset
+			m.chipHits.hits[i].x1 += offset
+		}
+		// topRow starts at TopChromeRows + 1 (leading blank); chip block is at
+		// the same Y. In bordered mode it spans 3 lines (border + label + border);
+		// in compact mode it's a single row.
+		topY := TopChromeRows + 1
+		m.chipHits.y0 = topY
+		m.chipHits.y1 = topY + lipgloss.Height(chips) - 1
+	}
 
 	// Titled box wrapping the table. [↑↓] is informational (keyboard nav)
 	// and not exposed as a clickable target — its synthesised KeyMsg would
@@ -458,6 +638,8 @@ func (m licensesModel) View() string {
 		{Key: "↑↓", Label: " nav ", Cmd: func() tea.Cmd { return nil }},
 		{Key: "d", Label: " détail ", Cmd: keyCmd("d")},
 		{Key: "n", Label: " nouvelle ", Cmd: keyCmd("n")},
+		{Key: "i", Label: " importer ", Cmd: keyCmd("i")},
+		{Key: "E", Label: " exporter ", Cmd: keyCmd("E")},
 		{Key: "x", Label: " révoquer ", Cmd: keyCmd("x")},
 		{Key: "e", Label: " re-émettre", Cmd: keyCmd("e")},
 	}, 0, BoxedInner(m.width))
@@ -475,7 +657,17 @@ func (m licensesModel) View() string {
 	body := lipgloss.JoinVertical(lipgloss.Left, "", topRow, "", boxed)
 
 	if m.detail {
-		body = lipgloss.JoinVertical(lipgloss.Left, body, m.renderDetail())
+		// Compute how many lines remain under the body before chrome's
+		// clampToHeight bites. lipgloss.Height(body) under-counts when topRow
+		// is wider than m.width and gets soft-wrapped at chrome level, so
+		// subtract a 2-line safety margin. Clip the detail to that budget so
+		// its bottom border always stays visible. On very small terminals
+		// (< 6 lines remaining) the detail panel is suppressed entirely
+		// rather than rendering a half-truncated frame.
+		remaining := m.hgt - ContentReservedRows - lipgloss.Height(body) - 4
+		if remaining >= 6 {
+			body = lipgloss.JoinVertical(lipgloss.Left, body, clipDetailBox(m.renderDetail(), remaining))
+		}
 	}
 
 	if m.err != nil {
@@ -493,20 +685,9 @@ func (m licensesModel) OnClick(x, y, _ int) tea.Cmd {
 	if cmd := m.titleHints.hit(x, y); cmd != nil {
 		return cmd
 	}
-	const chipBarTopY = TopChromeRows + 1 // chrome rows + 1 leading blank
-	if y >= chipBarTopY && y <= chipBarTopY+2 {
-		// Hit-test the filter chip bar. Mirror renderFilterBar layout:
-		// 1 PaddingLeft + each pill(label+4 border/padding) + 1 separator space.
-		cursor := 1
-		for _, f := range []licenseFilter{licFilterAll, licFilterActive, licFilterExpiring, licFilterExpired, licFilterRevoked, licFilterSuperseded} {
-			w := lipgloss.Width(f.String()) + 4
-			if x >= cursor && x < cursor+w {
-				target := f
-				return func() tea.Msg { return licenseFilterClickMsg{f: target} }
-			}
-			cursor += w + 1
-		}
-		return nil
+	if f, ok := m.chipHits.hit(x, y); ok {
+		target := f
+		return func() tea.Msg { return licenseFilterClickMsg{f: target} }
 	}
 
 	// Table rows: header sits one line below the box title row recorded by
@@ -559,21 +740,36 @@ func (m licensesModel) OnClick(x, y, _ int) tea.Cmd {
 // [I/B/P/A/C] tab strip in the license detail panel.
 type licenseDetailTabClickMsg struct{ tab int }
 
+// licenseImportPickedMsg carries the path returned by the file picker when
+// the operator selected a PEM to import. Handled in Update.
+type licenseImportPickedMsg struct{ path string }
+
+// licenseImportedMsg signals a successful import; Update triggers a list
+// reload so the new row appears.
+type licenseImportedMsg struct{ row *ent.License }
+
 // licenseFilterClickMsg is dispatched from OnClick when the operator clicks a
 // filter chip; the licenses model handles it in Update.
 type licenseFilterClickMsg struct{ f licenseFilter }
 
+// renderFilterBar renders the chip bar AND records each chip's rendered
+// X-span into chipHits. The recorded ranges are chip-local (origin = left
+// edge of the returned string); the caller offsets by the chip block's
+// absolute X in topRow.
 func (m licensesModel) renderFilterBar() string {
 	filters := []licenseFilter{licFilterAll, licFilterActive, licFilterExpiring, licFilterExpired, licFilterRevoked, licFilterSuperseded}
+	pillWs := make([]int, len(filters))
 	var parts []string
-	for _, f := range filters {
+	for i, f := range filters {
 		label := f.String()
+		var seg string
 		if f == m.filter {
-			parts = append(parts, PillActive.Render(label))
+			seg = PillActive.Render(label)
 		} else {
-			parts = append(parts, PillOff.Render(label))
+			seg = PillOff.Render(label)
 		}
-		parts = append(parts, " ")
+		pillWs[i] = lipgloss.Width(seg)
+		parts = append(parts, seg, " ")
 	}
 	// PaddingLeft applies to every line of the multi-line chip block; a leading
 	// space concat would only indent the first row (top border).
@@ -584,7 +780,19 @@ func (m licensesModel) renderFilterBar() string {
 	// across 4 lines. The topRow reserves ~30 cells for search+count, so
 	// the chip budget is roughly m.width - 35.
 	const topRowReserve = 35
-	if m.width > 0 && lipgloss.Width(bordered) > m.width-topRowReserve {
+	compact := m.width > 0 && lipgloss.Width(bordered) > m.width-topRowReserve
+	hits := make([]chipHit, len(filters))
+	if compact {
+		sepW := lipgloss.Width(Mute.Render(" · "))
+		cursor := 1 // leading " "
+		for i, f := range filters {
+			w := lipgloss.Width(f.String())
+			hits[i] = chipHit{f: f, x0: cursor, x1: cursor + w}
+			cursor += w + sepW
+		}
+		if m.chipHits != nil {
+			m.chipHits.hits = hits
+		}
 		var flat []string
 		for _, f := range filters {
 			seg := f.String()
@@ -596,6 +804,18 @@ func (m licensesModel) renderFilterBar() string {
 			flat = append(flat, seg)
 		}
 		return " " + strings.Join(flat, Mute.Render(" · "))
+	}
+	// Bordered mode: PaddingLeft adds 1 column; pills then sit shoulder-to-
+	// shoulder with a 1-cell space between them. Each pill exposes label + 4
+	// (2 border + 2 padding) horizontal cells, but we use the live measured
+	// width so any future PillActive/PillOff style change stays correct.
+	cursor := 1
+	for i, f := range filters {
+		hits[i] = chipHit{f: f, x0: cursor, x1: cursor + pillWs[i]}
+		cursor += pillWs[i] + 1
+	}
+	if m.chipHits != nil {
+		m.chipHits.hits = hits
 	}
 	return bordered
 }
@@ -760,28 +980,50 @@ func (m licensesModel) renderDetailBindings(row *ent.License) string {
 }
 
 // renderDetailPEM displays the licence PEM text in a scrollable viewport.
-// ↑/↓ are routed to pemViewport by Update() when this tab is active.
+// Pure: any viewport content loading happens in Update() — the [P] key path,
+// the licenseDetailTabClickMsg case 2, and tableSelectRowMsg / arrow-cursor
+// changes. Calling SetContent here would be a no-op because this is a
+// value-receiver method and the mutation never propagates back to the root.
 func (m licensesModel) renderDetailPEM(row *ent.License) string {
 	hint := HintKey.Render("[c]") + Dim.Render(" copier · ") +
-		HintKey.Render("↑↓") + Dim.Render(" scroll")
+		HintKey.Render("↑↓/jk") + Dim.Render(" scroll · ") +
+		HintKey.Render("space/b") + Dim.Render(" page · ") +
+		HintKey.Render("g/G") + Dim.Render(" début/fin")
 	header := GlowCyan.Render("PEM signé") + "  " + hint
 
 	pem := string(row.Pem)
 	if pem == "" {
 		return header + "\n" + Dim.Render("(PEM absent côté store — vérifie l'intégrité de la base ou re-émets la licence)")
 	}
-
-	// Keep the viewport content in sync with the selected row. The viewport is
-	// loaded on tab-open ('P' key) and here as a fallback for row switches.
+	// Viewport not yet sized (e.g. no WindowSizeMsg received yet) — render plain.
 	if m.pemViewport.Height == 0 {
-		// Viewport not yet sized (e.g. no WindowSizeMsg received yet) — render plain.
 		return header + "\n" + Base.Render(pem)
 	}
-	// Re-set content if it has drifted (row selection changed while PEM tab open).
-	if m.pemViewport.TotalLineCount() == 0 {
-		m.pemViewport.SetContent(Base.Render(pem))
+	// Scroll indicator: "lignes 5-16/47 · 25 %". Without this feedback the
+	// operator can't tell whether their key is being captured or whether the
+	// content simply fits in the viewport — exactly the "scroll doesn't
+	// work" perception even when scrolling is mechanically functional.
+	total := m.pemViewport.TotalLineCount()
+	first := m.pemViewport.YOffset + 1
+	last := m.pemViewport.YOffset + m.pemViewport.Height
+	if last > total {
+		last = total
 	}
-	return header + "\n" + m.pemViewport.View()
+	pct := 0
+	if total > m.pemViewport.Height {
+		// Percent of the *scrollable* range, not of total lines.
+		scrollable := total - m.pemViewport.Height
+		if scrollable > 0 {
+			pct = m.pemViewport.YOffset * 100 / scrollable
+		}
+	}
+	var indicator string
+	if total <= m.pemViewport.Height {
+		indicator = Dim.Render(fmt.Sprintf("[%d lignes · tout visible]", total))
+	} else {
+		indicator = Dim.Render(fmt.Sprintf("[lignes %d-%d/%d · %d %%]", first, last, total, pct))
+	}
+	return header + "  " + indicator + "\n" + m.pemViewport.View()
 }
 
 // renderDetailAudit lists audit events for the selected licence. The list is
@@ -944,6 +1186,32 @@ func (m licensesModel) handleLicenseReissueConfirm(res ConfirmResultMsg) (licens
 		return pushOverlayMsg{NewOKOverlay("Re-émission OK",
 			fmt.Sprintf("Nouvelle licence pour %q\nUUID: %s\n\nPress 'r' to refresh the list.",
 				subject, newLic.Row.LicenseUUID))}
+	}
+}
+
+// handleLicenseInputResult processes InputResultMsg payloads routed from
+// app.go. Today only the [E] export path lands here; future input-style
+// actions on the licences screen will share this switch.
+func (m licensesModel) handleLicenseInputResult(res InputResultMsg) (licensesModel, tea.Cmd) {
+	if res.ID != OverlayIDLicenseExport {
+		return m, nil
+	}
+	row := m.selectedRow()
+	if row == nil || m.svc == nil {
+		return m, nil
+	}
+	id := row.ID
+	path := ensureExtension(res.Value, ".pem")
+	svc := m.svc
+	return m, func() tea.Msg {
+		pem, err := svc.License.ExportPEM(context.Background(), id)
+		if err != nil {
+			return pushOverlayMsg{newErrorOverlay("Export Error", err.Error())}
+		}
+		if err := os.WriteFile(path, pem, 0o600); err != nil {
+			return pushOverlayMsg{newErrorOverlay("Write Error", err.Error())}
+		}
+		return pushOverlayMsg{NewOKOverlay("Export OK", "Wrote "+path)}
 	}
 }
 

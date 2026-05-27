@@ -16,9 +16,11 @@ const (
 	OverlayIDTOTPExportPDF    = "totp-export-pdf"
 
 	OverlayIDLicenseReissue   = "license-reissue"
+	OverlayIDLicenseExport    = "license-export"
 	OverlayIDIssuerRename     = "issuer-rename"
 	OverlayIDIssuerExportPub  = "issuer-export-pub"
-	OverlayIDIssuerExportPriv = "issuer-export-priv"
+	OverlayIDIssuerExportPriv     = "issuer-export-priv"      // confirm step
+	OverlayIDIssuerExportPrivPath = "issuer-export-priv-path" // path-input step
 	OverlayIDIssuerRetire     = "issuer-retire"
 	OverlayIDRecipientRename  = "recipient-rename"
 	OverlayIDRecipientDelete  = "recipient-delete"

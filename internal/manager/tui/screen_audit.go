@@ -234,33 +234,28 @@ func (m *auditModel) visibleRows() []*ent.AuditEvent {
 
 func (m *auditModel) rebuildTable() {
 	visible := m.visibleRows()
-	rows := make([]table.Row, 0, len(visible))
+	raw := make([][]string, 0, len(visible))
 	for _, r := range visible {
-		ts := r.CreatedAt.Format("2006-01-02 15:04:05")
-		target := r.TargetKind + "/" + r.TargetID
-		if len(target) > 14 {
-			target = target[:13] + "…"
-		}
 		note := ""
 		if n, ok := r.Payload["note"]; ok {
 			note = fmt.Sprintf("%v", n)
 		}
-		if len(note) > 18 {
-			note = note[:17] + "…"
-		}
-		rows = append(rows, table.Row{ts, r.Kind, r.Actor, target, note})
+		raw = append(raw, []string{
+			r.CreatedAt.Format("2006-01-02 15:04:05"),
+			r.Kind,
+			r.Actor,
+			r.TargetKind + "/" + r.TargetID,
+			note,
+		})
 	}
+	// Weights: TIMESTAMP fixed; KIND/ACTOR modest; TARGET useful; NOTE biggest.
+	setAutoFitRows(&m.table, m.width, []int{0, 1, 1, 2, 3}, raw, 60)
+
 	// Magic 6 = empirically measured fixed-row overhead the audit screen
 	// reserves above the table (chip bar + title + spacers + statusbar).
-	// Bumping it produces a too-short table; not bumping it is safe today
-	// because bubbles/table absorbs the over-allocation internally. Keep
-	// the literal but reference ChromeRows so the chrome dependency is
-	// at least documented.
 	const auditFixedOverhead = ChromeRows + 2 // 4 + 2 = 6
-	tableH := clampTableHeight(m.hgt-auditFixedOverhead, m.detail, len(rows) == 0)
-	m.table.SetRows(rows)
+	tableH := clampTableHeight(m.hgt-auditFixedOverhead, m.detail, len(raw) == 0)
 	m.table.SetHeight(tableH)
-	stretchLastColumn(&m.table, m.width)
 	if m.detail {
 		m.vp.Height = m.hgt - tableH - auditFixedOverhead
 		if m.vp.Height < 3 {

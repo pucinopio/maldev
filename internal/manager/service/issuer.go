@@ -153,3 +153,24 @@ func (svc *IssuerService) ExportPublic(ctx context.Context, id uuid.UUID) ([]byt
 	}
 	return license.MarshalPublicKey(row.PublicKey, row.KeyID)
 }
+
+// ExportPrivate returns the decrypted Ed25519 signing key as a PEM
+// "MALDEV PRIVATE KEY" block, symmetrical to ExportPublic. Callers MUST treat
+// the returned bytes as sensitive: this is the bytes the Import() path
+// accepts to register a foreign issuer key, so anyone who obtains them can
+// sign new licences. The slice returned by MarshalPrivateKey is a copy of
+// the in-memory key, so the operator writes it to disk without retaining the
+// raw key in process memory longer than necessary — memory.SecureZero is
+// applied to the intermediate private-key buffer before returning.
+func (svc *IssuerService) ExportPrivate(ctx context.Context, id uuid.UUID) ([]byte, error) {
+	priv, err := svc.PrivateKey(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	pemBytes, marshalErr := license.MarshalPrivateKey(priv)
+	memory.SecureZero(priv)
+	if marshalErr != nil {
+		return nil, marshalErr
+	}
+	return pemBytes, nil
+}

@@ -132,21 +132,20 @@ func (m *recipientsModel) selectedRow() *ent.RecipientKey {
 }
 
 func (m *recipientsModel) rebuildTable() {
-	rows := make([]table.Row, 0, len(m.rows))
+	raw := make([][]string, 0, len(m.rows))
 	for _, r := range m.rows {
 		keyID := fmt.Sprintf("%x", r.PublicKey)
 		if len(keyID) > 18 {
 			keyID = keyID[:18]
 		}
-		created := r.CreatedAt.Format("2006-01-02")
-		rows = append(rows, table.Row{keyID, r.Name, created, "—"})
+		raw = append(raw, []string{keyID, r.Name, r.CreatedAt.Format("2006-01-02"), "—"})
 	}
+	// Weights: KEYID/NAME grow, CREATED/#SEALED fixed.
+	setAutoFitRows(&m.table, BoxedInner(m.width), []int{1, 3, 0, 0}, raw, 60)
 	tableH := clampTableHeight(listTableHeight(m.hgt, m.width,
 		" Les recipient keys servent à sceller un payload (NaCl box). Le destinataire d'une licence possède la clé privée X25519 et peut déchiffrer le sealed payload."),
-		m.detail, len(rows) == 0)
-	m.table.SetRows(rows)
+		m.detail, len(raw) == 0)
 	m.table.SetHeight(tableH)
-	stretchLastColumn(&m.table, BoxedInner(m.width))
 }
 
 // OnClick handles title-bar hint chips + table-row selection.
@@ -180,7 +179,10 @@ func (m recipientsModel) View() string {
 
 	body := lipgloss.JoinVertical(lipgloss.Left, "", intro, "", boxed)
 	if m.detail {
-		body = lipgloss.JoinVertical(lipgloss.Left, body, m.renderDetail())
+		remaining := m.hgt - ContentReservedRows - lipgloss.Height(body) - 4
+		if remaining >= 6 {
+			body = lipgloss.JoinVertical(lipgloss.Left, body, clipDetailBox(m.renderDetail(), remaining))
+		}
 	}
 	if m.err != nil {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body

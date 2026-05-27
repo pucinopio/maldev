@@ -161,21 +161,22 @@ func (m *identitiesModel) refCount(_ *ent.Identity) int {
 }
 
 func (m *identitiesModel) rebuildTable() {
-	rows := make([]table.Row, 0, len(m.rows))
+	raw := make([][]string, 0, len(m.rows))
 	for _, r := range m.rows {
+		// SHA-256 is 64 chars hex — too wide to display fully in any reasonable
+		// terminal. Truncate before sizing so the ideal calc stays sane.
 		sha := r.Sha256
 		if len(sha) > 18 {
 			sha = sha[:18] + "…"
 		}
-		created := r.CreatedAt.Format("2006-01-02")
-		rows = append(rows, table.Row{r.Name, sha, "—", created})
+		raw = append(raw, []string{r.Name, sha, "—", r.CreatedAt.Format("2006-01-02")})
 	}
+	// Weights: NAME grows most, SHA256 modest, #REFS/CREATED fixed.
+	setAutoFitRows(&m.table, BoxedInner(m.width), []int{3, 2, 0, 0}, raw, 60)
 	tableH := clampTableHeight(listTableHeight(m.hgt, m.width,
 		" Une identity.bin est un blob de 32 octets aléatoires embarqué dans le binaire via //go:embed. Une licence peut être pinnée à son sha256 pour validation."),
-		m.detail, len(rows) == 0)
-	m.table.SetRows(rows)
+		m.detail, len(raw) == 0)
 	m.table.SetHeight(tableH)
-	stretchLastColumn(&m.table, BoxedInner(m.width))
 }
 
 // OnClick handles title-bar hint chips + table-row selection.
@@ -215,7 +216,10 @@ func (m identitiesModel) View() string {
 
 	body := lipgloss.JoinVertical(lipgloss.Left, "", intro, "", boxed)
 	if m.detail {
-		body = lipgloss.JoinVertical(lipgloss.Left, body, m.renderDetail())
+		remaining := m.hgt - ContentReservedRows - lipgloss.Height(body) - 4
+		if remaining >= 6 {
+			body = lipgloss.JoinVertical(lipgloss.Left, body, clipDetailBox(m.renderDetail(), remaining))
+		}
 	}
 	if m.err != nil {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body

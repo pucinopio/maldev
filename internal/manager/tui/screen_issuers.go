@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -50,6 +51,10 @@ type IssuersLoadedMsg struct {
 	Err  error
 }
 
+// issuerImportPickedMsg carries the path returned by the file picker when
+// the operator selected an Ed25519 private-key PEM to import.
+type issuerImportPickedMsg struct{ path string }
+
 type issuersModel struct {
 	svc    *service.Services
 	rows   []*ent.Issuer
@@ -80,7 +85,7 @@ func newIssuersModel(svc *service.Services) issuersModel {
 		table.WithHeight(15),
 		table.WithStyles(licTableStyles()),
 	)
-	return issuersModel{svc: svc, table: t, titleHints: &titleHintRow{}}
+	return issuersModel{svc: svc, table: t, titleHints: &titleHintRow{}, detail: true}
 }
 
 func listIssuersCmd(svc *service.Services) tea.Cmd {
@@ -113,6 +118,27 @@ func (m issuersModel) Update(msg tea.Msg) (issuersModel, tea.Cmd) {
 		m.table.SetCursor(msg.row)
 		return m, nil
 
+	case issuerImportPickedMsg:
+		svc := m.svc
+		path := msg.path
+		return m, func() tea.Msg {
+			pem, err := os.ReadFile(path)
+			if err != nil {
+				return pushOverlayMsg{newErrorOverlay("Import — read", err.Error())}
+			}
+			if svc == nil {
+				return pushOverlayMsg{newErrorOverlay("Import", "service indisponible")}
+			}
+			base := filepath.Base(path)
+			name := strings.TrimSuffix(base, filepath.Ext(base))
+			keyID := fmt.Sprintf("imported-%d", time.Now().Unix())
+			if _, err := svc.Issuer.Import(context.Background(), name, keyID, pem, "operator"); err != nil {
+				return pushOverlayMsg{newErrorOverlay("Import issuer", err.Error())}
+			}
+			rows, err := svc.Issuer.List(context.Background())
+			return IssuersLoadedMsg{Rows: rows, Err: err}
+		}
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "d":
@@ -138,6 +164,18 @@ func (m issuersModel) Update(msg tea.Msg) (issuersModel, tea.Cmd) {
 		case "n":
 			return m, func() tea.Msg {
 				return pushOverlayMsg{newInputOverlay("issuer-name", "New Issuer", "name (e.g. prod-2026)", 80)}
+			}
+
+		case "i":
+			// Import an Ed25519 private-key PEM from disk. Name defaults to the
+			// filename stem; keyID gets a synthetic `imported-<unix>` value so
+			// it never collides with a generated key. The operator can rename
+			// via [e] afterwards, and re-issue with the correct keyID if the
+			// imported key needs to match licences already in the store.
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newFilePickerOverlay(func(path string) tea.Cmd {
+					return func() tea.Msg { return issuerImportPickedMsg{path: path} }
+				})}
 			}
 
 		case "E":
@@ -194,7 +232,7 @@ func (m *issuersModel) selectedRow() *ent.Issuer {
 }
 
 func (m *issuersModel) rebuildTable() {
-	rows := make([]table.Row, 0, len(m.rows))
+	raw := make([][]string, 0, len(m.rows))
 	for _, r := range m.rows {
 		// Green dot in first column identifies the single active signing key at
 		// a glance without reading the STATUS column.
@@ -208,21 +246,16 @@ func (m *issuersModel) rebuildTable() {
 		} else if r.RetiredAt != nil {
 			status = "retired"
 		}
-		created := r.CreatedAt.Format("2006-01-02")
-		rows = append(rows, table.Row{
-			dot, r.KeyID, r.Name, status, created, "—",
+		raw = append(raw, []string{
+			dot, r.KeyID, r.Name, status, r.CreatedAt.Format("2006-01-02"), "—",
 		})
 	}
-	// clampTableHeight handles the universal halve-on-detail / min-3 /
-	// collapse-on-empty constraints. The empty-table case shows the
-	// emptyTableHint directly below the header rather than below an
-	// empty grid that pushes the hint off-screen.
+	// Weights ●=fixed dot, KEYID/NAME grow most, STATUS/CREATED/#SIGNED fixed.
+	setAutoFitRows(&m.table, BoxedInner(m.width), []int{0, 2, 3, 0, 0, 0}, raw, 60)
 	tableH := clampTableHeight(listTableHeight(m.hgt, m.width,
 		"Les issuer keys sont les clés Ed25519 qui signent tes licences. Une seule clé est active à la fois ; les autres sont retraitées (retired)."),
-		m.detail, len(rows) == 0)
-	m.table.SetRows(rows)
+		m.detail, len(raw) == 0)
 	m.table.SetHeight(tableH)
-	stretchLastColumn(&m.table, BoxedInner(m.width))
 }
 
 // OnClick dispatches title-bar hint clicks (synthesised as KeyMsg) and
@@ -269,6 +302,7 @@ func (m issuersModel) View() string {
 		{Key: "↑↓", Label: " nav ", Cmd: func() tea.Cmd { return nil }},
 		{Key: "d", Label: " détail ", Cmd: keyCmd("d")},
 		{Key: "n", Label: " générer ", Cmd: keyCmd("n")},
+		{Key: "i", Label: " importer ", Cmd: keyCmd("i")},
 		{Key: "a", Label: " activer ", Cmd: keyCmd("a")},
 		{Key: "E", Label: " export .pub ", Cmd: keyCmd("E")},
 		{Key: "x", Label: " retirer", Cmd: keyCmd("x")},
@@ -287,7 +321,10 @@ func (m issuersModel) View() string {
 
 	body := lipgloss.JoinVertical(lipgloss.Left, "", intro, "", boxed)
 	if m.detail {
-		body = lipgloss.JoinVertical(lipgloss.Left, body, m.renderDetail())
+		remaining := m.hgt - ContentReservedRows - lipgloss.Height(body) - 4
+		if remaining >= 6 {
+			body = lipgloss.JoinVertical(lipgloss.Left, body, clipDetailBox(m.renderDetail(), remaining))
+		}
 	}
 	if m.err != nil {
 		body = GlowRed.Render("Error: "+m.err.Error()) + "\n" + body
@@ -322,13 +359,19 @@ func (m issuersModel) renderDetail() string {
 	if row.Active {
 		activeLabel = "déjà active (aucune action)"
 	}
+	// Use HintKey for every action chip so the [a]/[e]/[E]/[K]/[x] column
+	// shares the same leading 1-cell padding. Pre-fix [x] rendered via GlowRed
+	// (no padding) and shifted left by 1, breaking the column visually — the
+	// destructive nature is now conveyed by foreground colour while keeping
+	// the geometry identical.
+	hintDanger := HintKey.Foreground(Palette.Red)
 	actions := lipgloss.JoinVertical(lipgloss.Left,
 		GlowCyan.Render("Actions"),
 		HintKey.Render("[a]")+" "+Dim.Render(activeLabel),
 		HintKey.Render("[e]")+" "+Dim.Render("renommer"),
 		HintKey.Render("[E]")+" "+Dim.Render("exporter clé publique (.pub)"),
-		HintKey.Render("[K]")+" "+Dim.Render("exporter clé privée (.key) — confirmation"),
-		GlowRed.Render("[x]")+" "+Dim.Render("retirer (clé reste vérifiable côté binaire)"),
+		HintKey.Render("[K]")+" "+Dim.Render("exporter clé privée (.priv) — confirmation"),
+		hintDanger.Render("[x]")+" "+Dim.Render("retirer (clé reste vérifiable côté binaire)"),
 	)
 
 	colStyle := lipgloss.NewStyle().Width(colW)
@@ -381,6 +424,27 @@ func (m issuersModel) handleIssuerInputResult(res InputResultMsg) (issuersModel,
 			return m, nil
 		}
 		return m, stubRenameResultCmd(res.Value)
+
+	case OverlayIDIssuerExportPrivPath:
+		row := m.selectedRow()
+		if row == nil || m.svc == nil {
+			return m, nil
+		}
+		id := row.ID
+		path := ensureExtension(res.Value, ".priv")
+		return m, func() tea.Msg {
+			pem, err := m.svc.Issuer.ExportPrivate(context.Background(), id)
+			if err != nil {
+				return pushOverlayMsg{newErrorOverlay("Export Error", err.Error())}
+			}
+			// 0o600: never group/world-readable. This file is the bytes Import()
+			// will accept to register a foreign signing key — anyone holding it
+			// can mint licences as this issuer.
+			if err := os.WriteFile(path, pem, 0o600); err != nil {
+				return pushOverlayMsg{newErrorOverlay("Write Error", err.Error())}
+			}
+			return pushOverlayMsg{NewOKOverlay("Export OK", "Wrote "+path)}
+		}
 	}
 	return m, nil
 }

@@ -99,6 +99,43 @@ func TestIssuerSetActiveDeactivatesOthers(t *testing.T) {
 	}
 }
 
+// TestIssuerExportPrivate guards the round-trip: generate → ExportPrivate →
+// ParsePrivateKey must recover bytes identical to the original signing key.
+// Symmetrical to TestIssuerImport which goes the other direction.
+func TestIssuerExportPrivate(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	kek := newKEK(t)
+	svc := NewIssuerService(s, kek, NewAuditService(s))
+
+	iss, err := svc.Generate(ctx, "exp-test", "k-exp", "op")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pem, err := svc.ExportPrivate(ctx, iss.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	priv, err := license.ParsePrivateKey(pem)
+	if err != nil {
+		t.Fatalf("re-parse exported PEM: %v", err)
+	}
+	// The in-DB private key (after KEK unwrap) must match what ExportPrivate
+	// rendered as PEM.
+	stored, err := svc.PrivateKey(ctx, iss.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(priv) != len(stored) {
+		t.Fatalf("len mismatch: exported=%d stored=%d", len(priv), len(stored))
+	}
+	for i := range priv {
+		if priv[i] != stored[i] {
+			t.Fatalf("byte %d differs: exported=%x stored=%x", i, priv[i], stored[i])
+		}
+	}
+}
+
 func TestIssuerImport(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)

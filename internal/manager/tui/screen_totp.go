@@ -228,19 +228,19 @@ func (m *totpModel) selectedRow() *ent.TOTPSecret {
 }
 
 func (m *totpModel) rebuildTable() {
-	rows := make([]table.Row, 0, len(m.rows))
+	raw := make([][]string, 0, len(m.rows))
 	for _, r := range m.rows {
 		shortID := r.ID.String()
 		if len(shortID) > 12 {
 			shortID = shortID[:8] + "…"
 		}
-		bound := "—"
 		// The license_totps FK is populated when the secret was issued via the
 		// wizard; standalone secrets show "—".
-		// (Direct read avoids an extra eager-load query for the list view.)
-		created := r.CreatedAt.Format("2006-01-02")
-		rows = append(rows, table.Row{r.AccountLabel, shortID, created, bound})
+		raw = append(raw, []string{r.AccountLabel, shortID, r.CreatedAt.Format("2006-01-02"), "—"})
 	}
+	// Weights: LABEL + BOUND TO are descriptive text, grow; ID/CREATED fixed.
+	setAutoFitRows(&m.table, BoxedInner(m.width), []int{3, 0, 0, 2}, raw, 60)
+
 	tableH := listTableHeight(m.hgt, m.width,
 		" Les secrets TOTP créés ici sont réutilisables — la liste apparaît dans le wizard step 7. Suppression libère le secret mais n'invalide pas les licences qui en dépendent.")
 	if tableH < 3 {
@@ -250,12 +250,10 @@ func (m *totpModel) rebuildTable() {
 	if tableH < 3 {
 		tableH = 3
 	}
-	if len(rows) == 0 {
+	if len(raw) == 0 {
 		tableH = 1
 	}
-	m.table.SetRows(rows)
 	m.table.SetHeight(tableH)
-	stretchLastColumn(&m.table, BoxedInner(m.width))
 	m.vp.Width = BoxedInner(m.width)
 	m.vp.Height = tableH
 	if m.view != nil {

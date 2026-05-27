@@ -333,6 +333,40 @@ func (g *gridWidget) Children() []Widget {
 	return cs
 }
 
+// clipDetailBox truncates a rendered bordered box to fit in `maxLines`,
+// preserving the top border (first line) and the bottom border (last line)
+// so the frame stays visually closed even when the middle content is cut
+// off. Returns s untouched when it already fits. Used by list screens to
+// guarantee the detail panel never extends past the terminal bottom on
+// narrow terminals (≤ 35 lines) where the Identity tab body alone (9 rows)
+// plus chrome + table + topRow exceeds the available height.
+func clipDetailBox(s string, maxLines int) string {
+	if maxLines <= 0 {
+		return ""
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) <= maxLines {
+		return s
+	}
+	if maxLines == 1 {
+		return lines[0]
+	}
+	// Find the actual bottom border — the LAST line that contains the closing
+	// box character "└". A trailing empty line would otherwise be kept and
+	// the visible `└────┘` would be discarded by the slice cut.
+	bottomIdx := len(lines) - 1
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.ContainsAny(lines[i], "└┘") {
+			bottomIdx = i
+			break
+		}
+	}
+	kept := make([]string, 0, maxLines)
+	kept = append(kept, lines[:maxLines-1]...)
+	kept = append(kept, lines[bottomIdx])
+	return strings.Join(kept, "\n")
+}
+
 // clampToHeight trims s to at most h lines, padding short content with blank
 // lines if necessary. This enforces a hard height ceiling that lipgloss.Height()
 // cannot provide (it only pads, never truncates). The w parameter is unused but
@@ -616,28 +650,220 @@ func (b *boxWidget) Children() []Widget { return []Widget{b.inner} }
 // layout.go alongside BoxedInner/BoxedWidth so a new screen author doesn't
 // have to guess which feature file owns them.
 
+// setAutoFitRows is the one-shot helper that every list screen calls in
+// rebuildTable: it computes each column's content-derived ideal width (max
+// of header width + every cell width, capped by maxIdeal), uses those
+// ideals as the fit baseline, then truncates each cell to the resulting
+// column width. Short columns automatically free space for textual ones,
+// the row sum always equals the box's inner width, and shrinking the
+// window still works because fitColumns handles the negative-delta path.
+//
+// rows is row-major: rows[i][j] is row i, column j (raw, untruncated).
+// weights mirrors fitColumns: 0 = stay at ideal, >0 = share of growth slack.
+// maxIdeal caps the per-column ideal (typically 60) so a single very long
+// cell doesn't blow up the column to the exclusion of every other one.
+func setAutoFitRows(t *table.Model, width int, weights []int, rows [][]string, maxIdeal int) {
+	cols := t.Columns()
+	nCols := len(cols)
+	if nCols == 0 {
+		return
+	}
+	ideals := make([]int, nCols)
+	for i, c := range cols {
+		ideals[i] = lipgloss.Width(c.Title)
+	}
+	for _, r := range rows {
+		for i := 0; i < nCols && i < len(r); i++ {
+			if w := lipgloss.Width(r[i]); w > ideals[i] {
+				ideals[i] = w
+			}
+		}
+	}
+	if maxIdeal > 0 {
+		for i := range ideals {
+			if ideals[i] > maxIdeal {
+				ideals[i] = maxIdeal
+			}
+		}
+	}
+	fitColumns(t, width, ideals, weights)
+
+	final := t.Columns()
+	out := make([]table.Row, len(rows))
+	for i, r := range rows {
+		tr := make(table.Row, nCols)
+		for j := 0; j < nCols; j++ {
+			if j < len(r) {
+				tr[j] = truncate(r[j], final[j].Width)
+			}
+		}
+		out[i] = tr
+	}
+	t.SetRows(out)
+}
+
+// tableMinsCache memoises the original (constructor-declared) column widths
+// for each *table.Model so stretchColumns can grow from the original minima
+// on every rebuild instead of compounding from already-stretched widths.
+// Keyed by pointer; the entry survives for the table's lifetime since the
+// app keeps one *table.Model per screen.
+var tableMinsCache = map[*table.Model][]int{}
+
+// tableMins returns the cached original widths for t, capturing cols on the
+// first call. Subsequent calls return the captured slice unchanged even if
+// cols (passed in for convenience) already reflects a stretched state.
+func tableMins(t *table.Model, cols []table.Column) []int {
+	if cached, ok := tableMinsCache[t]; ok && len(cached) == len(cols) {
+		return cached
+	}
+	mins := make([]int, len(cols))
+	for i, c := range cols {
+		mins[i] = c.Width
+	}
+	tableMinsCache[t] = mins
+	return mins
+}
+
 // stretchLastColumn enlarges the rightmost table column so the row highlight
 // spans the available screen width. The bubbles/table package only
 // highlights cells, so without this the selected-row background stops at
 // the natural column sum. Safe to call when width == 0 (no-op).
 func stretchLastColumn(t *table.Model, width int) {
-	if width <= 0 {
-		return
-	}
+	stretchColumns(t, width, nil)
+}
+
+// stretchColumns is the legacy entry point that uses constructor-declared
+// widths (captured once via tableMins) as the fit baseline. Prefer fitColumns
+// + explicit mins for new screens — that path lets the caller pass content-
+// derived ideal widths (see setAutoFitRows) so unused space in short columns
+// can be reclaimed for textual ones.
+func stretchColumns(t *table.Model, width int, weights []int) {
 	cols := t.Columns()
 	if len(cols) == 0 {
 		return
 	}
-	fixed := 0
-	for i := 0; i < len(cols)-1; i++ {
-		fixed += cols[i].Width
+	fitColumns(t, width, tableMins(t, cols), weights)
+}
+
+// fitColumns sizes every table column so the row sum ALWAYS equals the
+// available width minus the cell-padding + outer-border overhead, growing or
+// shrinking from the supplied `mins` baseline as needed. Without this two-way
+// fit, the row content overflows the box on a narrow terminal (end columns
+// wrap to the next line) and falls short on a wide one (selected-row
+// highlight ends mid-screen).
+//
+// weights[i] controls the *growth* share when there is positive slack.
+// weights[i] == 0 keeps the column at its baseline width. A nil/all-zero
+// weights vector falls back to "last column absorbs everything" — the
+// stretchLastColumn legacy behaviour. When the window is smaller than the
+// sum of mins, every column shrinks proportionally to its baseline (capped
+// at colFloor cells so the column title stays readable).
+func fitColumns(t *table.Model, width int, mins, weights []int) {
+	if width <= 0 {
+		return
 	}
-	overhead := 2*len(cols) + 2 // padding (1 per col) + outer borders
-	last := width - fixed - overhead
-	if last < cols[len(cols)-1].Width {
-		last = cols[len(cols)-1].Width
+	cols := t.Columns()
+	if len(cols) == 0 || len(mins) != len(cols) {
+		return
 	}
-	cols[len(cols)-1].Width = last
+
+	// 2*len(cols)+2 == 1-cell padding per column + outer left/right borders.
+	overhead := 2*len(cols) + 2
+	target := width - overhead
+	if target < len(cols) {
+		// Pathologically narrow terminal — give every column 1 cell and let
+		// the table truncate. Better than negative widths or a panic.
+		for i := range cols {
+			cols[i].Width = 1
+		}
+		t.SetColumns(cols)
+		return
+	}
+
+	minSum := 0
+	for _, w := range mins {
+		minSum += w
+	}
+	delta := target - minSum
+
+	switch {
+	case delta == 0:
+		// Exact fit at minima.
+		for i := range cols {
+			cols[i].Width = mins[i]
+		}
+
+	case delta > 0:
+		// Grow phase — distribute extra slack by weights. When no weights are
+		// supplied (or all zero), the last column absorbs everything to keep
+		// the stretchLastColumn legacy behaviour.
+		totalWeight := 0
+		if len(weights) == len(cols) {
+			for _, w := range weights {
+				if w > 0 {
+					totalWeight += w
+				}
+			}
+		}
+		for i := range cols {
+			cols[i].Width = mins[i]
+		}
+		if totalWeight == 0 {
+			cols[len(cols)-1].Width = mins[len(cols)-1] + delta
+			break
+		}
+		used := 0
+		lastWeighted := -1
+		for i, w := range weights {
+			if w <= 0 {
+				continue
+			}
+			share := w * delta / totalWeight
+			cols[i].Width += share
+			used += share
+			lastWeighted = i
+		}
+		if lastWeighted >= 0 {
+			cols[lastWeighted].Width += delta - used
+		}
+
+	case delta < 0:
+		// Shrink phase — proportional to each column's minimum so the larger
+		// columns absorb more of the deficit. Floor at colFloor so titles
+		// stay readable; any rounding remainder is taken from the widest
+		// non-floored column until the row sum equals target exactly.
+		const colFloor = 4
+		deficit := -delta
+		used := 0
+		for i := range cols {
+			share := mins[i] * deficit / minSum
+			// Cap share at what the column can actually give up.
+			maxTakeable := mins[i] - colFloor
+			if maxTakeable < 0 {
+				maxTakeable = 0
+			}
+			if share > maxTakeable {
+				share = maxTakeable
+			}
+			cols[i].Width = mins[i] - share
+			used += share
+		}
+		// Take any rounding/clamped remainder from the widest non-floored col.
+		rem := deficit - used
+		for rem > 0 {
+			widest := -1
+			for i := range cols {
+				if cols[i].Width > colFloor && (widest < 0 || cols[i].Width > cols[widest].Width) {
+					widest = i
+				}
+			}
+			if widest < 0 {
+				break // every column at floor; truncation is inevitable.
+			}
+			cols[widest].Width--
+			rem--
+		}
+	}
 	t.SetColumns(cols)
 }
 

@@ -136,6 +136,20 @@ func renderBreadcrumb(active ViewID, licFilter licenseFilter, extras []string, w
 		}
 	}
 	crumbText := strings.Join(parts, Mute.Render(" ▸ "))
+	// lipgloss.Width sets the cell budget but DOES NOT TRUNCATE — when
+	// crumbText is wider than (width - 2*padding), lipgloss soft-wraps to a
+	// second row. That extra row pushes every subsequent screen element down
+	// by 1, which is the silent cause of the "I can't see the bottom of the
+	// detail box" complaint on narrow terminals. Pre-truncate to the cell
+	// budget so the breadcrumb is guaranteed to render on a single line.
+	const padding = 2 // 1 cell each side from Padding(0, 1)
+	budget := width - padding
+	if budget < 1 {
+		budget = 1
+	}
+	if lipgloss.Width(crumbText) > budget {
+		crumbText = truncate(crumbText, budget)
+	}
 	return lipgloss.NewStyle().
 		Background(Palette.Bg1).
 		Foreground(Palette.FgDim).

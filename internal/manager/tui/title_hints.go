@@ -69,6 +69,20 @@ func titleBar(t *titleHintRow, label string, hints []titleHint, boxLeftX, boxInn
 	if len(hints) > 1 {
 		total += sepWidth * (len(hints) - 1)
 	}
+	// Drop the rightmost hints until the row fits in boxInnerW with at least
+	// a 1-cell gap. Without this, narrow terminals soft-wrap the title row
+	// onto a second line — which pushes the box bottom border off the
+	// screen and the operator sees the detail panel "missing its bottom".
+	for len(segs) > 0 && leftW+total+1 > boxInnerW {
+		dropped := len(segs) - 1
+		total -= ws[dropped]
+		if len(segs) > 1 {
+			total -= sepWidth
+		}
+		segs = segs[:dropped]
+		ws = ws[:dropped]
+		hints = hints[:dropped]
+	}
 	gap := boxInnerW - leftW - total
 	if gap < 1 {
 		gap = 1

@@ -700,6 +700,16 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 			}
 		case ViewIssuers:
 			// Retire confirm — no service call for retire yet (Phase 3 will add it).
+			// Private-key export is gated by a confirm overlay (destructive: reveals
+			// the signing key). On confirm, push the path-input overlay so the
+			// operator types where to write the .priv file; the input result then
+			// routes to handleIssuerInputResult.
+			if res.ID == OverlayIDIssuerExportPriv && res.Confirm {
+				m.pendingCmd = func() tea.Msg {
+					return pushOverlayMsg{newInputOverlay(OverlayIDIssuerExportPrivPath,
+						"Export Private Key", "/path/to/issuer.priv", 256)}
+				}
+			}
 		case ViewRecipients:
 			updated, c := m.recipients.handleRecipientConfirmResult(res)
 			m.recipients = updated
@@ -758,6 +768,10 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 
 	case InputResultMsg:
 		switch m.active {
+		case ViewLicenses:
+			updated, c := m.licenses.handleLicenseInputResult(res)
+			m.licenses = updated
+			m.pendingCmd = c
 		case ViewIssuers:
 			updated, c := m.issuers.handleIssuerInputResult(res)
 			m.issuers = updated
@@ -1074,8 +1088,12 @@ func (m rootModel) viewReady() string {
 		content = m.settings.View()
 	}
 
-	// chrome = title(1) + tabs(1) + breadcrumb(1) + statusbar(1) = ChromeRows.
-	contentH := m.hgt - ChromeRows
+	// Top chrome consumes ChromeRows (title + tabs(2) + crumb); the status
+	// bar consumes one more row at the bottom. Use ContentReservedRows so the
+	// content height matches the area actually visible after the bottom
+	// clamp; pre-2026-05 we used ChromeRows here, which left content one row
+	// too tall and silently clipped detail-box bottom borders.
+	contentH := m.hgt - ContentReservedRows
 	if contentH < 0 {
 		contentH = 0
 	}

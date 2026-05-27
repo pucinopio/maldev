@@ -6,7 +6,20 @@ import "github.com/charmbracelet/lipgloss"
 // available content height. Screens use `m.hgt - ChromeRows` for sizing.
 // Update this constant if the chrome layout changes; do not duplicate the
 // literal locally.
+// ChromeRows is the Y offset at which screen content begins below the top
+// chrome (title row + 2-row tab strip + breadcrumb = 4). Screens that need
+// to reserve VERTICAL space — including the bottom status bar — must use
+// ContentReservedRows, which adds the 1-row statusbar to ChromeRows.
 const ChromeRows = 4
+
+// ContentReservedRows is the total number of terminal rows the chrome
+// (top + bottom) reserves. Screens compute available content height as
+// `m.hgt - ContentReservedRows`. Pre-2026-05 this was missing — the value
+// `m.hgt - ChromeRows` was used as both Y-origin (correct: 4) AND content
+// height reservation (incorrect: should be 5), so every screen's last row
+// was silently clipped by the root-level clampToHeight, which is why
+// detail-panel bottom borders disappeared.
+const ContentReservedRows = ChromeRows + 1
 
 // TopChromeRows is the number of rows the top chrome occupies on the screen
 // BEFORE the content area starts. = title(1) + tab strip(2 — active tab
