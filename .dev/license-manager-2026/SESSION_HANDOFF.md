@@ -1,8 +1,160 @@
 # License-manager TUI — session handoff
 
-Snapshot of the work pushed during the 2026-05-22 and 2026-05-25 sessions
-and what's still queued. All commits are on `master`, authored as
+Snapshot of the work pushed during the 2026-05-22, 2026-05-25 and 2026-05-27
+sessions and what's still queued. All commits are on `master`, authored as
 `oioio-space <oioio-space@users.noreply.github.com>`.
+
+## 2026-05-27 — Operator defects 2.0, truth tables, visual E2E
+
+Continues Session 7 (10 operator defects). This session shipped **22
+distinct work items**, all green in CI (`go test ./internal/manager/tui/
+-count=1` → ok in ~7.8s). Below is the delta — pick any row to resume.
+
+### A. Licenses screen — operator-reported
+
+| Item | Files | Status |
+|---|---|---|
+| Stress test 100 licences (rendering + scroll + N=100 visual) | `screen_stress_100_test.go`, `screen_stress_render_test.go` | ✅ |
+| Import licence via filepicker `[i]` | `screen_licenses.go` (+ `licenseImportPickedMsg`/`licenseImportedMsg`) | ✅ |
+| Filter chip click mapping (bordered AND compact modes) | `screen_licenses.go` (new `chipHitRow` type) | ✅ |
+| Doc chaîne de succession | (conversational explanation) | ✅ |
+| Export licence `[E]` via input overlay → ExportPEM | `screen_licenses.go`, `overlay_ids.go`, `app.go` | ✅ |
+
+### B. Issuers screen
+
+| Item | Files | Status |
+|---|---|---|
+| Stress test 100 issuers | `screen_stress_100_test.go` | ✅ |
+| Detail panel open by default (`detail: true`) | `screen_issuers.go` | ✅ |
+| Import issuer via filepicker `[i]` | `screen_issuers.go` (+ `issuerImportPickedMsg`) | ✅ |
+| **`[K]` export private key — full flow** | `screen_issuers.go`, `app.go`, `service/issuer.go` (new `ExportPrivate`) | ✅ |
+| Action chip alignment fix (`[x]` → HintKey w/red) | `screen_issuers.go` | ✅ |
+| Extension `.priv` (was `.key`) | `screen_issuers.go` | ✅ |
+
+### C. Revocation screen — Detail panel
+
+| Item | Files | Status |
+|---|---|---|
+| Detail panel — was missing entirely | `screen_revocation.go` (`renderDetail`, `renderDetailLicenseContext`) | ✅ |
+| Lazy-load underlying licence via `License.Get` | `loadDetailCmd`, `revocationLicenseLoadedMsg` | ✅ |
+| Detail open by default + `[d]` toggle hint | `screen_revocation.go` | ✅ |
+
+### D. All list screens — column auto-sizing
+
+| Item | Files | Status |
+|---|---|---|
+| `fitColumns(t, w, mins, weights)` + bidirectional resize | `layout.go` | ✅ |
+| `setAutoFitRows(t, w, weights, rows, cap)` — content-aware ideal widths | `layout.go` | ✅ |
+| 7 screens migrated to `setAutoFitRows` | `screen_*.go` × 7 | ✅ |
+| Stretch + shrink under min-sum (proportional w/ floor=4) | `layout.go` (`fitColumns` 3 phases) | ✅ |
+
+### E. Vertical overflow — global audit
+
+| Item | Files | Status |
+|---|---|---|
+| `ChromeRows` (4, Y-origin) vs `ContentReservedRows` (5, height-reservation) split | `layout_constants.go` | ✅ |
+| Breadcrumb pre-truncate to avoid soft-wrap | `chrome.go` | ✅ |
+| titleBar drops rightmost hints when overflow | `title_hints.go` | ✅ |
+| `clipDetailBox` truncates middle, preserves bottom border | `layout.go` | ✅ |
+| Per-screen `remaining` budget in `View()` | 5× `screen_*.go` | ✅ |
+| `TestNoOverflow_FullMatrix` — 40 cases (5 sizes × 8 scenarios) | `screen_stress_render_test.go` | ✅ |
+
+### F. PEM tab — scroll + navigation
+
+| Item | Files | Status |
+|---|---|---|
+| `[P]` mouse-click loads PEM (case was missing) | `screen_licenses.go` (`licenseDetailTabClickMsg` case 2) | ✅ |
+| `renderDetailPEM` purified (no SetContent in View) | `screen_licenses.go` | ✅ |
+| **Multi-binding scroll**: `j`/`k`/`space`/`b`/`pgup`/`pgdn`/`g`/`G` + `↑`/`↓` | `screen_licenses.go` | ✅ |
+| Scroll indicator `[lignes N-M/T · P %]` in header | `screen_licenses.go` (`renderDetailPEM`) | ✅ |
+| Dual affordance: arrows nav table + PEM auto-reload via `tableSelectRowMsg` | `screen_licenses.go` | ✅ |
+| Viewport height sized from layout reservation | `screen_licenses.go` (`WindowSizeMsg`) | ✅ |
+
+### G. Truth tables — data-driven key dispatch tests
+
+| Screen | File | Sub-tests |
+|---|---|---|
+| Licenses | `screen_licenses_keytable_test.go` | 29 |
+| Issuers | `screen_issuers_keytable_test.go` | 10 |
+| Recipients / Identities / Revocation | `screen_others_keytable_test.go` | 18 |
+| TOTP / Audit | `screen_totp_audit_keytable_test.go` | 11 |
+| Dashboard cross-screen hotkeys + tabs | `dashboard_xscreen_keytable_test.go` | 19 |
+| Licenses search state machine | `screen_licenses_search_e2e_test.go` | 1 (5 sub-checks) |
+| **Total** | | **88+** |
+
+### H. Visual E2E — Windows-compatible (`cmd/tui-gif`)
+
+| Item | Files | Status |
+|---|---|---|
+| Driver + GIF encoder, pure Go | `cmd/tui-gif/main.go` (~600 lines) | ✅ |
+| Go Mono TTF embedded (truetype, unicode) | `golang.org/x/image/font/gofont/gomono` | ✅ |
+| ASCII fallback for glyphs Go Mono misses (`◆ → *`) | `cmd/tui-gif/main.go` (`toASCII`) | ✅ |
+| ANSI SGR parser (8-color + 256-color + truecolor) | `cmd/tui-gif/main.go` (`applySGR`) | ✅ |
+| Tape directive `Seed <kind> <N>` | `cmd/tui-gif/main.go` (`buildSeedMsg`) | ✅ |
+| 7 fixture builders exported | `internal/manager/tui/seed_fixtures.go` | ✅ |
+| 7 unit tests for fixture builders | `seed_fixtures_test.go` | ✅ |
+| 7 tapes covering PEM scroll + nav + tabs + filter + search | `vhs/tui-gif/*.tape` | ✅ |
+| Wrapper script | `scripts/tui-gif-record.sh` | ✅ |
+| Unit tests for tui-gif itself | `cmd/tui-gif/main_test.go`, `main_debug_test.go` | ✅ |
+
+### I. Other scoped fixes
+
+| Item | Files | Status |
+|---|---|---|
+| `IssuerService.ExportPrivate` + test | `service/issuer.go`, `service/issuer_test.go` | ✅ |
+| `Seed*Msg` × 7 + tests | `seed_fixtures.go`, `seed_fixtures_test.go` | ✅ |
+
+### How to verify on a fresh machine
+
+```bash
+# 1. Compile everything
+go build ./...
+
+# 2. Full TUI test suite (truth tables + integration + snapshots)
+go test ./internal/manager/tui/ -count=1 -timeout 120s
+
+# 3. Service tests (exported new ExportPrivate)
+go test ./internal/manager/service/ -count=1
+
+# 4. tui-gif unit tests
+go test ./cmd/tui-gif/ -count=1
+
+# 5. Re-record all GIFs (Windows OK — pure Go, no ttyd/ffmpeg needed)
+scripts/tui-gif-record.sh
+# → vhs/out/*.gif × 7
+
+# 6. Inspect a tape frame-by-frame
+TUI_GIF_DUMP="$(pwd)/vhs/out/pem-scroll-all-bindings.gif" \
+  go test ./cmd/tui-gif/ -run TestDumpFrames -v
+# → vhs/out/*.gif.frames/frame-N.png
+```
+
+### Key design decisions
+
+1. **Truth table = executable spec.** `TestLicensesKeyDispatchTruthTable`
+   and friends are data-driven (one row per (context, key) → expected effect).
+   To change a binding: edit the table, run the test, fix the prod code.
+2. **`tui-gif` instead of `vhs` on Windows.** Official `vhs` needs `ttyd`
+   (no native Windows build) + `ffmpeg`. `tui-gif` drives the TUI in-process
+   via `tea.Model.Update`/`View`, encodes via stdlib `image/gif` + embedded
+   Go Mono TTF. Zero external setup.
+3. **Fixture seed via exported `Seed*Msg(n, t0)` builders.** Deterministic
+   row sets reusable by `tui-gif` AND any test/tool that wants fixtures
+   without spinning a service+DB.
+4. **Preview-list pattern on PEM tab.** ↑/↓ navigate the table (PEM
+   auto-reloads via `tableSelectRowMsg`). j/k/space/b/pgup/pgdn/g/G scroll
+   the viewport. Header indicator `[lignes N-M/T · P %]` makes scroll visible.
+
+### Pending / unstarted
+
+Nothing pending from this session. New defects should:
+
+1. Reproduce as a new truth-table row in `*_keytable_test.go`
+2. Get fixed in production
+3. Verify the truth-table test passes
+4. (Optional) Add a VHS tape if the regression is visual
+
+---
 
 ## 2026-05-25 — Simplify pass + queued items + VHS infra
 

@@ -53,6 +53,9 @@ go.work.sum
 ignore/
 /ignore*.go
 /ignore*.txt
+# Re-recordable GIF artefacts produced by cmd/tui-gif from vhs/tui-gif/*.tape.
+# Tapes are tracked; rendered GIFs are not (regen with scripts/tui-gif-record.sh).
+vhs/out/
 material_theme_project_new.xml
 modules.xml
 testutil/results/
