@@ -360,7 +360,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 
 </details>
 
-<details><summary><strong>examples</strong> — 23 packages</summary>
+<details><summary><strong>examples</strong> — 24 packages</summary>
 
 | Package | Detection | Summary |
 |---|---|---|
@@ -370,6 +370,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 | [`examples/credentials-dump`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/credentials-dump) | — | credentials-dump — panorama 9 of the doc-truth audit |
 | [`examples/inject-evasive`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/inject-evasive) | — | inject-evasive — panorama 2 of the doc-truth audit |
 | [`examples/kernel-byovd`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/kernel-byovd) | — | kernel-byovd — panorama 16 of the doc-truth audit |
+| [`examples/license-manager/01-issue-basic`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/01-issue-basic) | — | 01-issue-basic — runnable companion to examples/license-manager/README.md |
 | [`examples/packer-shellcode`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/packer-shellcode) | — | packer-shellcode — runnable companion to Mode 6 of docs/techniques/pe/packer.md |
 | [`examples/packer-tour`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/packer-tour) | — | packer-tour — runnable companion to docs/examples/upx-style-packer.md |
 | [`examples/pe-modify`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/pe-modify) | — | pe-modify — panorama 11 of the doc-truth audit |

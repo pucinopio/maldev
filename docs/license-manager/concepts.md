@@ -4,17 +4,49 @@ package: github.com/oioio-space/maldev/cmd/license-manager
 
 # License Manager — Concepts
 
-Cette page décrit l'architecture du `license-manager`, son modèle de données, et ses mécanismes de sécurité. Pour les recettes opérationnelles, va directement au [Cookbook](./workflow.md).
+This page describes the architecture of `license-manager`, its data
+model, and its security mechanisms. For operational recipes, jump
+straight to the [Cookbook](./workflow.md). For runnable code, see
+[`examples/license-manager/`](../../examples/license-manager/).
 
-## Vue d'ensemble
+## Concept index
 
-Le `license-manager` est un outil local-first en ligne de commande (TUI bubbletea en préparation) qui centralise le cycle de vie complet des licences de recherche maldev sans quitter le terminal. Il s'appuie sur le package `license/` pour l'émission et la vérification cryptographique, et y ajoute une couche de persistance (SQLite + chiffrement colonne), trois serveurs HTTP optionnels, et un mécanisme de _fingerprint probe_ pour obtenir le `hostid` d'une machine distante.
+Each notion below has a dedicated page that links back here AND to
+the example program that exercises it:
 
-Le manager est un **outil opérateur**, pas une primitive défensive : il n'a pas d'entrée MITRE ATT&CK. Il vit dans `cmd/license-manager/` et son backend dans `internal/manager/`.
+| Notion | Page | Demonstrated in |
+|---|---|---|
+| Issuer (Ed25519 signing key) | [concepts/issuer.md](./concepts/issuer.md) | [01-issue-basic](../../examples/license-manager/01-issue-basic/) |
+| KEK & passphrase cascade | [concepts/kek-passphrase.md](./concepts/kek-passphrase.md) *(coming)* | — |
+| Bindings (machine / password / TOTP) | [concepts/bindings.md](./concepts/bindings.md) *(coming)* | `02-issue-with-bindings` *(coming)* |
+| CRL (Certificate Revocation List) | [concepts/crl.md](./concepts/crl.md) *(coming)* | `03-revoke-and-crl` *(coming)* |
+| Audit chain | [concepts/audit-chain.md](./concepts/audit-chain.md) *(coming)* | every example |
+| Argon2id preset | [concepts/argon-preset.md](./concepts/argon-preset.md) *(coming)* | `02-issue-with-bindings` |
+| Sealed payload (X25519) | [concepts/sealed-payload.md](./concepts/sealed-payload.md) *(coming)* | `07-sealed-payload` *(coming)* |
+| Identity pin (host SHA-256) | [concepts/identity-pin.md](./concepts/identity-pin.md) *(coming)* | `08-identity-pin` *(coming)* |
 
-L'API backend est exposée via `*service.Services`. La TUI et tout autre frontend consomment ce struct — ils ne touchent jamais directement la couche store ni la crypto.
+## Overview
 
-## Architecture en couches
+`license-manager` is a local-first command-line tool (with a
+bubbletea TUI) that centralises the full life cycle of maldev
+research licences without leaving the terminal. It builds on the
+[`license/`](../../license/) package for cryptographic issuance
+and verification, then adds:
+
+- A persistence layer (SQLite + per-column encryption).
+- Three optional HTTP servers (revocation, heartbeat, probe).
+- A *fingerprint probe* mechanism to capture the `hostid` of a
+  remote machine.
+
+The manager is an **operator tool**, not a defensive primitive —
+it carries no MITRE ATT&CK ID. It lives in `cmd/license-manager/`
+with the backend in `internal/manager/`.
+
+The backend API is exposed via `*service.Services`. The TUI and
+any other frontend consume this struct — they never touch the
+store layer or crypto directly.
+
+## Layered architecture
 
 ```mermaid
 flowchart TB
@@ -34,76 +66,91 @@ flowchart TB
     D --> E
 ```
 
-| Couche | Rôle | Dépendances |
-|--------|------|-------------|
+| Layer | Role | Dependencies |
+|---|---|---|
 | `crypto` | KDF (Argon2id) + AEAD (ChaCha20-Poly1305) | `golang.org/x/crypto` |
-| `store` | Persistance SQLite via ENT, migrations auto | `crypto`, `entgo.io/ent`, `modernc.org/sqlite` |
-| `service` | Logique métier, audit trail atomique | `store`, `crypto`, `license/*` |
-| `httpsrv` | Serveurs HTTP startables/stoppables à chaud | `service`, `probe` |
-| `cmd` | Boot, résolution passphrase, wiring, TUI | tout ce qui précède |
+| `store` | SQLite persistence via ENT, auto-migrations | `crypto`, `entgo.io/ent`, `modernc.org/sqlite` |
+| `service` | Business logic, atomic audit trail | `store`, `crypto`, `license/*` |
+| `httpsrv` | Hot-startable / stoppable HTTP servers | `service`, `probe` |
+| `cmd` | Boot, passphrase resolution, wiring, TUI | everything above |
 
-## Chiffrement au repos
+## Encryption at rest
 
-La passphrase de l'opérateur ne touche jamais la DB. Elle sert uniquement à dériver une **KEK** (Key Encryption Key) via Argon2id.
+The operator's passphrase never touches the DB. It is used only
+to derive a **KEK** (Key Encryption Key) through Argon2id.
 
 ```
-passphrase + kek_salt (16 octets, stocké en clair dans Setting)
+passphrase + kek_salt (16 bytes, stored in plaintext in Setting)
     → Argon2id(time=3, memory=64 MiB, threads=4, keylen=32)
-    → KEK (32 octets, en RAM uniquement)
+    → KEK (32 bytes, in RAM only)
 ```
 
-La KEK sert ensuite à envelopper les secrets colonne par colonne avec **ChaCha20-Poly1305** :
+The KEK then wraps each sensitive column with **ChaCha20-Poly1305**:
 
 ```
-[12 octets nonce aléatoire] || [ciphertext] || [16 octets AEAD tag]
+[12-byte random nonce] || [ciphertext] || [16-byte AEAD tag]
 ```
 
-### Colonnes chiffrées
+### Encrypted columns
 
-| Table | Colonne | Contenu |
-|-------|---------|---------|
-| `Issuer` | `encrypted_priv` | clé privée Ed25519 (64 octets) |
-| `RecipientKey` | `encrypted_priv` | clé privée X25519 (32 octets) |
-| `TOTPSecret` | `encrypted_secret` | secret TOTP base32 |
-| `ServerConfig` | `revocation_admin_token_enc` | token admin du serveur de révocation |
+| Table | Column | Contents |
+|---|---|---|
+| `Issuer` | `encrypted_priv` | Ed25519 private key (64 bytes) |
+| `RecipientKey` | `encrypted_priv` | X25519 private key (32 bytes) |
+| `TOTPSecret` | `encrypted_secret` | TOTP secret (base32) |
+| `ServerConfig` | `revocation_admin_token_enc` | Revocation-server admin token |
 
-### Colonnes en clair
+### Plaintext columns
 
-Tout le reste : PEM de licences, sujets, résultats probe, identités, audit events. Raisonnement : ces données peuvent être reconstruites depuis les licences émises et ne permettent pas de forger de nouvelles licences.
+Everything else — licence PEMs, subjects, probe results,
+identities, audit events. Rationale: this data can be
+reconstructed from the issued licences and cannot be used to
+forge new ones.
 
-### Canary de vérification
+### Canary check
 
-Un bloc `Setting.kek_canary = KEK.Wrap(random32)` est écrit à la création de la DB. À chaque démarrage, on tente `KEK.Unwrap(canary)` — si ça échoue, la passphrase est mauvaise. Trois tentatives, puis exit.
+A `Setting.kek_canary = KEK.Wrap(random32)` block is written when
+the DB is created. On every startup we try `KEK.Unwrap(canary)` —
+failure means the passphrase is wrong. Three attempts, then exit.
 
-La KEK est effacée (zéro mémoire) à l'arrêt propre via `KEK.Wipe()`.
+The KEK is zeroed (`KEK.Wipe()`) on a clean shutdown.
 
-## Cycle de démarrage
+## Startup cycle
 
-La résolution de la passphrase suit une cascade stricte. Dès qu'une source fournit une valeur non vide, les suivantes sont ignorées :
+Passphrase resolution follows a strict cascade. The first source
+that yields a non-empty value wins; later sources are ignored:
 
 ```
-1. flag --passphrase-file <chemin>   → lire le fichier, trim whitespace
-2. env MALDEV_MGR_PASSPHRASE_FILE    → lire le fichier indiqué par la var
-3. env MALDEV_MGR_PASSPHRASE         → valeur directe
+1. flag --passphrase-file <path>   → read file, trim whitespace
+2. env MALDEV_MGR_PASSPHRASE_FILE  → read the file named by the var
+3. env MALDEV_MGR_PASSPHRASE       → direct value
 4. (v2) OS keystore (DPAPI / Keychain / libsecret)
-5. fallback : prompt interactif TUI (modal masqué)
+5. fallback: interactive TUI prompt (masked modal)
 ```
 
-Si la DB n'existe pas encore, le wizard de première utilisation se déclenche : choix passphrase, génération du sel KEK, stockage du canary, création du premier Issuer.
+If the DB does not yet exist, the first-launch wizard fires:
+choose passphrase, generate KEK salt, store canary, create the
+first issuer.
 
-Si la DB existe, on vérifie immédiatement le canary. Échec = mauvaise passphrase.
+If the DB exists, the canary check runs immediately. Failure =
+wrong passphrase.
 
-## Les trois serveurs HTTP
+## The three HTTP servers
 
-Tous sont **OFF par défaut**. Chaque serveur doit être démarré explicitement par l'opérateur (via TUI ou `SettingsService.UpdateServerConfig`). Confirmation requise si des serveurs tournent à la fermeture (configurable via `Setting.confirm_quit_with_servers`).
+All three are **OFF by default**. Each must be started explicitly
+by the operator (TUI or `SettingsService.UpdateServerConfig`). A
+confirmation modal fires on quit when one or more servers are
+running (controlled by `Setting.confirm_quit_with_servers`); when
+`Setting.stop_servers_on_exit` is on the manager auto-drains them
+before `tea.Quit`.
 
-| Serveur | Port défaut | Endpoints principaux | Rôle |
-|---------|-------------|----------------------|------|
-| Revocation | `:8443` | `GET /revoked.pem` | Publie la CRL signée par l'issuer actif |
-| Heartbeat | `:8444` | `GET /heartbeat` | Répond `ok: true` si la licence est active |
-| Probe | `:8445` | `GET /probe/<tok>/agent[/<os-arch>]`<br/>`GET /probe/<tok>/snippet`<br/>`POST /probe/<tok>/result` | Distribue l'agent fingerprint et reçoit les résultats |
+| Server | Default port | Main endpoints | Role |
+|---|---|---|---|
+| Revocation | `:8443` | `GET /revoked.pem` | Publishes the CRL signed by the active issuer |
+| Heartbeat | `:8444` | `GET /heartbeat` | Returns `ok: true` if the licence is active |
+| Probe | `:8445` | `GET /probe/<tok>/agent[/<os-arch>]`<br/>`GET /probe/<tok>/snippet`<br/>`POST /probe/<tok>/result` | Distributes the fingerprint agent and collects results |
 
-Les trois implémentent l'interface `httpsrv.Server` :
+All three implement the `httpsrv.Server` interface:
 
 ```go
 type Server interface {
@@ -115,35 +162,41 @@ type Server interface {
 }
 ```
 
-`Bundle.MergedEvents()` agrège les trois canaux `Events()` en un seul pour la TUI.
+`Bundle.MergedEvents()` fans the three event channels into one
+for the TUI.
 
 ## Fingerprint probe
 
-Le fingerprint probe permet à l'opérateur d'obtenir le `hostid.Local()` et `hostid.Composite()` d'une machine distante sans y installer d'outil permanent.
+The fingerprint probe lets the operator capture `hostid.Local()`
+and `hostid.Composite()` from a remote machine without leaving a
+permanent tool installed there.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Op as "Opérateur"
+    participant Op as "Operator"
     participant Mgr as "license-manager"
-    participant Remote as "Machine distante"
+    participant Remote as "Remote machine"
 
     Op->>Mgr: ProbeService.NewToken(label, ttl)
-    Mgr-->>Op: token + URL de base
+    Mgr-->>Op: token + base URL
     Op->>Mgr: GET /probe/<tok>/snippet
-    Mgr-->>Op: one-liner curl/PowerShell
-    Op->>Remote: copie-colle le one-liner
+    Mgr-->>Op: curl / PowerShell one-liner
+    Op->>Remote: paste the one-liner
     Remote->>Mgr: GET /probe/<tok>/agent/linux-amd64
-    Mgr-->>Remote: binaire probe (//go:embed)
+    Mgr-->>Remote: probe binary (//go:embed)
     Remote->>Remote: hostid.Local() + Composite()
     Remote->>Mgr: POST /probe/<tok>/result (JSON)
     Mgr->>Mgr: ProbeService.ConsumeToken(→ DB + channel)
-    Mgr-->>Op: notification temps réel (chan *ProbeToken)
+    Mgr-->>Op: real-time notification (chan *ProbeToken)
 ```
 
-Les binaires agent sont compilés à l'avance pour 5 cibles (linux-amd64, linux-arm64, darwin-amd64, darwin-arm64, windows-amd64) et embarqués via `//go:embed`. L'agent lui-même fait ~80 lignes de Go : collecte les fingerprints, POST le JSON, exit.
+Agent binaries are pre-built for 5 targets (linux-amd64,
+linux-arm64, darwin-amd64, darwin-arm64, windows-amd64) and
+embedded via `//go:embed`. The agent itself is ~80 lines of Go:
+collect the fingerprints, POST the JSON, exit.
 
-One-liner distribué par `/snippet` :
+One-liner served by `/snippet`:
 
 ```bash
 # Linux / macOS
@@ -158,30 +211,33 @@ Invoke-WebRequest "$URL/agent/windows-amd64" -OutFile $env:TEMP\maldev-probe.exe
 & "$env:TEMP\maldev-probe.exe" "$URL/result"
 ```
 
-## Modèle de données
+## Data model
 
-10 entités ENT, schéma SQLite. Toutes les heures sont en UTC.
+11 ENT entities, SQLite schema. All times are UTC.
 
-| Entité | Rôle | FK principales |
-|--------|------|----------------|
-| `Issuer` | Paire de clés Ed25519 + metadata | — |
-| `License` | Licence émise (PEM + metadata) | `→ Issuer` |
-| `Revocation` | Enregistrement de révocation | `→ License` (1:1) |
-| `Identity` | 32 octets random pour identity pinning | — |
-| `RecipientKey` | Paire X25519 pour sealed payload | — |
-| `TOTPSecret` | Secret TOTP chiffré | `→ License` |
-| `ProbeToken` | Token + résultat fingerprint probe | — |
-| `ServerConfig` | Singleton (PK=1) — config des 3 serveurs | — |
-| `Setting` | Singleton (PK=1) — préférences opérateur, KEK salt/canary | — |
-| `AuditEvent` | Trace immuable de chaque mutation | index `target_id`, `created_at` |
+| Entity | Role | Main FKs |
+|---|---|---|
+| `Issuer` | Ed25519 key pair + metadata | — |
+| `License` | Issued licence (PEM + metadata) | `→ Issuer` |
+| `Revocation` | Revocation record | `→ License` (1:1) |
+| `Identity` | 32 random bytes for identity pinning | — |
+| `RecipientKey` | X25519 pair for sealed payloads | — |
+| `TOTPSecret` | Encrypted TOTP secret | `→ License` |
+| `ProbeToken` | Token + fingerprint-probe result | — |
+| `ServerConfig` | Singleton (PK=1) — three servers' config | — |
+| `Setting` | Singleton (PK=1) — operator preferences, KEK salt/canary | — |
+| `AuditEvent` | Immutable trace of every mutation | indexes on `target_id`, `created_at` |
 
-Indexes notables sur `License` : `subject`, `status`, `not_after`, `identity_sha256`, `(issuer_id, status)`.
+Notable `License` indexes: `subject`, `status`, `not_after`,
+`identity_sha256`, `(issuer_id, status)`.
 
 ## Audit trail
 
-Chaque méthode de service mutante écrit la ligne métier **et** un `AuditEvent` dans la même transaction SQLite. Il est impossible d'émettre, révoquer ou pivoter une clé sans laisser une trace.
+Every mutating service method writes the business row **and** an
+`AuditEvent` in the same SQLite transaction. It is impossible to
+issue, revoke, or pivot a key without leaving a trace.
 
-Structure d'un événement :
+Event shape:
 
 ```json
 {
@@ -194,11 +250,15 @@ Structure d'un événement :
 }
 ```
 
-`kind` suit le format `<entité>.<action>` : `license.issue`, `license.revoke`, `issuer.create`, `issuer.retire`, `issuer.rotate`, `identity.create`, `probe.token_created`, `probe.result`, etc.
+`kind` follows the `<entity>.<action>` shape: `license.issue`,
+`license.revoke`, `license.delete`, `license.supersede`,
+`issuer.create`, `issuer.retire`, `issuer.delete`,
+`identity.create`, `probe.token_created`, `probe.result`, …
 
-## Voir aussi
+## See also
 
-- [Cookbook (recettes)](./workflow.md)
+- [Cookbook (recipes)](./workflow.md)
 - [Configuration](./configuration.md)
+- [Runnable examples](../../examples/license-manager/)
 - [License framing — Concepts](../license/concepts.md)
 - [Threat model](../license/threat-model.md)
