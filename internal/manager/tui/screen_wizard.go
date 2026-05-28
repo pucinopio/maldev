@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/oioio-space/maldev/internal/manager/service"
+	"github.com/oioio-space/maldev/internal/manager/store/ent"
 	"github.com/oioio-space/maldev/internal/manager/tui/wizard"
 )
 
@@ -142,6 +144,12 @@ func (m wizardModel) Update(msg tea.Msg) (wizardModel, tea.Cmd) {
 		m.state.Subject = msg.Subject
 		m.state.Audience = msg.Audience
 		m.state.FreeFields = msg.Fields
+		// Re-issue inherits bindings/TOTP from the original — skip step 7
+		// straight to Review. The new-licence flow still goes through TOTP.
+		if m.state.IsReissue {
+			m.stepReview.SetState(m.state)
+			return m.advance(wizStepReview)
+		}
 		return m.advance(wizStepTOTP)
 
 	// Step 7 outcomes.
@@ -225,10 +233,22 @@ func (m wizardModel) gotoStep(target wizardStep) (wizardModel, tea.Cmd) {
 	return m, m.initStep(target)
 }
 
-// retreat moves back one step.
+// retreat moves back one step. In re-issue mode the floor is Validity (the
+// steps before it are pre-populated and skipped on the way forward), and
+// the jump from Review skips TOTP since it never ran.
 func (m wizardModel) retreat() (wizardModel, tea.Cmd) {
 	if m.step == wizStepIdentity {
 		return m, nil
+	}
+	if m.state.IsReissue {
+		switch m.step {
+		case wizStepValidity:
+			return m, nil
+		case wizStepReview:
+			m.blurCurrent()
+			m.step = wizStepFreeFields
+			return m, m.initStep(m.step)
+		}
 	}
 	m.blurCurrent()
 	m.step--
@@ -539,6 +559,46 @@ type filePickedMsg struct {
 func openWizardCmd(svc *service.Services) tea.Cmd {
 	return func() tea.Msg {
 		wiz := newWizardModel(svc)
+		return pushOverlayMsg{overlay: &wizardOverlay{model: wiz}}
+	}
+}
+
+// openReissueWizardCmd opens the wizard pre-populated from an existing
+// licence row. The wizard skips identity/recipient/binding steps (those
+// carry over from the original) and lets the operator edit validity,
+// audience/features (via the FreeFields step) and payload before the
+// Review step calls svc.License.ReIssue. The PEM is parsed via
+// licensekg.Inspect to recover fields not present on the ent.License row
+// (NotAfter is on the row, Audience/Features/Payload come from the PEM).
+func openReissueWizardCmd(svc *service.Services, original *ent.License) tea.Cmd {
+	return func() tea.Msg {
+		wiz := newWizardModel(svc)
+		state := wizard.WizardState{
+			IsReissue:  true,
+			OriginalID: original.ID.String(),
+			Subject:    original.Subject,
+			NotBefore:  original.NotBefore,
+			NotAfter:   original.NotAfter,
+			Audience:   strings.Join(original.Audience, ","),
+			Features:   original.Features,
+			FreeFields: map[string]string{},
+		}
+		// Inspect the PEM for the payload bytes — they aren't carried on
+		// the row in plaintext (PayloadKind tracks presence, the PEM holds
+		// the bytes). Ignore inspect failures: the wizard still works with
+		// nil payload + the operator can edit other fields. svc may be nil
+		// in some test contexts (e.g. nil-svc smoke tests of [e]); skip
+		// the PEM inspection there too.
+		if svc != nil {
+			if parsed, err := svc.License.Inspect(original.Pem); err == nil {
+				state.PayloadCleartext = parsed.Payload
+			}
+		}
+		wiz.state = state
+		wiz.step = wizStepValidity
+		wiz.stepValidity.SetInitial(state.NotBefore, state.NotAfter)
+		wiz.stepFreeFields.SetInitial(state.Subject, state.Audience, state.FreeFields)
+		wiz.stepReview.SetState(state)
 		return pushOverlayMsg{overlay: &wizardOverlay{model: wiz}}
 	}
 }

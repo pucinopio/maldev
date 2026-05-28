@@ -421,15 +421,17 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 			return m, nil
 
 		case "e":
-			// Re-issue the selected licence: push a confirm overlay.
+			// Re-issue the selected licence: open the wizard pre-populated
+			// from the original. Identity/recipient/bindings/totp are
+			// inherited; validity, audience/free-fields and payload are
+			// editable. The previous confirm-only flow accepted no input
+			// and emitted a licence with NotAfter=zero (i.e. expired) —
+			// the new wizard makes the edited fields explicit.
 			row := m.selectedRow()
 			if row == nil {
 				return m, nil
 			}
-			sub := fmt.Sprintf("Re-émettre la licence pour %q?\nUne nouvelle licence sera créée avec les mêmes bindings.", row.Subject)
-			return m, func() tea.Msg {
-				return pushOverlayMsg{newConfirmOverlay(OverlayIDLicenseReissue, "Re-émettre la licence", sub, "re-émettre", "annuler", false)}
-			}
+			return m, openReissueWizardCmd(m.svc, row)
 
 		case "D":
 			// Hard-delete the selected licence (License + Revocation + TOTPSecret).
@@ -1196,33 +1198,6 @@ func (m licensesModel) renderDetailChain(row *ent.License) string {
 	}
 
 	return strings.Join(lines, "\n")
-}
-
-// handleLicenseReissueConfirm is called when the operator confirms the
-// "license-reissue" overlay. It calls svc.License.ReIssue and reloads
-// the list, surfacing an OK overlay on success or an error overlay on failure.
-func (m licensesModel) handleLicenseReissueConfirm(res ConfirmResultMsg) (licensesModel, tea.Cmd) {
-	if !res.Confirm {
-		return m, nil
-	}
-	row := m.selectedRow()
-	if row == nil || m.svc == nil {
-		return m, func() tea.Msg {
-			return pushOverlayMsg{NewOKOverlay("Re-émettre", "Re-émission (stub — aucun service ou aucune sélection).")}
-		}
-	}
-	svc := m.svc
-	oldID := row.ID
-	subject := row.Subject
-	return m, func() tea.Msg {
-		newLic, err := svc.License.ReIssue(context.Background(), oldID, service.ReIssueOptions{Actor: "operator"})
-		if err != nil {
-			return pushOverlayMsg{newErrorOverlay("Re-émission échouée", err.Error())}
-		}
-		return pushOverlayMsg{NewOKOverlay("Re-émission OK",
-			fmt.Sprintf("Nouvelle licence pour %q\nUUID: %s\n\nPress 'r' to refresh the list.",
-				subject, newLic.Row.LicenseUUID))}
-	}
 }
 
 // handleLicenseInputResult processes InputResultMsg payloads routed from

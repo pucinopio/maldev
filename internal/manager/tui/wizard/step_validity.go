@@ -53,6 +53,18 @@ func NewStepValidity() *StepValidity {
 	return &StepValidity{startIn: si, endIn: ei}
 }
 
+// SetInitial overrides the default dates with values from an existing
+// licence (used by the re-issue wizard so the original window is pre-
+// filled). nb/na are formatted YYYY-MM-DD into the textinputs verbatim.
+func (s *StepValidity) SetInitial(nb, na time.Time) {
+	if !nb.IsZero() {
+		s.startIn.SetValue(nb.Format("2006-01-02"))
+	}
+	if !na.IsZero() {
+		s.endIn.SetValue(na.Format("2006-01-02"))
+	}
+}
+
 func (s *StepValidity) Layout(b core.Rect) { s.bounds = b }
 func (s *StepValidity) Bounds() core.Rect  { return s.bounds }
 

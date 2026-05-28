@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -408,4 +409,125 @@ func TestLicenseDelete(t *testing.T) {
 			t.Fatal("expected error deleting non-existent id")
 		}
 	})
+}
+
+// TestLicenseReIssueOverrides covers the new ReIssueOptions fields. Each
+// sub-case overrides exactly one slot and asserts the new licence reflects
+// the change while the other fields inherit from the original.
+func TestLicenseReIssueOverrides(t *testing.T) {
+	setup := func(t *testing.T) (*LicenseService, uuid.UUID, *licensekg.License) {
+		t.Helper()
+		lic, issuer, _, _, _, ctx := setupLicSvc(t)
+		iss, _ := issuer.Generate(ctx, "lab", "k1", "op")
+		orig, err := lic.Issue(ctx, IssueRequest{
+			IssuerID: iss.ID, Subject: "alice",
+			AudienceList: []string{"prod", "eu"},
+			Features:     []string{"export", "api"},
+			Payload:      json.RawMessage(`{"tier":"silver"}`),
+			NotBefore:    time.Now(),
+			NotAfter:     time.Now().Add(24 * time.Hour),
+			Actor:        "op",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		parsed, _ := lic.Inspect(orig.PEM)
+		return lic, orig.Row.ID, parsed
+	}
+
+	t.Run("NotAfter override", func(t *testing.T) {
+		lic, origID, parsed := setup(t)
+		want := time.Now().Add(365 * 24 * time.Hour).Truncate(time.Second)
+		out, err := lic.ReIssue(context.Background(), origID, ReIssueOptions{
+			NotAfter: want, Actor: "op",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _ := lic.Inspect(out.PEM)
+		if !got.NotAfter.Truncate(time.Second).Equal(want) {
+			t.Errorf("NotAfter = %v, want %v", got.NotAfter, want)
+		}
+		if !sameStringSlice(got.Audience, parsed.Audience) {
+			t.Errorf("Audience drifted: got %v, want inherited %v", got.Audience, parsed.Audience)
+		}
+	})
+
+	t.Run("Features override", func(t *testing.T) {
+		lic, origID, _ := setup(t)
+		out, err := lic.ReIssue(context.Background(), origID, ReIssueOptions{
+			Features: []string{"pro"},
+			Actor:    "op",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _ := lic.Inspect(out.PEM)
+		if !sameStringSlice(got.Features, []string{"pro"}) {
+			t.Errorf("Features = %v, want [pro]", got.Features)
+		}
+	})
+
+	t.Run("Audience override", func(t *testing.T) {
+		lic, origID, _ := setup(t)
+		out, err := lic.ReIssue(context.Background(), origID, ReIssueOptions{
+			Audience: []string{"staging"},
+			Actor:    "op",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _ := lic.Inspect(out.PEM)
+		if !sameStringSlice(got.Audience, []string{"staging"}) {
+			t.Errorf("Audience = %v, want [staging]", got.Audience)
+		}
+	})
+
+	t.Run("Payload override", func(t *testing.T) {
+		lic, origID, _ := setup(t)
+		out, err := lic.ReIssue(context.Background(), origID, ReIssueOptions{
+			Payload: json.RawMessage(`{"tier":"gold"}`),
+			Actor:   "op",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _ := lic.Inspect(out.PEM)
+		if string(got.Payload) != `{"tier":"gold"}` {
+			t.Errorf("Payload = %q, want gold", string(got.Payload))
+		}
+	})
+
+	t.Run("zero options inherit everything", func(t *testing.T) {
+		lic, origID, parsed := setup(t)
+		out, err := lic.ReIssue(context.Background(), origID, ReIssueOptions{Actor: "op"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _ := lic.Inspect(out.PEM)
+		if !got.NotAfter.Truncate(time.Second).Equal(parsed.NotAfter.Truncate(time.Second)) {
+			t.Errorf("NotAfter not inherited")
+		}
+		if !sameStringSlice(got.Features, parsed.Features) {
+			t.Errorf("Features not inherited")
+		}
+		if !sameStringSlice(got.Audience, parsed.Audience) {
+			t.Errorf("Audience not inherited")
+		}
+		if string(got.Payload) != string(parsed.Payload) {
+			t.Errorf("Payload not inherited")
+		}
+	})
+}
+
+func sameStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

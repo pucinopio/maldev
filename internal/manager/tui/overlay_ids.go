@@ -15,7 +15,6 @@ const (
 
 	OverlayIDTOTPExportPDF    = "totp-export-pdf"
 
-	OverlayIDLicenseReissue   = "license-reissue"
 	OverlayIDLicenseExport    = "license-export"
 	OverlayIDLicenseDelete    = "license-delete"
 	OverlayIDIssuerRename     = "issuer-rename"

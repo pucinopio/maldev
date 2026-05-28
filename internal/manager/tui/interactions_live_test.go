@@ -1596,67 +1596,9 @@ func TestIdentityExport_AppendsDotBin(t *testing.T) {
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// D-S16 — license re-issue confirm result is now routed (was silently dropped)
-// ─────────────────────────────────────────────────────────────────────────────
-
-// TestLive_LicenseReissueConfirm_NilSvcReturnsOKOverlay verifies that when
-// svc is nil (no selected row or no service), handleLicenseReissueConfirm
-// returns a cmd that emits a stub OK overlay instead of silently doing nothing.
-func TestLive_LicenseReissueConfirm_NilSvcReturnsOKOverlay(t *testing.T) {
-	m := newLicensesModel(nil)
-	_, cmd := m.handleLicenseReissueConfirm(ConfirmResultMsg{ID: "license-reissue", Confirm: true})
-	if cmd == nil {
-		t.Fatal("nil svc + no row: handleLicenseReissueConfirm must return a stub overlay cmd")
-	}
-	msg := cmd()
-	push, ok := msg.(pushOverlayMsg)
-	if !ok {
-		t.Fatalf("expected pushOverlayMsg, got %T", msg)
-	}
-	if push.overlay == nil {
-		t.Fatal("pushOverlayMsg must carry a non-nil overlay")
-	}
-}
-
-// TestLive_LicenseReissueConfirm_CancelIsNoop verifies that Confirm:false is
-// a no-op (no cmd returned, model unchanged).
-func TestLive_LicenseReissueConfirm_CancelIsNoop(t *testing.T) {
-	m := newLicensesModel(nil)
-	m2, cmd := m.handleLicenseReissueConfirm(ConfirmResultMsg{ID: "license-reissue", Confirm: false})
-	if cmd != nil {
-		t.Errorf("Confirm:false must be a no-op, got cmd %T", cmd())
-	}
-	_ = m2
-}
-
-// TestLive_LicenseReissueConfirm_RoutedByRoot verifies the root model routes
-// "license-reissue" ConfirmResultMsg to handleLicenseReissueConfirm (D-S16).
-// Before the fix, the ViewLicenses case was absent from dispatchOverlayResult
-// so the confirm result was silently dropped.
-func TestLive_LicenseReissueConfirm_RoutedByRoot(t *testing.T) {
-	const w, h = 144, 44
-	m := driveRootModel(t)
-	m = sendKeyToRoot(m, "2") // goto Licenses
-
-	// Push a confirm overlay with the license-reissue ID.
-	push := pushOverlayMsg{newConfirmOverlay("license-reissue", "Re-émettre", "body", "OK", "Cancel", false)}
-	updated, _ := m.Update(push)
-	m = updated.(rootModel)
-
-	if len(m.overlays) == 0 {
-		t.Fatal("confirm overlay not pushed")
-	}
-
-	// Confirm with "y" — should route to handleLicenseReissueConfirm.
-	updated2, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
-	m = drainCmd(updated2.(rootModel), cmd)
-
-	// Overlay must be dismissed (ConfirmResultMsg processed, not dropped).
-	if len(m.overlays) != 0 {
-		t.Errorf("overlay still open after 'y': ConfirmResultMsg was not dispatched (D-S16 regression)")
-	}
-}
+// (Tests for the old "license-reissue" confirm overlay were removed when
+// the [e] flow was rewritten as a wizard. The wizard-driven path is
+// covered by TestWorkflow_ReissueWizard* in workflow_reissue_test.go.)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // D-S27 — dashboard server tile click: tile refreshes after start/stop
@@ -2165,49 +2107,8 @@ func TestLive_LicensesDetailTabClick_BoxLeftOffset(t *testing.T) {
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Session 7 — DS-L04: re-issue confirm overlay dispatched to screen
-// ─────────────────────────────────────────────────────────────────────────────
-
-// TestLive_LicenseReissue_ConfirmYProducesOverlay re-tests DS-L04 end-to-end:
-// pushing the confirm overlay, pressing 'y', and verifying a pushOverlayMsg
-// (the OK/error overlay) is enqueued.
-func TestLive_LicenseReissue_ConfirmYProducesOverlay(t *testing.T) {
-	m := driveRootModel(t)
-	m = sendKeyToRoot(m, "2") // goto Licenses
-
-	// Seed a license row so selectedRow() is non-nil.
-	m.licenses.rows = []*ent.License{fakeLicense()}
-	m.licenses.rebuildTable()
-
-	// Push the reissue confirm overlay exactly as the 'e' key does.
-	push := pushOverlayMsg{newConfirmOverlay(OverlayIDLicenseReissue, "Re-émettre", "body", "re-émettre", "annuler", false)}
-	updated, _ := m.Update(push)
-	m = updated.(rootModel)
-
-	if len(m.overlays) == 0 {
-		t.Fatal("confirm overlay not pushed")
-	}
-
-	// Press 'y' — overlay emits OverlayDoneMsg as a cmd; drain one tick to
-	// process the OverlayDoneMsg (which pops overlay + routes to screen handler).
-	updated2, yCmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
-	m2 := updated2.(rootModel)
-	// Execute the cmd from 'y' → OverlayDoneMsg.
-	if yCmd == nil {
-		t.Fatal("DS-L04: 'y' on confirm overlay must return a cmd (OverlayDoneMsg)")
-	}
-	updated3, doneCmd := m2.Update(yCmd())
-	m3 := updated3.(rootModel)
-	// Overlay must be popped after processing OverlayDoneMsg.
-	if len(m3.overlays) != 0 {
-		t.Error("DS-L04: overlay still open after OverlayDoneMsg; dispatchOverlayResult not reached")
-	}
-	// doneCmd batches the re-issue cmd (nil svc → stub OK overlay). Must be non-nil.
-	if doneCmd == nil {
-		t.Error("DS-L04: doneCmd is nil after OverlayDoneMsg; handleLicenseReissueConfirm must return a cmd for feedback")
-	}
-}
+// (Session-7 DS-L04 test removed alongside the confirm-only re-issue flow.
+// The wizard-driven path is covered by TestWorkflow_ReissueWizard*.)
 
 // liveTestStore opens an in-memory store pre-seeded with the given passphrase
 // so passphrase-prompt tests have a real canary to verify against.

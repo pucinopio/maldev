@@ -70,6 +70,31 @@ func NewStepFreeFields() *StepFreeFields {
 	}
 }
 
+// SetInitial pre-fills subject/audience and seeds one row per key in fields.
+// Used by the re-issue wizard so the operator sees the original values and
+// can edit them. Empty subject/audience leaves the placeholder text in
+// place; an empty fields map keeps the default single empty row.
+func (s *StepFreeFields) SetInitial(subject, audience string, fields map[string]string) {
+	if subject != "" {
+		s.subjectIn.SetValue(subject)
+	}
+	if audience != "" {
+		s.audienceIn.SetValue(audience)
+	}
+	if len(fields) > 0 {
+		s.rows = s.rows[:0]
+		for k, v := range fields {
+			r := newFreeFieldRow()
+			r.keyIn.SetValue(k)
+			r.valIn.SetValue(v)
+			s.rows = append(s.rows, r)
+		}
+		// Always leave one trailing empty row so the operator can add a pair
+		// without first deleting an existing one.
+		s.rows = append(s.rows, newFreeFieldRow())
+	}
+}
+
 func (s *StepFreeFields) Layout(b core.Rect) { s.bounds = b }
 func (s *StepFreeFields) Bounds() core.Rect  { return s.bounds }
 

@@ -335,15 +335,22 @@ func (svc *LicenseService) Delete(ctx context.Context, id uuid.UUID, actor strin
 	return nil
 }
 
-// ReIssueOptions configures ReIssue.
+// ReIssueOptions configures ReIssue. Every non-zero field overrides the
+// matching value inherited from the original licence; zero values fall
+// through to the original's data. The wizard pre-populates the editable
+// fields so an operator can tweak any subset (typically NotAfter alone)
+// without having to re-supply the rest.
 type ReIssueOptions struct {
 	NotAfter time.Time
+	Features []string        // nil = inherit
+	Audience []string        // nil = inherit
+	Payload  json.RawMessage // nil = inherit
 	Actor    string
 }
 
-// ReIssue creates a new licence from the original's data with overridable
-// NotAfter. The new licence's ReplacesLicenseID points at the original,
-// which is marked superseded.
+// ReIssue creates a new licence from the original's data, applying the
+// non-zero fields of opts as overrides. The new licence's ReplacesLicenseID
+// points at the original, which is marked superseded.
 //
 // Password and TOTP bindings cannot be reconstructed — only machine and
 // custom bindings are carried forward.
@@ -370,16 +377,32 @@ func (svc *LicenseService) ReIssue(ctx context.Context, originalID uuid.UUID, op
 	if err != nil {
 		return nil, err
 	}
+	notAfter := opts.NotAfter
+	if notAfter.IsZero() {
+		notAfter = parsed.NotAfter
+	}
+	audience := opts.Audience
+	if audience == nil {
+		audience = parsed.Audience
+	}
+	features := opts.Features
+	if features == nil {
+		features = parsed.Features
+	}
+	payload := opts.Payload
+	if payload == nil {
+		payload = parsed.Payload
+	}
 	req := IssueRequest{
 		IssuerID:     issuerRow.ID,
 		Subject:      parsed.Subject,
-		AudienceList: parsed.Audience,
+		AudienceList: audience,
 		NotBefore:    parsed.NotBefore,
-		NotAfter:     opts.NotAfter,
+		NotAfter:     notAfter,
 		Bindings:     binds,
-		Features:     parsed.Features,
+		Features:     features,
 		BinarySHA256: parsed.BinarySHA256,
-		Payload:      parsed.Payload,
+		Payload:      payload,
 		Label:        "re-issue of " + orig.Subject,
 		ReplacesID:   &orig.ID,
 		Actor:        opts.Actor,

@@ -386,14 +386,21 @@ Si la transaction échoue, la DB reste cohérente avec l'ancienne passphrase.
 Re-issue est utilisé pour étendre la durée, modifier les bindings ou mettre à jour le payload d'une licence existante. La licence originale passe en `status=superseded` et la nouvelle porte `replaces_license_id`.
 
 ```go
-import "github.com/oioio-space/maldev/internal/manager/service"
+import (
+    "encoding/json"
+
+    "github.com/oioio-space/maldev/internal/manager/service"
+)
 
 originalID := uuid.MustParse("73f56081-...")
 
 reissued, err := svc.License.ReIssue(ctx, originalID, service.ReIssueOptions{
-    // Uniquement les champs à modifier — les autres sont hérités de l'original.
+    // Chaque champ non-zéro remplace la valeur héritée de l'original.
+    // Les champs zéro tombent en cascade sur l'original.
     NotAfter: time.Now().Add(180 * 24 * time.Hour),
     Features: []string{"pro", "extended"},
+    Audience: []string{"prod", "staging"},
+    Payload:  json.RawMessage(`{"tier":"gold"}`),
 })
 if err != nil {
     log.Fatal(err)
@@ -404,6 +411,13 @@ log.Printf("Remplace : %s", originalID)
 ```
 
 L'original est listé dans l'audit avec `kind=license.supersede`. La chaîne `replaces_license_id` est navigable via `svc.License.Get(ctx, id)` (champ `Row` + `Successors` dans `LicenseDetail`).
+
+**Côté TUI :** `[e]` sur l'écran *Licences* ouvre le wizard pré-rempli depuis
+l'original (validity, audience, free-fields, payload). Les étapes
+identity / recipient / bindings / TOTP sont héritées telles quelles ; les 4
+étapes éditables enchaînent step 5 → 6 → review. La pré-fix de cette
+session corrige le bug "Ré-émission OK mais nouvelle licence déjà expirée"
+causé par `NotAfter` zéro dans les anciens `ReIssueOptions`.
 
 ---
 

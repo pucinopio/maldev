@@ -38,6 +38,22 @@ type WizardState struct {
 	FreeFields  map[string]string
 	RequireTOTP bool
 	TOTPSecretID string // UUID string; empty when RequireTOTP false
+
+	// IsReissue marks the wizard run as a re-issue of an existing licence:
+	// identity/recipient/machine/binary/totp steps are pre-populated and
+	// skipped, and the Review step calls svc.License.ReIssue instead of
+	// Issue. OriginalID points at the licence being superseded.
+	IsReissue  bool
+	OriginalID string // UUID of the original licence; empty when IsReissue=false
+	// Features carries the licence's feature list. The new-licence flow
+	// derives features from FreeFields' "features" key; re-issue inherits
+	// them straight from the original licence here so they survive the
+	// wizard round-trip.
+	Features []string
+	// PayloadCleartext holds an optional payload to embed unencrypted. The
+	// new-licence wizard doesn't currently expose a UI for it; re-issue
+	// inherits the original's payload through this field.
+	PayloadCleartext []byte
 }
 
 // StepReview is step 8: summary + Issue button.
@@ -94,6 +110,44 @@ func (s *StepReview) issueCmd() tea.Cmd {
 	return func() tea.Msg {
 		if svc == nil {
 			return IssueResultMsg{Err: fmt.Errorf("services unavailable")}
+		}
+		if st.IsReissue {
+			origID, err := parseUUID(st.OriginalID)
+			if err != nil {
+				return IssueResultMsg{Err: fmt.Errorf("invalid original id: %w", err)}
+			}
+			opts := service.ReIssueOptions{
+				NotAfter: st.NotAfter,
+				Actor:    "operator",
+				Payload:  st.PayloadCleartext,
+			}
+			// Audience: csv → []string. Empty input means "clear the audience"
+			// during a re-issue (operator intent), so we explicitly assign an
+			// empty (non-nil) slice instead of letting the service inherit
+			// the original. That keeps the wizard's edit semantics consistent
+			// with what the operator sees on screen.
+			opts.Audience = []string{}
+			for _, tag := range strings.Split(st.Audience, ",") {
+				tag = strings.TrimSpace(tag)
+				if tag != "" {
+					opts.Audience = append(opts.Audience, tag)
+				}
+			}
+			// Features: prefer the original's slice (already inherited via
+			// state) when the operator did not add any key=value rows that
+			// look like features. Free-fields rows are encoded the same way
+			// as in the new-licence path (key=value) — when present they
+			// REPLACE the original feature list so the operator can prune.
+			if len(st.FreeFields) > 0 {
+				opts.Features = []string{}
+				for k, v := range st.FreeFields {
+					opts.Features = append(opts.Features, k+"="+v)
+				}
+			} else {
+				opts.Features = st.Features
+			}
+			issued, err := svc.License.ReIssue(context.Background(), origID, opts)
+			return IssueResultMsg{Issued: issued, Err: err}
 		}
 		req, err := buildIssueRequest(st)
 		if err != nil {
