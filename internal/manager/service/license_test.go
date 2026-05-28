@@ -309,3 +309,103 @@ func TestLicenseGetAndGetByUUID(t *testing.T) {
 		t.Fatalf("GetByUUID mismatch: %v vs %v", row2.ID, row.ID)
 	}
 }
+
+// TestLicenseDelete covers the export→delete→re-import round-trip plus the
+// cascade-clean of TOTPSecret + Revocation rows. Three sub-cases:
+//   - delete an active licence and re-import its PEM without UUID conflict
+//   - delete a licence whose binding produced a TOTPSecret row
+//   - delete a revoked licence (Revocation row must be cascaded)
+func TestLicenseDelete(t *testing.T) {
+	t.Run("active round-trip", func(t *testing.T) {
+		lic, issuer, _, _, _, ctx := setupLicSvc(t)
+		iss, _ := issuer.Generate(ctx, "lab", "k1", "op")
+		out, err := lic.Issue(ctx, IssueRequest{
+			IssuerID: iss.ID, Subject: "alice",
+			NotAfter: time.Now().Add(24 * time.Hour), Actor: "op",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		uuidStr := out.Row.LicenseUUID
+		pem := out.PEM
+
+		if err := lic.Delete(ctx, out.Row.ID, "op"); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+		if _, err := lic.GetByUUID(ctx, uuidStr); err == nil {
+			t.Fatal("row still queryable after Delete")
+		}
+		// Re-import the previously-exported PEM should now succeed.
+		row, err := lic.Import(ctx, pem, "reimport", "op")
+		if err != nil {
+			t.Fatalf("re-import after Delete failed: %v", err)
+		}
+		if row.LicenseUUID != uuidStr {
+			t.Fatalf("reimported UUID=%q want %q", row.LicenseUUID, uuidStr)
+		}
+	})
+
+	t.Run("cascades totp secret", func(t *testing.T) {
+		lic, issuer, _, _, _, ctx := setupLicSvc(t)
+		iss, _ := issuer.Generate(ctx, "lab", "k1", "op")
+		out, err := lic.Issue(ctx, IssueRequest{
+			IssuerID: iss.ID, Subject: "bob",
+			NotAfter: time.Now().Add(24 * time.Hour), Actor: "op",
+			Bindings: []BindingSpec{{Type: "totp"}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Sanity: the issuance created one TOTPSecret row.
+		n, _ := lic.store.Client.TOTPSecret.Query().Count(ctx)
+		if n != 1 {
+			t.Fatalf("totp row count before Delete=%d, want 1", n)
+		}
+		if err := lic.Delete(ctx, out.Row.ID, "op"); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+		n, _ = lic.store.Client.TOTPSecret.Query().Count(ctx)
+		if n != 0 {
+			t.Fatalf("totp row count after Delete=%d, want 0 (cascade)", n)
+		}
+	})
+
+	t.Run("cascades revocation", func(t *testing.T) {
+		lic, issuer, _, _, _, ctx := setupLicSvc(t)
+		audit := NewAuditService(lic.store)
+		revSvc := NewRevokeService(lic.store, audit, issuer)
+		lic.SetRevoke(revSvc)
+
+		iss, _ := issuer.Generate(ctx, "lab", "k1", "op")
+		out, err := lic.Issue(ctx, IssueRequest{
+			IssuerID: iss.ID, Subject: "carol",
+			NotAfter: time.Now().Add(24 * time.Hour), Actor: "op",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := revSvc.Revoke(ctx, out.Row.ID, "compromise", "op"); err != nil {
+			t.Fatal(err)
+		}
+		if err := lic.Delete(ctx, out.Row.ID, "op"); err != nil {
+			t.Fatalf("Delete revoked: %v", err)
+		}
+		// The revocation table should no longer reference the deleted licence.
+		views, err := revSvc.ListRevoked(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, v := range views {
+			if v.LicenseID == out.Row.ID {
+				t.Fatal("revocation row survived Delete")
+			}
+		}
+	})
+
+	t.Run("missing id errors", func(t *testing.T) {
+		lic, _, _, _, _, ctx := setupLicSvc(t)
+		if err := lic.Delete(ctx, uuid.New(), "op"); err == nil {
+			t.Fatal("expected error deleting non-existent id")
+		}
+	})
+}

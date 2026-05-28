@@ -297,6 +297,19 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 		// Trigger reload so the table shows the newly imported row.
 		return m, ListLicensesCmd(m.svc)
 
+	case licenseDeletedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.rows = msg.rows
+			m.rebuildTable()
+			subject := msg.subject
+			return m, func() tea.Msg {
+				return pushOverlayMsg{NewOKOverlay("Suppression OK",
+					fmt.Sprintf("Licence %q supprimée — son UUID est libre, le PEM est réimportable.", subject))}
+			}
+		}
+		return m, nil
+
 	case tableSelectRowMsg:
 		m.table.SetCursor(msg.row)
 		// Keep the PEM preview in sync with the new selection when the PEM
@@ -416,6 +429,28 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 			sub := fmt.Sprintf("Re-émettre la licence pour %q?\nUne nouvelle licence sera créée avec les mêmes bindings.", row.Subject)
 			return m, func() tea.Msg {
 				return pushOverlayMsg{newConfirmOverlay(OverlayIDLicenseReissue, "Re-émettre la licence", sub, "re-émettre", "annuler", false)}
+			}
+
+		case "D":
+			// Hard-delete the selected licence (License + Revocation + TOTPSecret).
+			// Frees the unique license_uuid so a previously-exported PEM can be
+			// re-imported. Destructive — confirm before calling.
+			row := m.selectedRow()
+			if row == nil {
+				return m, nil
+			}
+			short := row.LicenseUUID
+			if len(short) > 12 {
+				short = short[:8] + "…"
+			}
+			sub := fmt.Sprintf(
+				"Supprimer définitivement la licence %q (uuid %s) ?\n"+
+					"La ligne, sa révocation éventuelle et tout secret TOTP associé\n"+
+					"seront effacés. L'audit conserve la trace de l'opération.\n"+
+					"Le PEM exporté reste réimportable.",
+				row.Subject, short)
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newConfirmOverlay(OverlayIDLicenseDelete, "Supprimer la licence", sub, "supprimer", "annuler", true)}
 			}
 
 		case "r":
@@ -641,7 +676,8 @@ func (m licensesModel) View() string {
 		{Key: "i", Label: " importer ", Cmd: keyCmd("i")},
 		{Key: "E", Label: " exporter ", Cmd: keyCmd("E")},
 		{Key: "x", Label: " révoquer ", Cmd: keyCmd("x")},
-		{Key: "e", Label: " re-émettre", Cmd: keyCmd("e")},
+		{Key: "e", Label: " re-émettre ", Cmd: keyCmd("e")},
+		{Key: "D", Label: " supprimer", Cmd: keyCmd("D")},
 	}, 0, BoxedInner(m.width))
 	// Title Y = TopChromeRows + blank + topRowH + blank + box border. topRow
 	// renders ~3 lines because the filter chips have a bordered pill style;
@@ -849,7 +885,7 @@ func (m licensesModel) renderDetail() string {
 		HintKey.Render("[A]") + Dim.Render("udit"),
 		HintKey.Render("[C]") + Dim.Render("haîne"),
 	}, "  ")
-	actions := Dim.Render("[d] replier  [c] PEM  [e] re-émettre  [x] révoquer")
+	actions := Dim.Render("[d] replier  [c] PEM  [e] re-émettre  [x] révoquer  [D] supprimer")
 	headerW := BoxedInner(m.width)
 	gap := headerW - lipgloss.Width(tabStrip) - lipgloss.Width(actions)
 	if gap < 1 {
@@ -1213,6 +1249,38 @@ func (m licensesModel) handleLicenseInputResult(res InputResultMsg) (licensesMod
 		}
 		return pushOverlayMsg{NewOKOverlay("Export OK", "Wrote "+path)}
 	}
+}
+
+// handleLicenseDeleteConfirm processes the operator's reply to the
+// OverlayIDLicenseDelete confirm overlay. On Confirm=true it calls
+// svc.License.Delete and reloads the list; cancellation is a no-op.
+func (m licensesModel) handleLicenseDeleteConfirm(res ConfirmResultMsg) (licensesModel, tea.Cmd) {
+	if res.ID != OverlayIDLicenseDelete || !res.Confirm {
+		return m, nil
+	}
+	row := m.selectedRow()
+	if row == nil || m.svc == nil {
+		return m, nil
+	}
+	svc := m.svc
+	id := row.ID
+	subject := row.Subject
+	return m, func() tea.Msg {
+		if err := svc.License.Delete(context.Background(), id, "operator"); err != nil {
+			return pushOverlayMsg{newErrorOverlay("Suppression échouée", err.Error())}
+		}
+		rows, err := svc.License.List(context.Background(), service.ListFilter{Limit: 500})
+		return licenseDeletedMsg{rows: rows, err: err, subject: subject}
+	}
+}
+
+// licenseDeletedMsg carries the post-delete list reload + the subject of the
+// row that was removed. The licences screen Update handles it and pushes the
+// confirmation toast — app.go only routes it through.
+type licenseDeletedMsg struct {
+	rows    []*ent.License
+	err     error
+	subject string
 }
 
 func (m licensesModel) handleRevokeResult(res RevokeConfirmedMsg) (licensesModel, tea.Cmd) {

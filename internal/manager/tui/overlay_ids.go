@@ -17,6 +17,7 @@ const (
 
 	OverlayIDLicenseReissue   = "license-reissue"
 	OverlayIDLicenseExport    = "license-export"
+	OverlayIDLicenseDelete    = "license-delete"
 	OverlayIDIssuerRename     = "issuer-rename"
 	OverlayIDIssuerExportPub  = "issuer-export-pub"
 	OverlayIDIssuerExportPriv     = "issuer-export-priv"      // confirm step

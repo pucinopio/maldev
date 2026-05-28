@@ -22,6 +22,7 @@ import (
 	"github.com/oioio-space/maldev/internal/manager/store"
 	"github.com/oioio-space/maldev/internal/manager/store/ent"
 	licenseent "github.com/oioio-space/maldev/internal/manager/store/ent/license"
+	totpsecretent "github.com/oioio-space/maldev/internal/manager/store/ent/totpsecret"
 	licensekg "github.com/oioio-space/maldev/license"
 	"github.com/oioio-space/maldev/license/seal"
 	"github.com/oioio-space/maldev/license/totp"
@@ -36,7 +37,16 @@ type LicenseService struct {
 	identity  *IdentityService
 	recipient *RecipientService
 	totp      *TOTPService
+
+	// revoke is wired post-construction by Services.New so Delete can flush
+	// the CRL cache when a revoked licence is removed. Optional — when nil,
+	// callers must invalidate the cache themselves (only the test setup).
+	revoke *RevokeService
 }
+
+// SetRevoke wires the RevokeService dependency so Delete can flush the CRL
+// cache for revoked licences. Called once by Services.New.
+func (svc *LicenseService) SetRevoke(r *RevokeService) { svc.revoke = r }
 
 func NewLicenseService(s *store.Store, k *crypto.KEK, a *AuditService,
 	iss *IssuerService, id *IdentityService, rec *RecipientService, t *TOTPService) *LicenseService {
@@ -274,6 +284,55 @@ func (svc *LicenseService) Issue(ctx context.Context, req IssueRequest) (*Issued
 	}
 
 	return &IssuedLicense{Row: licRow, PEM: pemBytes, TOTPs: provs}, nil
+}
+
+// Delete hard-deletes a licence row plus every dependent row (Revocation 1:1,
+// TOTPSecret 1:N) in a single transaction. The audit log keeps the
+// "license.delete" entry so the operation stays traceable after the row is
+// gone. Re-importing the same PEM afterwards succeeds because the unique
+// license_uuid is freed.
+//
+// Trade-off: deleting a revoked licence removes it from PublishSignedList,
+// so any client that hasn't yet fetched the CRL won't see the revocation.
+// Operators should prefer Revoke for licences still in the wild and reserve
+// Delete for licences they intend to re-import or that never left the lab.
+func (svc *LicenseService) Delete(ctx context.Context, id uuid.UUID, actor string) error {
+	var wasRevoked bool
+	if err := withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		row, err := tx.License.Get(ctx, id)
+		if err != nil {
+			return err
+		}
+		wasRevoked = row.Status == licenseent.StatusRevoked
+		if _, err := tx.TOTPSecret.Delete().
+			Where(totpsecretent.HasLicenseWith(licenseent.IDEQ(id))).
+			Exec(ctx); err != nil {
+			return fmt.Errorf("delete totps: %w", err)
+		}
+		// Only(ctx) returns NotFoundError when no revocation exists — that's
+		// the common path for non-revoked licences and is silently absorbed.
+		if rev, err := row.QueryRevocation().Only(ctx); err == nil {
+			if err := tx.Revocation.DeleteOneID(rev.ID).Exec(ctx); err != nil {
+				return fmt.Errorf("delete revocation: %w", err)
+			}
+		}
+		if err := tx.License.DeleteOneID(id).Exec(ctx); err != nil {
+			return fmt.Errorf("delete license: %w", err)
+		}
+		return svc.audit.AppendTx(ctx, tx, "license.delete", actor,
+			Target{Kind: "License", ID: id.String()},
+			map[string]any{
+				"license_uuid": row.LicenseUUID,
+				"subject":      row.Subject,
+				"status":       string(row.Status),
+			})
+	}); err != nil {
+		return err
+	}
+	if wasRevoked && svc.revoke != nil {
+		svc.revoke.invalidateCache()
+	}
+	return nil
 }
 
 // ReIssueOptions configures ReIssue.

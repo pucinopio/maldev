@@ -146,6 +146,7 @@ func TestLicensesKeyDispatchTruthTable(t *testing.T) {
 		{"E opens export input overlay", nil, runRune('E'), []string{"overlay-push"}},
 		{"x opens revoke overlay",       nil, runRune('x'), []string{"overlay-push"}},
 		{"e opens reissue confirm",      nil, runRune('e'), []string{"overlay-push"}},
+		{"D opens delete confirm",       nil, runRune('D'), []string{"overlay-push"}},
 
 		// ──── Search input ──────────────────────────────────────────────
 		{"/ focuses the search input", nil, runRune('/'), []string{"search-focus"}},

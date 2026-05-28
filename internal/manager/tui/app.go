@@ -698,6 +698,11 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 				m.licenses = updated
 				m.pendingCmd = c
 			}
+			if res.ID == OverlayIDLicenseDelete {
+				updated, c := m.licenses.handleLicenseDeleteConfirm(res)
+				m.licenses = updated
+				m.pendingCmd = c
+			}
 		case ViewIssuers:
 			// Retire confirm — no service call for retire yet (Phase 3 will add it).
 			// Private-key export is gated by a confirm overlay (destructive: reveals

@@ -501,6 +501,7 @@ local hints surfaced via the title bar.
 | `I` / `B` / `P` / `A` / `C` | ✓ | ✓ | Switch detail tab (Identité / Bindings / PEM / Audit / Chaîne) | `lic.detail.tab.{i,b,p,a,c}.{kb,ms}` |
 | `n` | ✓ | ✓ | Open New-License wizard | `lic.new.{kb,ms}` |
 | `x` | ✓ | ✓ | Push revoke overlay on selected row | `lic.revoke.{kb,ms}` |
+| `D` | ✓ | ✓ | Push confirm overlay → hard-delete row (License + Revocation + TOTPSecret, danger) | `lic.delete.{kb,ms}` |
 | `c` | ✓ | n/a | Copy selected row's PEM to clipboard | `lic.copypem.kb` |
 | `esc` in search | ✓ | n/a | Exit search (preserves query) | `lic.search.esc.kb` |
 | `enter` in search | ✓ | n/a | Exit search (preserves query) | `lic.search.enter.kb` |

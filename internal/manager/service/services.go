@@ -34,6 +34,7 @@ func New(s *store.Store, k *crypto.KEK) *Services {
 	probe := NewProbeService(s, audit)
 	license := NewLicenseService(s, k, audit, issuer, identity, recipient, totp)
 	revoke := NewRevokeService(s, audit, issuer)
+	license.SetRevoke(revoke)
 	return &Services{
 		Store: s, KEK: k,
 		Audit: audit, Settings: settings, Issuer: issuer, Identity: identity,
