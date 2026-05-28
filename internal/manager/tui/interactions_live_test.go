@@ -1965,12 +1965,11 @@ func TestLive_IssuerActivate_DashboardRefreshed(t *testing.T) {
 // Session 7 — DS-I03: green dot in issuers table for active row
 // ─────────────────────────────────────────────────────────────────────────────
 
-// TestLive_IssuersActiveRowMarker verifies that the active issuer's first
-// table column contains the active arrow "▶" and inactive rows do not.
-// The original "●" was easy to miss because (a) it matched the column
-// header symbol and (b) bubbles/table's Selected style overrode the green
-// foreground on the cursor row, making active+selected indistinguishable.
-// The arrow stays distinctive even when colour is stripped.
+// TestLive_IssuersActiveRowMarker verifies the ASCII ">>" marker appears in
+// the active issuer's first table cell and not in inactive rows. The marker
+// went through two prior iterations (● and ▶) that rendered in lipgloss
+// golden tests but failed to display in the operator's actual terminal due
+// to glyph rendering issues. ASCII ">>" survives every terminal/font combo.
 func TestLive_IssuersActiveRowMarker(t *testing.T) {
 	active := fakeIssuer()
 	active.Active = true
@@ -1985,18 +1984,18 @@ func TestLive_IssuersActiveRowMarker(t *testing.T) {
 	if len(rows) < 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
 	}
-	if !strings.Contains(rows[0][0], "▶") {
-		t.Errorf("active issuer row[0][0] = %q, want it to contain '▶'", rows[0][0])
+	if !strings.Contains(rows[0][0], ">>") {
+		t.Errorf("active issuer row[0][0] = %q, want it to contain '>>'", rows[0][0])
 	}
-	if strings.Contains(rows[1][0], "▶") {
-		t.Errorf("inactive issuer row[1][0] = %q, must not contain '▶'", rows[1][0])
+	if strings.Contains(rows[1][0], ">>") {
+		t.Errorf("inactive issuer row[1][0] = %q, must not contain '>>'", rows[1][0])
 	}
-	// Header must NOT use the same glyph as the row marker — that was the
-	// root cause operators couldn't distinguish "column title" from "row
-	// indicator". A blank header is the unambiguous fix.
+	// Column header must be ASCII-readable ("ACT") so operators understand
+	// the column purpose at a glance — earlier iterations used a glyph
+	// header (●) which read as decorative rather than informative.
 	cols := m.table.Columns()
-	if strings.Contains(cols[0].Title, "▶") {
-		t.Errorf("column header reuses the active marker glyph: %q", cols[0].Title)
+	if cols[0].Title != "ACT" {
+		t.Errorf("column header = %q, want \"ACT\"", cols[0].Title)
 	}
 }
 

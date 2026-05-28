@@ -243,7 +243,16 @@ func (s *StepIdentity) View() string {
 func (s *StepIdentity) renderList(_ int) string {
 	var lines []string
 	for i, r := range s.rows {
-		label := fmt.Sprintf("  %-28s  %s", r.Name, r.KeyID)
+		// Active-issuer marker — ASCII ">>" identical to the issuers
+		// screen so the operator can identify the in-use signing key at
+		// a glance. Without this the wizard's identity list looked
+		// identical for active and retired issuers, hiding which key
+		// would actually sign the new licence.
+		actMark := "    "
+		if r.Active {
+			actMark = ">>  "
+		}
+		label := fmt.Sprintf("%s%-28s  %s", actMark, r.Name, r.KeyID)
 		if i == s.cursor {
 			lines = append(lines, wizSel.Render("> "+label))
 		} else {

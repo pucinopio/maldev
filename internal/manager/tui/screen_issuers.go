@@ -72,11 +72,14 @@ type issuersModel struct {
 
 func newIssuersModel(svc *service.Services) issuersModel {
 	cols := []table.Column{
-		// First column is the active-issuer marker. Header is blank so the
-		// operator doesn't mistake the column title for a row marker — the
-		// dot character on the active row is the only one in this column,
-		// distinct from any decorative header glyph.
-		{Title: " ", Width: 3},
+		// First column is the active-issuer marker. Header is "ACT" so the
+		// operator can read what the column means even when scanning the
+		// table for the first time. The marker uses pure ASCII (">>") so
+		// it renders in every terminal/font combination — earlier Unicode
+		// glyphs (●, ▶) rendered correctly in our golden tests but the
+		// operator's terminal failed to display them, hiding the active
+		// row signal entirely. Width=5 fits ">>" plus padding.
+		{Title: "ACT", Width: 5},
 		{Title: "KEYID", Width: 20},
 		{Title: "NAME", Width: 24},
 		{Title: "STATUS", Width: 10},
@@ -269,16 +272,17 @@ func (m *issuersModel) selectedRow() *ent.Issuer {
 func (m *issuersModel) rebuildTable() {
 	raw := make([][]string, 0, len(m.rows))
 	for _, r := range m.rows {
-		// Active-issuer marker. The bubbles/table Selected style forces its
-		// own foreground over cell-level colours, so when the cursor sits
-		// on the active row a coloured "●" becomes indistinguishable from
-		// the header "●" (DS-I03 follow-up). We use a directional arrow
-		// "▶" — recognisable even when the colour is overridden, and the
-		// glyph itself differs from any header convention — and pair it
-		// with a leading space so the column has a stable 2-cell footprint.
-		dot := "   "
+		// Active-issuer marker. Constraints stacked up across iterations:
+		//  - bubbles/table Selected style overrides cell foreground, so
+		//    colour alone is unreliable on the cursor row (DS-I03);
+		//  - Unicode glyphs (●, ▶) rendered in lipgloss/golden tests but
+		//    the operator's terminal couldn't display them at all (DS-I03
+		//    follow-up #2). Drop colour AND non-ASCII: ">>" is 2 cells
+		//    of pure ASCII that every terminal renders identically and
+		//    survives any Selected style override.
+		dot := "     "
 		if r.Active {
-			dot = " " + GlowGreen.Render("▶") + " "
+			dot = " >>  "
 		}
 		status := "inactive"
 		if r.Active {

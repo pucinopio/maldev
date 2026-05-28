@@ -13,6 +13,7 @@ import (
 	"github.com/oioio-space/maldev/internal/manager/httpsrv"
 	"github.com/oioio-space/maldev/internal/manager/service"
 	"github.com/oioio-space/maldev/internal/manager/store/ent"
+	"github.com/oioio-space/maldev/internal/manager/tui/cmds"
 	"github.com/oioio-space/maldev/internal/manager/tui/widgets"
 )
 
@@ -251,6 +252,15 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Batch a dashboard refresh so the "Clé d'émission active" tile stays
 		// in sync whenever the active issuer changes (e.g. after [a] activate).
 		return m, tea.Batch(cmd, m.dashboard.refresh())
+	case cmds.DashboardSnapshotMsg:
+		// Always route the snapshot to the dashboard, even when the operator
+		// is on another tab. Previously the routeReady dispatcher sent it to
+		// the active screen (e.g. issuers) which silently dropped it, so the
+		// dashboard's "Clé d'émission active" tile stayed stale after a [a]
+		// activate on the issuers screen.
+		var cmd tea.Cmd
+		m.dashboard, cmd = m.dashboard.Update(dmsg)
+		return m, cmd
 	case TOTPLoadedMsg:
 		var cmd tea.Cmd
 		m.totp, cmd = m.totp.Update(dmsg)

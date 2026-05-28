@@ -31,25 +31,24 @@ func TestStepFreeFieldsCtrlSSubmits(t *testing.T) {
 	}
 }
 
-func TestStepFreeFieldsEnterAfterTypingThenEnterSubmits(t *testing.T) {
+// TestStepFreeFieldsEnterAlwaysSubmits — operator-reported uniformity
+// requirement "la touche entrée sert à passer à l'étape suivante sauf
+// pour une étape — uniformise". Enter on FreeFields now always submits
+// (advances to the next step) regardless of whether an input is focused
+// or has content. Tab/⇧Tab still cycle between fields inside the step.
+func TestStepFreeFieldsEnterAlwaysSubmits(t *testing.T) {
 	s := NewStepFreeFields()
 	s.Focus()
-	for _, r := range "k" {
+	for _, r := range "key1" {
 		_, _ = s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
-	// First Enter blurs the input
+	// Enter on a focused, non-empty input must submit on the FIRST press —
+	// pre-fix this required two Enter presses (advance field, then submit).
 	_, cmd := s.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd != nil {
-		if _, ok := cmd().(FreeFieldsMsg); ok {
-			t.Fatal("first Enter with typed value should NOT submit immediately")
-		}
-	}
-	// Second Enter (input now blurred) submits
-	_, cmd = s.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
-		t.Fatal("second Enter should submit")
+		t.Fatal("Enter on typed value must submit, got nil cmd")
 	}
 	if _, ok := cmd().(FreeFieldsMsg); !ok {
-		t.Fatal("second Enter should emit FreeFieldsMsg")
+		t.Fatalf("Enter cmd produced %T, want FreeFieldsMsg", cmd())
 	}
 }

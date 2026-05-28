@@ -135,18 +135,13 @@ func (s *StepFreeFields) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 		return s, nil
 
 	case "enter":
-		// Enter while no input is focused = submit.
-		if !s.activeInput().Focused() {
-			return s, s.submitCmd()
-		}
-		// Enter on an empty active input = submit (caller meant "I'm done").
-		if s.activeInput().Value() == "" {
-			return s, s.submitCmd()
-		}
-		// Enter on a non-empty value: advance to the next field instead of
-		// submitting so the operator can keep typing without surprise.
-		s.activeInput().Blur()
-		s.cycleNext()
+		// Enter always advances to the next wizard step — uniform with
+		// every other step. Tab/⇧Tab move between fields WITHIN this step
+		// without leaving it. Pre-fix behaviour ("Enter on non-empty field
+		// cycles to next field") was the operator-reported inconsistency:
+		// "la touche entrée sert à passer à l'étape suivante sauf pour une
+		// étape — uniformise."
+		return s, s.submitCmd()
 		s.activeInput().Focus()
 		return s, textinput.Blink
 
