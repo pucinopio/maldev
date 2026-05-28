@@ -19,6 +19,13 @@ type confirmOverlay struct {
 	confirmLabel string
 	cancelLabel  string
 	danger       bool
+
+	// footerY is the overlay-relative Y of the footer row, populated by
+	// View() at render time. The mouse handler reads it instead of
+	// hardcoding a value — bodies wider than one line shift the footer
+	// down via lipgloss.Place's vertical centering, and a fixed Y=7
+	// missed every multi-line confirm.
+	footerY int
 }
 
 // NewConfirmOverlay is exported for use by cmd/tui-snap.
@@ -54,12 +61,16 @@ func (o *confirmOverlay) Update(msg tea.Msg) (Overlay, tea.Cmd) {
 		if m.Button != tea.MouseButtonLeft || m.Action != tea.MouseActionPress {
 			return o, nil
 		}
-		// Modal is centered inside a 54x12 lipgloss.Place box. Top padding =
-		// (12-9)/2 = 1 row, so the footer line sits at overlay Y=7. Cancel
-		// occupies the left half of the inner row, Confirm the right half.
-		// Coordinates have already been translated to overlay-relative by
-		// rootModel.updateOverlay.
-		if m.Y != 7 {
+		// Footer Y is populated by View() so multi-line bodies (which shift
+		// the footer downward via lipgloss.Place vertical centering) still
+		// hit-test correctly. View must have run at least once — when it
+		// hasn't (test paths that click before rendering) fall back to the
+		// historical Y=7 to preserve the single-line behaviour.
+		footerY := o.footerY
+		if footerY == 0 {
+			footerY = 7
+		}
+		if m.Y != footerY {
 			return o, nil
 		}
 		// Inside the modal, the button row spans X≈3..51 (border+padding=3 left).
@@ -99,5 +110,24 @@ func (o *confirmOverlay) View() string {
 	if o.danger {
 		style = ModalDanger
 	}
-	return lipgloss.Place(54, 12, lipgloss.Center, lipgloss.Center, style.Render(content))
+	rendered := style.Render(content)
+
+	// Place height auto-grows with the body so the modal never clips and the
+	// footer position is fully derivable. Minimum 12 preserves the historical
+	// look for short bodies; longer bodies inflate it row-for-row.
+	modalH := lipgloss.Height(rendered)
+	placeH := 12
+	if modalH+2 > placeH {
+		placeH = modalH + 2
+	}
+	topPad := (placeH - modalH) / 2
+	// Inside the rendered modal the layout is: top border (1) + top padding
+	// (1) + content rows + bottom padding (1) + bottom border (1). The footer
+	// is the LAST content line, so it sits at modalH - 1 - 1 - 1 = modalH - 3
+	// relative to the modal start, plus topPad in the Place canvas.
+	// For the historical 5-content-row body this resolves to topPad(1) +
+	// 9 - 3 = 7, matching the pre-fix hardcoded value.
+	o.footerY = topPad + modalH - 3
+
+	return lipgloss.Place(54, placeH, lipgloss.Center, lipgloss.Center, rendered)
 }
