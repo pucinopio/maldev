@@ -159,3 +159,69 @@ func visualWidth(s string) int {
 	return len(out)
 }
 
+
+// TestWorkflow_TOTPTableFitsInsideListBox is the regression guard for the
+// operator-reported "les cadres dans l'onglet TOTP ne sont toujours pas
+// correctes". Pre-fix rebuildTable sized the table for the FULL terminal
+// (BoxedInner(m.width)) but View() then placed it inside the narrower
+// listBox of the two-column layout, so the header line "LABEL ID CREATED
+// BOUND TO" wrapped onto two rows and the data row was hidden behind the
+// bottom border.
+//
+// The fix centralises the inner-width decision in listInnerWidth() and
+// has rebuildTable use that — and stops halving tableH in two-col mode
+// since the detail panel is now BESIDE, not below, the list.
+func TestWorkflow_TOTPTableFitsInsideListBox(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+	row, _, _ := svc.TOTP.Generate(ctx, "alice@app")
+	view, _ := svc.TOTP.ByID(ctx, row.ID, "lab")
+	rows, _ := svc.TOTP.List(ctx)
+
+	for _, w := range []int{120, 144, 180} {
+		var m tea.Model = New(svc, nil, SessionReady)
+		m, _ = m.Update(tea.WindowSizeMsg{Width: w, Height: 40})
+		m, _ = m.Update(TOTPLoadedMsg{Rows: rows})
+		m = driveRune(m, '8')
+		root := rootOf(t, m)
+		root.totp.view = view
+		root.totp.rebuildTable()
+		m = root
+
+		rendered := m.View()
+		lines := strings.Split(rendered, "\n")
+
+		// Locate the line that carries the column headers. ALL four
+		// titles must appear on the same line — pre-fix the line that
+		// held "LABEL" was followed by a separate line for "ID CREATED
+		// BOUND TO", which is exactly the wrapping bug.
+		headerY := -1
+		for i, line := range lines {
+			if strings.Contains(line, "LABEL") {
+				headerY = i
+				break
+			}
+		}
+		if headerY < 0 {
+			t.Fatalf("width=%d: LABEL header missing from rendered view", w)
+		}
+		headerLine := lines[headerY]
+		for _, col := range []string{"LABEL", "ID", "CREATED", "BOUND TO"} {
+			if !strings.Contains(headerLine, col) {
+				t.Errorf("width=%d: column %q not on the same line as LABEL — header wrapped (line=%q)",
+					w, col, headerLine)
+			}
+		}
+
+		// The data row "alice@app" must appear on the line immediately
+		// below the header — pre-fix it was clipped by the listBox.
+		if headerY+1 >= len(lines) {
+			t.Fatalf("width=%d: no line below header", w)
+		}
+		dataLine := lines[headerY+1]
+		if !strings.Contains(dataLine, "alice@app") {
+			t.Errorf("width=%d: data row 'alice@app' missing from line below header (line=%q)",
+				w, dataLine)
+		}
+	}
+}

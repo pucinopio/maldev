@@ -253,27 +253,74 @@ func (m *totpModel) rebuildTable() {
 		// wizard; standalone secrets show "—".
 		raw = append(raw, []string{r.AccountLabel, shortID, r.CreatedAt.Format("2006-01-02"), "—"})
 	}
-	// Weights: LABEL + BOUND TO are descriptive text, grow; ID/CREATED fixed.
-	setAutoFitRows(&m.table, BoxedInner(m.width), []int{3, 0, 0, 2}, raw, 60)
+	// Match the column-fit width to whichever layout View() will pick.
+	// Pre-fix the table was sized for the full terminal even when the
+	// two-column layout was active, so the header titles (LABEL ID
+	// CREATED BOUND TO) wrapped inside the narrower listBox and the
+	// table body lost rows to that wrap.
+	listInnerW := m.listInnerWidth()
+	setAutoFitRows(&m.table, listInnerW, []int{3, 0, 0, 2}, raw, 60)
 
 	tableH := listTableHeight(m.hgt, m.width,
 		" Les secrets TOTP créés ici sont réutilisables — la liste apparaît dans le wizard step 7. Suppression libère le secret mais n'invalide pas les licences qui en dépendent.")
 	if tableH < 3 {
 		tableH = 3
 	}
-	tableH /= 2 // reserve half the budget for the detail/QR panel
-	if tableH < 3 {
-		tableH = 3
+	// In two-column mode the detail panel sits BESIDE the list, not below,
+	// so the table can claim the full vertical budget. Pre-fix this divided
+	// the height by 2 unconditionally — leftover from the single-column
+	// stacked layout — leaving the list visibly truncated even when there
+	// was plenty of room next to the detail panel.
+	if !m.isTwoColLayout() {
+		tableH /= 2 // single-col: detail stacks below, share the budget
+		if tableH < 3 {
+			tableH = 3
+		}
 	}
 	if len(raw) == 0 {
 		tableH = 1
 	}
 	m.table.SetHeight(tableH)
-	m.vp.Width = BoxedInner(m.width)
+	m.vp.Width = listInnerW
 	m.vp.Height = tableH
 	if m.view != nil {
 		m.vp.SetContent(m.renderQR())
 	}
+}
+
+// isTwoColLayout returns true when View() will pick the side-by-side
+// listBox + detailBox layout. Single source of truth for rebuildTable
+// and View — both must agree, otherwise column widths mismatch the box
+// they end up inside and the header wraps.
+func (m *totpModel) isTwoColLayout() bool {
+	const minDetailW = 58
+	const minListW = 50
+	return (m.width - 4) >= minListW+2+minDetailW
+}
+
+// listInnerWidth returns the inner-content width of the listBox under
+// the currently-chosen layout, accounting for the box border + padding.
+func (m *totpModel) listInnerWidth() int {
+	totalW := m.width - 4
+	if totalW < 1 {
+		totalW = 1
+	}
+	const minDetailW = 58
+	var listBoxOuterW int
+	if m.isTwoColLayout() {
+		rightW := minDetailW
+		if rightW < totalW*45/100 {
+			rightW = totalW * 45 / 100
+		}
+		listBoxOuterW = totalW - rightW - 2
+	} else {
+		listBoxOuterW = BoxedWidth(m.width)
+	}
+	inner := listBoxOuterW - BoxStyle.GetHorizontalFrameSize() + BoxStyle.GetHorizontalBorderSize()
+	if inner < 10 {
+		inner = 10
+	}
+	return inner
 }
 
 // OnClick handles title-bar hint chips + table-row selection. Header row
@@ -290,17 +337,13 @@ func (m totpModel) View() string {
 		Dim.Render(" créés ici sont réutilisables — la liste apparaît dans le wizard step 7. Suppression libère le secret mais n'invalide pas les licences qui en dépendent.")
 
 	titleLabel := fmt.Sprintf("TOTP secrets (%d)", len(m.rows))
-	// Compute the layout mode + list-box inner width FIRST so titleBar sizes
-	// the hint strip to whatever the list-box can actually fit. Otherwise
-	// the title wraps mid-render and the click hit-test for the table
-	// header lands a row above the real header.
+	// Layout decision is owned by isTwoColLayout() / listInnerWidth() so
+	// rebuildTable and View can never disagree on column widths (the
+	// pre-fix mismatch caused the table header to wrap inside the
+	// listBox while the column-fit assumed the full terminal width).
 	totalW := m.width - 4
-	// QR ASCII for a typical 16-char base32 secret is 53 cells wide. The
-	// detail box adds 2 padding + 2 border, so minDetailW must be ≥ 57 or
-	// lipgloss soft-wraps the QR mid-row and the half-block grid breaks.
 	const minDetailW = 58
-	const minListW = 50
-	twoCol := totalW >= minListW+2+minDetailW
+	twoCol := m.isTwoColLayout()
 	var listBoxOuterW int
 	if twoCol {
 		rightW := minDetailW
@@ -311,7 +354,7 @@ func (m totpModel) View() string {
 	} else {
 		listBoxOuterW = BoxedWidth(m.width)
 	}
-	listInnerW := listBoxOuterW - BoxStyle.GetHorizontalFrameSize() + BoxStyle.GetHorizontalBorderSize()
+	listInnerW := m.listInnerWidth()
 	title := titleBar(m.titleHints, titleLabel, []titleHint{
 		{Key: "↑↓", Label: " nav ", Cmd: func() tea.Cmd { return nil }},
 		{Key: "n", Label: " générer ", Cmd: keyCmd("n")},
