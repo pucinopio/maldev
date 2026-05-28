@@ -161,3 +161,57 @@ func TestWorkflow_ChainClickNavigatesToLicence(t *testing.T) {
 		t.Errorf("after chain click detailTab=%d, want 4 (Chain)", root.licenses.detailTab)
 	}
 }
+
+// TestWorkflow_ChainHitsResetOnLoadingState is the regression guard for the
+// /simplify finding: renderDetailChain previously reset chainHits AFTER the
+// loading / error early returns, so a click landing during the loading
+// state inherited stale hits from the previous (different) chain render.
+// The reset is now at the top of the function — covered here by switching
+// rows mid-render and asserting no stale hits remain.
+func TestWorkflow_ChainHitsResetOnLoadingState(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+	iss, _ := svc.Issuer.Generate(ctx, "lab", "k1", "op")
+	orig, _ := svc.License.Issue(ctx, service.IssueRequest{
+		IssuerID: iss.ID, Subject: "anna",
+		NotAfter: time.Now().Add(24 * time.Hour), Actor: "op",
+	})
+	reissued, _ := svc.License.ReIssue(ctx, orig.Row.ID, service.ReIssueOptions{
+		NotAfter: time.Now().Add(48 * time.Hour), Actor: "op",
+	})
+
+	var m tea.Model = New(svc, nil, SessionReady)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 200, Height: 50})
+	m = driveRune(m, '2')
+	if cmd := ListLicensesCmd(svc); cmd != nil {
+		m, _ = m.Update(cmd())
+	}
+	root := rootOf(t, m)
+	for i, r := range root.licenses.visibleRows() {
+		if r.LicenseUUID == reissued.Row.LicenseUUID {
+			m, _ = m.Update(tableSelectRowMsg{row: i})
+			break
+		}
+	}
+
+	// Open Chain tab + load — populates chainHits.
+	m = driveRune(m, 'C')
+	if cmd := loadLicenseChainCmd(svc, reissued.Row); cmd != nil {
+		m, _ = m.Update(cmd())
+	}
+	_ = m.View()
+	if got := len(rootOf(t, m).licenses.chainHits.hits); got == 0 {
+		t.Fatal("precondition: chainHits should be populated after loading chain")
+	}
+
+	// Force the chain back into "loading" state and re-render. The hits
+	// must be wiped — otherwise an OnClick during the loading window would
+	// dispatch a UUID from the previous chain.
+	root = rootOf(t, m)
+	root.licenses.detailChainLoading = true
+	root.licenses.detailChain = nil
+	_ = root.View() // trigger renderDetailChain via View pipeline
+	if got := len(root.licenses.chainHits.hits); got != 0 {
+		t.Errorf("chainHits not reset during loading state: %d hits remain", got)
+	}
+}

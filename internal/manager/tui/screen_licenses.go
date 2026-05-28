@@ -1229,6 +1229,13 @@ func loadLicenseChainCmd(svc *service.Services, row *ent.License) tea.Cmd {
 // absolute Y of the chain header in m.chainHits.baseY so OnClick can
 // translate. The pointer-struct pattern mirrors chipHits.
 func (m licensesModel) renderDetailChain(row *ent.License) string {
+	// Reset hits BEFORE any early return so a click landing during the
+	// loading/error states cannot dispatch a stale UUID inherited from
+	// the previous chain render. Empty hits = OnClick falls through.
+	if m.chainHits != nil {
+		m.chainHits.hits = m.chainHits.hits[:0]
+	}
+
 	hint := HintKey.Render("[C]") + Dim.Render(" chaîne")
 	header := GlowCyan.Render("Chaîne de succession") + "  " + hint
 
@@ -1237,11 +1244,6 @@ func (m licensesModel) renderDetailChain(row *ent.License) string {
 	}
 	if m.detailChainErr != nil {
 		return header + "\n" + GlowRed.Render("  erreur : "+m.detailChainErr.Error())
-	}
-	// Reset hits — every render rewrites them so an old chain from a
-	// different row doesn't leak through OnClick.
-	if m.chainHits != nil {
-		m.chainHits.hits = m.chainHits.hits[:0]
 	}
 
 	// When chain has not been loaded yet, show the current row so the UUID and
