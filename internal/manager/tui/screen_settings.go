@@ -245,94 +245,142 @@ type settingsSetThemeMsg struct{ idx int } // 1=neon, 2=mono, 3=nord-soft
 type settingsSetArgonMsg struct{ preset setting.DefaultArgonPreset }
 type settingsToggleMsg struct{ key string }
 
-// OnClick implements ScreenMouseClick for the settings screen. It rebuilds
-// the hit map on every call (cheap; settings render is small) and dispatches
-// to the matching action. Y is absolute terminal row; chrome occupies rows
-// 0..3 so the first settings content row is Y=4.
+// OnClick implements ScreenMouseClick for the settings screen. Hit boxes
+// are computed by SCANNING the rendered View() rather than hardcoding row
+// offsets — too many things drift the offsets (toggle-label wrapping on
+// narrow widths, new action lines like [I] import, extra apparence
+// toggles), so any hardcoded mapping eventually goes stale.
 func (m settingsModel) OnClick(x, y, width int) tea.Cmd {
-	h := m.buildHits(width)
-	return h.dispatch(x, y)
-}
-
-// buildHits computes the click regions for every interactive element in the
-// current settings render. Mirrors the layout of renderGrid + box helpers so
-// that clicks land on the same cells the user sees.
-func (m settingsModel) buildHits(width int) hits {
 	if width <= 0 {
 		return nil
 	}
-	colW := (width-1)/2 - 2
-	if colW < 18 {
-		colW = 18
+	// Root passes absolute screen coords; m.View() returns the settings
+	// grid without the chrome rows (tab bar + status). Subtract so the
+	// line index matches what the operator clicked.
+	yLocal := y - ChromeRows
+	lines := strings.Split(m.View(), "\n")
+	if yLocal < 0 || yLocal >= len(lines) {
+		return nil
 	}
-	// Right column starts at colW+3 (left col width = colW+2, then 1-cell gap).
-	rightX := colW + 3
-	rightInnerX := rightX + 2 // border(1) + padding(1)
+	line := lines[yLocal]
 
-	var h hits
+	// Half-width: anything past the gap column belongs to the right pane;
+	// otherwise the left pane.
+	half := width / 2
 
-	// Right column box layout (constant heights per content):
-	//   boxArgonPreset  → 8 rows (top, title, blank, p1, p2, p3, footer, bottom)
-	//   boxBaseDeDonnees→ 10 rows (top, title, blank, chemin, passphrase, blank, [P], [V], [B], bottom)
-	//   boxApparence    → 8 rows (top, title, blank, theme, t1, t2, t3, bottom)
-	argonY := ChromeRows                       // 4
-	baseY := argonY + 8                        // 12
-	apparenceY := baseY + 10                   // 22
-
-	// ── Argon presets (3 clickable rows in argon box) ─────────────────────
-	// Rows: 3 (preset 1), 4 (preset 2), 5 (preset 3) inside the box.
-	presets := []setting.DefaultArgonPreset{
-		setting.DefaultArgonPresetFast,
-		setting.DefaultArgonPresetDefault,
-		setting.DefaultArgonPresetParanoid,
+	// Each entry maps a label substring to the cmd it dispatches. The
+	// `right` bool says which pane the label is expected to live in
+	// (prevents a "rekey" hit on the left pane from a hypothetical box
+	// that mentions the word "rekey").
+	type spec struct {
+		label string
+		right bool
+		make  func() tea.Cmd
 	}
-	for i, p := range presets {
-		p := p
-		h.add(rightInnerX, argonY+3+i, colW-2, 1, func() tea.Cmd {
-			return func() tea.Msg { return settingsSetArgonMsg{preset: p} }
-		})
+	specs := []spec{
+		// Argon presets (right column).
+		{"[1]", true, func() tea.Cmd {
+			return func() tea.Msg { return settingsSetArgonMsg{preset: setting.DefaultArgonPresetFast} }
+		}},
+		{"[2]", true, func() tea.Cmd {
+			return func() tea.Msg { return settingsSetArgonMsg{preset: setting.DefaultArgonPresetDefault} }
+		}},
+		{"[3]", true, func() tea.Cmd {
+			return func() tea.Msg { return settingsSetArgonMsg{preset: setting.DefaultArgonPresetParanoid} }
+		}},
+		// DB actions.
+		{"[P]", true, func() tea.Cmd { return func() tea.Msg { return settingsActionMsg{kind: "rekey"} } }},
+		{"[V]", true, func() tea.Cmd { return func() tea.Msg { return settingsActionMsg{kind: "vacuum"} } }},
+		{"[B]", true, func() tea.Cmd { return func() tea.Msg { return settingsActionMsg{kind: "backup"} } }},
+		{"[I]", true, func() tea.Cmd { return func() tea.Msg { return settingsActionMsg{kind: "restore"} } }},
+		// Apparence (right column). Theme markers live on the same line
+		// so we hit-test by X further down for those. Toggles take a
+		// whole row, so the label-substring match is enough.
+		{"bold_saturated", true, func() tea.Cmd {
+			return func() tea.Msg { return settingsToggleMsg{key: "bold_saturated"} }
+		}},
+		{"comfort_density", true, func() tea.Cmd {
+			return func() tea.Msg { return settingsToggleMsg{key: "comfort_density"} }
+		}},
+		{"timestamps_local", true, func() tea.Cmd {
+			return func() tea.Msg { return settingsToggleMsg{key: "timestamps_local"} }
+		}},
+		// Cycle de vie (left column).
+		{"confirm_quit_with_servers", false, func() tea.Cmd {
+			return func() tea.Msg { return settingsToggleMsg{key: "confirm_quit_with_servers"} }
+		}},
+		{"stop_servers_on_exit", false, func() tea.Cmd {
+			return func() tea.Msg { return settingsToggleMsg{key: "stop_servers_on_exit"} }
+		}},
+		{"auto_start_servers", false, func() tea.Cmd {
+			return func() tea.Msg { return settingsToggleMsg{key: "auto_start_servers"} }
+		}},
 	}
 
-	// ── DB action chips [P] [V] [B] (rows 6, 7, 8 inside base box) ────────
-	actions := []string{"rekey", "vacuum", "backup"}
-	for i, a := range actions {
-		a := a
-		h.add(rightInnerX, baseY+6+i, colW-2, 1, func() tea.Cmd {
-			return func() tea.Msg { return settingsActionMsg{kind: a} }
-		})
+	// Drop ANSI escape sequences from the line so substring matches see
+	// the same bytes the operator sees on screen — without this a styled
+	// "[P]" surrounded by colour escapes wouldn't match the literal "[P]".
+	plain := stripANSI(line)
+	for _, s := range specs {
+		if !strings.Contains(plain, s.label) {
+			continue
+		}
+		// Pane filter: the right pane starts at `half`; anything clicked
+		// strictly before that is on the left.
+		if s.right && x < half {
+			continue
+		}
+		if !s.right && x >= half {
+			continue
+		}
+		return s.make()
 	}
 
-	// ── Theme markers in apparence box (row 3 inside the box) ─────────────
-	// Layout: "thème : ●  [1]  neon     [2]  mono     [3]  nord-soft"
-	// Each marker+label takes ~14 cells; we register 3 overlapping regions
-	// roughly aligned with the rendered widths.
-	const themeStartOffset = 9 // "thème : " is 8 chars + 1 margin
-	themeCellWidth := (colW - 2 - themeStartOffset) / 3
-	if themeCellWidth < 8 {
-		themeCellWidth = 8
+	// Theme markers: the line that contains "thème :" carries [N]/[M]/[O]
+	// at different X positions. Locate each in the plain text and hit-test
+	// against its rendered span.
+	if strings.Contains(plain, "thème :") {
+		themes := []struct {
+			marker string
+			idx    int
+		}{{"[N]", 1}, {"[M]", 2}, {"[O]", 3}}
+		for _, th := range themes {
+			start := strings.Index(plain, th.marker)
+			if start < 0 {
+				continue
+			}
+			// Allow a generous 12-cell hit region after the marker so the
+			// "[N]  neon" label is clickable as one chip.
+			if x >= start && x < start+12 {
+				idx := th.idx
+				return func() tea.Msg { return settingsSetThemeMsg{idx: idx} }
+			}
+		}
 	}
-	for i := 1; i <= 3; i++ {
-		idx := i
-		h.add(rightInnerX+themeStartOffset+(idx-1)*themeCellWidth, apparenceY+3, themeCellWidth, 1, func() tea.Cmd {
-			return func() tea.Msg { return settingsSetThemeMsg{idx: idx} }
-		})
+	return nil
+}
+
+// stripANSI removes SGR escape sequences from s so substring searches see
+// the plain rendered text. lipgloss only emits the `\x1b[...m` form which
+// is what we strip here.
+func stripANSI(s string) string {
+	out := make([]byte, 0, len(s))
+	inEsc := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == 0x1b {
+			inEsc = true
+			continue
+		}
+		if inEsc {
+			if c == 'm' {
+				inEsc = false
+			}
+			continue
+		}
+		out = append(out, c)
 	}
-
-	// ── Cycle-de-vie toggles (left col box #3) ────────────────────────────
-	// Heights: boxDefaultsLicence=8, boxIdentiteOperateur=6 → cycleY = 4+8+6 = 18.
-	// Inside the box, the two persisted toggles sit at row 4 (confirm_quit) and
-	// row 8 (auto_start) — rows 5 and 9 are non-persisted prototypes that we
-	// register as hits-with-noop to acknowledge the click without mutating.
-	leftInnerX := 2 // border(1)+padding(1)
-	cycleY := ChromeRows + 8 + 6 // = 18
-	h.add(leftInnerX, cycleY+4, colW-2, 1, func() tea.Cmd {
-		return func() tea.Msg { return settingsToggleMsg{key: "confirm_quit_with_servers"} }
-	})
-	h.add(leftInnerX, cycleY+8, colW-2, 1, func() tea.Cmd {
-		return func() tea.Msg { return settingsToggleMsg{key: "auto_start_servers"} }
-	})
-
-	return h
+	return string(out)
 }
 
 func (m settingsModel) View() string {

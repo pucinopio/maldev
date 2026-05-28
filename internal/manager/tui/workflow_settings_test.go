@@ -137,3 +137,120 @@ func TestWorkflow_SettingsRestoreActionReachable(t *testing.T) {
 		t.Errorf("restore input overlay title missing; got view: %s", pushed.overlay.View())
 	}
 }
+
+// TestWorkflow_SettingsClicksAllInteractables — operator-reported "toutes
+// les interactions de settings ne sont pas cliquables". Drive an OnClick
+// for each interactive label by locating the label in the rendered View()
+// and asserting the dispatched cmd matches the expected msg type. Covers
+// every toggle, every action, and the theme markers.
+func TestWorkflow_SettingsClicksAllInteractables(t *testing.T) {
+	svc, _ := newTestServices(t)
+	var m tea.Model = New(svc, nil, SessionReady)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 50})
+	m = driveRune(m, '0')
+	for _, msg := range flattenCmd(loadSettingsCmd(svc)) {
+		m, _ = m.Update(msg)
+	}
+	root := rootOf(t, m)
+	view := root.View()
+	lines := strings.Split(view, "\n")
+
+	// findLineX returns (x, y) for the first occurrence of needle (post
+	// ANSI-strip) — the position the operator would click on.
+	findLineX := func(needle string) (int, int) {
+		for y, line := range lines {
+			plain := stripANSI(line)
+			if x := strings.Index(plain, needle); x >= 0 {
+				return x + len(needle)/2, y
+			}
+		}
+		return -1, -1
+	}
+
+	cases := []struct {
+		needle string
+		wantFn func(tea.Msg) bool
+	}{
+		{"[1]", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsSetArgonMsg)
+			return ok && m.preset == "fast"
+		}},
+		{"[2]", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsSetArgonMsg)
+			return ok && m.preset == "default"
+		}},
+		{"[3]", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsSetArgonMsg)
+			return ok && m.preset == "paranoid"
+		}},
+		{"[P]", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsActionMsg)
+			return ok && m.kind == "rekey"
+		}},
+		{"[V]", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsActionMsg)
+			return ok && m.kind == "vacuum"
+		}},
+		{"[B]", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsActionMsg)
+			return ok && m.kind == "backup"
+		}},
+		{"[I]", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsActionMsg)
+			return ok && m.kind == "restore"
+		}},
+		{"confirm_quit_with_servers", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsToggleMsg)
+			return ok && m.key == "confirm_quit_with_servers"
+		}},
+		{"stop_servers_on_exit", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsToggleMsg)
+			return ok && m.key == "stop_servers_on_exit"
+		}},
+		{"auto_start_servers", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsToggleMsg)
+			return ok && m.key == "auto_start_servers"
+		}},
+		{"bold_saturated", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsToggleMsg)
+			return ok && m.key == "bold_saturated"
+		}},
+		{"comfort_density", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsToggleMsg)
+			return ok && m.key == "comfort_density"
+		}},
+		{"timestamps_local", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsToggleMsg)
+			return ok && m.key == "timestamps_local"
+		}},
+		{"[N]", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsSetThemeMsg)
+			return ok && m.idx == 1
+		}},
+		{"[M]", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsSetThemeMsg)
+			return ok && m.idx == 2
+		}},
+		{"[O]", func(msg tea.Msg) bool {
+			m, ok := msg.(settingsSetThemeMsg)
+			return ok && m.idx == 3
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.needle, func(t *testing.T) {
+			x, y := findLineX(tc.needle)
+			if x < 0 {
+				t.Fatalf("label %q not in rendered view", tc.needle)
+			}
+			cmd := root.settings.OnClick(x, y, 144)
+			if cmd == nil {
+				t.Fatalf("OnClick on label %q at (%d,%d) returned nil", tc.needle, x, y)
+			}
+			msg := cmd()
+			if !tc.wantFn(msg) {
+				t.Errorf("OnClick on %q produced wrong msg: %T %+v", tc.needle, msg, msg)
+			}
+		})
+	}
+}
