@@ -360,7 +360,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 
 </details>
 
-<details><summary><strong>examples</strong> — 32 packages</summary>
+<details><summary><strong>examples</strong> — 40 packages</summary>
 
 | Package | Detection | Summary |
 |---|---|---|
@@ -379,6 +379,14 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 | [`examples/license-manager/09-import-and-verify`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/09-import-and-verify) | — | 09-import-and-verify — runnable companion to README.md |
 | [`examples/license-manager/tutorials/01-issue-and-verify`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/tutorials/01-issue-and-verify) | — | _(no doc.go summary)_ |
 | [`examples/license-manager/tutorials/01-issue-and-verify/client`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/tutorials/01-issue-and-verify/client) | — | Tutorial 01 — verifier client |
+| [`examples/license-manager/tutorials/02-bindings-and-verify`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/tutorials/02-bindings-and-verify) | — | _(no doc.go summary)_ |
+| [`examples/license-manager/tutorials/02-bindings-and-verify/client`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/tutorials/02-bindings-and-verify/client) | — | Tutorial 02 — verifier client that collects three evidence pieces at startup: a machine id (from hostid.Composite()), a password (typed by the user, read from --password flag for the E2E demo), and a 6-digit TOTP code (read from --totp) |
+| [`examples/license-manager/tutorials/03-revocation-server`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/tutorials/03-revocation-server) | — | _(no doc.go summary)_ |
+| [`examples/license-manager/tutorials/03-revocation-server/client`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/tutorials/03-revocation-server/client) | — | Tutorial 03 — verifier client that fetches the CRL from a running revocation server before deciding whether to accept the licence |
+| [`examples/license-manager/tutorials/04-totp-authenticator`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/tutorials/04-totp-authenticator) | — | _(no doc.go summary)_ |
+| [`examples/license-manager/tutorials/04-totp-authenticator/client`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/tutorials/04-totp-authenticator/client) | — | Tutorial 04 — verifier that requires a 6-digit TOTP code |
+| [`examples/license-manager/tutorials/05-sealed-payload`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/tutorials/05-sealed-payload) | — | _(no doc.go summary)_ |
+| [`examples/license-manager/tutorials/05-sealed-payload/client`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/tutorials/05-sealed-payload/client) | — | Tutorial 05 — verifier that decrypts a sealed payload after the licence check passes |
 | [`examples/packer-shellcode`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/packer-shellcode) | — | packer-shellcode — runnable companion to Mode 6 of docs/techniques/pe/packer.md |
 | [`examples/packer-tour`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/packer-tour) | — | packer-tour — runnable companion to docs/examples/upx-style-packer.md |
 | [`examples/pe-modify`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/pe-modify) | — | pe-modify — panorama 11 of the doc-truth audit |
