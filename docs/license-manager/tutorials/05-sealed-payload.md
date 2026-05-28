@@ -1,8 +1,16 @@
 # Tutorial 05 — Sealed payload (X25519)
 
-The licence is signed in the open, but a portion of its body is
-encrypted to a single recipient. Only that recipient's private
-key can read it.
+> **Objectif** — embed a per-licensee secret inside a licence so
+> that only the targeted recipient's private key can read it.
+> **Concepts** — X25519 sealed box · `seal.Open` · ciphertext is
+> bound to the recipient public key, not just the licence
+> **Attendu** — holder of the correct private key prints the
+> plaintext; any other key → `seal.Open` errors and the binary
+> exits 1.
+
+The licence body is signed in the open, but a portion is
+encrypted to a single recipient — only their private key reads
+it.
 
 ## In the TUI
 

@@ -1,5 +1,12 @@
 # Tutorial 02 — Bindings (machine + password + TOTP)
 
+> **Objectif** — tie a licence to three independent pieces of
+> evidence so a leaked file is useless without all of them.
+> **Concepts** — AND semantics · `WithMachineID` · `WithPassword`
+> · `WithTOTPCode`
+> **Attendu** — client succeeds only when **all three** evidences
+> match; drop one or change the machine ID → exit 1.
+
 ## In the TUI
 
 1. `2` → Licences. `n` → wizard.

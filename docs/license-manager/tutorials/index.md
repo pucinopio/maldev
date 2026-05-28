@@ -6,23 +6,26 @@ Each tutorial is two things:
 2. **The client program** — the Go code your binary runs to use
    the licence the TUI produced.
 
-Nothing else. Each ships a CI-tested example so the documented
-keys + code stay green.
+Each page opens with **Objectif / Concepts / Attendu** so you know
+what to expect before pressing a single key.
 
-| # | Scenario | TUI action | Client code |
+Read them in order — each builds on the last:
+
+| # | Scenario | Concept introduced | Client API |
 |---|---|---|---|
-| [01](./01-issue-and-verify.md) | Issue a basic licence, verify it in a binary | Wizard → defaults → confirm | `license.Verify` |
-| [02](./02-bindings-and-verify.md) | Bind a licence to machine + password + TOTP | Wizard → bindings ON | `Verify` with `WithMachineID`, `WithPassword`, `WithTOTPCode` |
-| [03](./03-revocation-server.md) | Start the CRL server, client polls it | Servers tab → start revocation | `Verify` with `WithRevocation(HTTPSource)` |
-| [04](./04-totp-authenticator.md) | Generate a TOTP, the user types the code | TOTP tab → `[n]` → `[Q]` to share QR | `Verify` with `WithTOTPCode` |
-| [05](./05-sealed-payload.md) | Encrypt a payload for one recipient only | Recipients tab → `[n]` → wizard step 2 | `seal.Open` with the recipient's private key |
+| [01](./01-issue-and-verify.md) | Issue a basic licence, verify it | Ed25519 signing, trust chain | `license.Verify` |
+| [02](./02-bindings-and-verify.md) | Machine + password + TOTP bindings | Evidence AND semantics | `WithMachineID`, `WithPassword`, `WithTOTPCode` |
+| [03](./03-revocation-server.md) | Manager publishes a CRL, client polls it | Live revocation, cache fallback | `WithRevocation(HTTPSource)` |
+| [04](./04-totp-authenticator.md) | Hand off a TOTP secret via QR code | Rolling code, clock-skew window | `WithTOTPCode` |
+| [05](./05-sealed-payload.md) | Encrypt a payload to one recipient | X25519 sealed box, per-licensee secret | `seal.Open` |
 
-Tutorials 04 and 05 land in the next batch with the same shape.
+Each page ships a CI-tested example so the documented keys + code
+can't silently drift from reality.
 
 ## Running them
 
 ```bash
-# Render every tape into vhs/out/*.gif:
+# Render every tape into docs/.../tutorials/assets/*.gif:
 go run ./cmd/tui-gif vhs/tui-gif/tutorial-NN-*.tape
 
 # Run every E2E (drives tape + client together):

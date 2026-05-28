@@ -1,5 +1,12 @@
 # Tutorial 04 — TOTP authenticator handoff
 
+> **Objectif** — mint a TOTP secret, hand it off via QR code, then
+> require the rolling 6-digit code at every binary launch.
+> **Concepts** — RFC 6238 · ±30 s clock-skew window · authenticator
+> apps (Google Auth / Authy / 1Password / Yubico)
+> **Attendu** — the live code is accepted; a bogus `000000` is
+> rejected with exit 1.
+
 ## In the TUI
 
 1. `8` → TOTP screen.

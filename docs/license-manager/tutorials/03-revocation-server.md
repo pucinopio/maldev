@@ -1,5 +1,13 @@
 # Tutorial 03 — Revocation server + client that polls it
 
+> **Objectif** — run the signed-CRL HTTP server in the TUI and have
+> a client honour revocations the operator publishes live.
+> **Concepts** — CRL · monotonic sequence (downgrade defence) ·
+> `revoke.HTTPSource` · on-disk cache fallback
+> **Attendu** — client accepts the licence; after the operator
+> presses `r`, the next poll rejects it. With the manager offline,
+> the cached CRL still enforces the last known revocations.
+
 ## In the TUI
 
 1. `7` → Servers screen.

@@ -1,5 +1,11 @@
 # Tutorial 01 — Issue a licence, verify it in your binary
 
+> **Objectif** — produce a signed licence file and run a Go binary
+> that accepts it.
+> **Concepts** — Ed25519 signature · issuer key · `license.Verify`
+> **Attendu** — the client prints `[ok] licence verified` with the
+> subject; flipping any byte of the PEM makes it exit 1.
+
 ## In the TUI
 
 1. `2` → Licences screen.
