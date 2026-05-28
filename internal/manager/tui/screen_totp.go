@@ -186,6 +186,18 @@ func (m totpModel) Update(msg tea.Msg) (totpModel, tea.Cmd) {
 					"Supprimer le secret TOTP \""+label+"\" ?\nLes licences déjà émises avec ce secret continueront à valider.",
 					"supprimer", "annuler", true)}
 			}
+		case "Q":
+			// Open the QR popup. The QR ASCII is wider than most detail
+			// panels can accommodate (~53 cells) so showing it inline
+			// historically wrapped each row and pushed the listBox off
+			// screen. The popup is centred over the underlying view and
+			// can never affect the table layout.
+			if m.view == nil {
+				return m, nil
+			}
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newTOTPQRPopup(m.view)}
+			}
 		case "E":
 			if m.view == nil || m.view.QRImagePNG == nil {
 				return m, nil
@@ -303,6 +315,7 @@ func (m totpModel) View() string {
 	title := titleBar(m.titleHints, titleLabel, []titleHint{
 		{Key: "↑↓", Label: " nav ", Cmd: func() tea.Cmd { return nil }},
 		{Key: "n", Label: " générer ", Cmd: keyCmd("n")},
+		{Key: "Q", Label: " voir QR ", Cmd: keyCmd("Q")},
 		{Key: "E", Label: " export QR PNG ", Cmd: keyCmd("E")},
 		{Key: "P", Label: " export PDF ", Cmd: keyCmd("P")},
 		{Key: "x/D", Label: " supprimer ", Cmd: keyCmd("D")},
@@ -341,27 +354,33 @@ func (m totpModel) View() string {
 
 func (m totpModel) renderDetailSide(w int) string {
 	if m.view == nil {
-		title := Dim.Render("QR code · ") + Dim.Render("aucune sélection")
+		title := Dim.Render("Détail TOTP · ") + Dim.Render("aucune sélection")
 		hint := Dim.Render("crée un secret avec ") + HintKey.Render("[n]") +
 			Dim.Render(" ou sélectionne une ligne.")
 		return BoxStyle.Width(w).Render(
 			lipgloss.JoinVertical(lipgloss.Left, title, "", hint),
 		)
 	}
-	title := Dim.Render("QR · ") + GlowCyan.Render(m.view.AccountLabel)
-	// render QR at its natural width inside a padding wrapper rather
-	// than inside a Width()-constrained box. Width() wraps every line to w
-	// cells which shifts the QR half-block art to the right when the box
-	// border+padding overhead is counted against the inner text budget.
-	// Use Padding(0,1) for a thin visual frame without a hard width constraint.
-	qr := m.view.QRImageASCII
-	hint := HintKey.Render("[E]") + Dim.Render(" PNG  ·  ") +
-		Dim.Render("secret: ") + Mute.Render(m.view.Secret)
-	inner := lipgloss.JoinVertical(lipgloss.Left, title, "", qr, "", hint)
-	// use the same BoxFocused style but without Width() override so the
-	// two columns stay flush — lipgloss JoinHorizontal aligns tops, not heights,
-	// so we rely on the parent caller (View) to equalise heights if needed.
-	return BoxFocused.Width(w).Render(inner)
+	// The QR ASCII (53 cells wide for a typical Medium-quality bitmap) was
+	// previously inlined here. When the detail box happened to be narrower
+	// than the QR, lipgloss wrapped each row mid-grid which broke the
+	// half-block alignment AND pushed the adjacent listBox off-screen.
+	// Operator complaint: "l'affichage du QRCODE décale tout l'affichage".
+	// The QR is now reachable via [Q] which opens a centred modal that
+	// can never affect the underlying layout.
+	title := Dim.Render("Détail TOTP · ") + GlowCyan.Render(m.view.AccountLabel)
+	rows := []string{title, ""}
+	rows = append(rows,
+		Dim.Render("secret: ")+Mute.Render(m.view.Secret),
+		Dim.Render("compte: ")+Base.Render(m.view.AccountLabel),
+		Dim.Render("otpauth: ")+Mute.Render(m.view.OtpauthURI),
+	)
+	rows = append(rows, "",
+		HintKey.Render("[Q]")+Dim.Render(" voir le QR  ·  ")+
+			HintKey.Render("[E]")+Dim.Render(" export PNG  ·  ")+
+			HintKey.Render("[P]")+Dim.Render(" export PDF"),
+	)
+	return BoxStyle.Width(w).Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 }
 
 // Hints implements ScreenWithHints — drives the bottom status bar.

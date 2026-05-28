@@ -7,7 +7,7 @@
 mais n'invalide pas les licences qui en dépendent.                                                                      
                                                                                                                         
 ┌────────────────────────────────────────────────────────┐  ┌──────────────────────────────────────────────────────────┐
-│ TOTP secrets (0)            [↑↓]  nav ·  [n]  générer  │  │ QR code · aucune sélection                               │
+│ TOTP secrets (0)            [↑↓]  nav ·  [n]  générer  │  │ Détail TOTP · aucune sélection                           │
 │  LABEL                                                 │  │                                                          │
 │ ID  CREATED  BOUND TO                                  │  │ crée un secret avec  [n]  ou sélectionne une ligne.      │
 │                                                        │  └──────────────────────────────────────────────────────────┘
