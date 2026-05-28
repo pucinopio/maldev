@@ -17,14 +17,14 @@ architecture, then come back here for working code.
 | # | Example | What it shows | Concepts |
 |---|---|---|---|
 | 01 | [`01-issue-basic`](./01-issue-basic/) | Smallest possible issue → export → verify round-trip | [Issuer](../../docs/license-manager/concepts/issuer.md) |
-| 02 | `02-issue-with-bindings` *(coming)* | Machine ID + password + TOTP binding chain | Bindings |
-| 03 | `03-revoke-and-crl` *(coming)* | Mark a licence revoked, sign + publish the CRL | CRL |
-| 04 | `04-reissue` *(coming)* | Supersede a licence with a new validity window | Audit chain |
-| 05 | `05-hard-delete-roundtrip` *(coming)* | Export → delete → re-import without UUID conflict | — |
-| 06 | `06-totp-secret` *(coming)* | Issue a TOTP binding, render QR + otpauth URI | TOTP |
+| 02 | [`02-issue-with-bindings`](./02-issue-with-bindings/) | Machine ID + password + TOTP binding chain | [Bindings](../../docs/license-manager/concepts/bindings.md) |
+| 03 | [`03-revoke-and-crl`](./03-revoke-and-crl/) | Mark a licence revoked, sign + publish the CRL | [CRL](../../docs/license-manager/concepts/crl.md) |
+| 04 | [`04-reissue`](./04-reissue/) | Supersede a licence with a new validity window | [Audit chain](../../docs/license-manager/concepts/audit-chain.md) |
+| 05 | [`05-hard-delete-roundtrip`](./05-hard-delete-roundtrip/) | Export → delete → re-import without UUID conflict | — |
+| 06 | [`06-totp-secret`](./06-totp-secret/) | Issue a TOTP binding, render QR + otpauth URI | [Bindings](../../docs/license-manager/concepts/bindings.md) |
 | 07 | `07-sealed-payload` *(coming)* | Encrypt a JSON payload for one recipient only | Sealed payload |
 | 08 | `08-identity-pin` *(coming)* | Bind a licence to a host identity SHA-256 | Identity pin |
-| 09 | `09-import-and-verify` *(coming)* | Take a PEM from another instance and verify it | KEK passphrase |
+| 09 | [`09-import-and-verify`](./09-import-and-verify/) | Take a PEM from another instance and verify it | [KEK passphrase](../../docs/license-manager/concepts/kek-passphrase.md) |
 | 10 | `10-http-servers` *(coming)* | Start the revocation / heartbeat / probe servers | — |
 | 11 | `11-backup-and-restore` *(coming)* | Snapshot the encrypted DB and restore it elsewhere | — |
 

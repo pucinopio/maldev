@@ -150,7 +150,16 @@
 # License manager
 
 - [Concepts](license-manager/concepts.md)
+  - [Concept index](license-manager/concepts/README.md)
+  - [Issuer](license-manager/concepts/issuer.md)
+  - [Bindings](license-manager/concepts/bindings.md)
+  - [CRL](license-manager/concepts/crl.md)
+  - [Audit chain](license-manager/concepts/audit-chain.md)
+  - [KEK & passphrase](license-manager/concepts/kek-passphrase.md)
 - [Cookbook](license-manager/workflow.md)
+- [Tutorials (TUI + client)](license-manager/tutorials/index.md)
+  - [01 — Issue & verify in your binary](license-manager/tutorials/01-issue-and-verify.md)
+- [Runnable examples](license-manager/examples/index.md)
 - [Configuration](license-manager/configuration.md)
 - [TUI widget system](license-manager/tui-widgets.md)
 - [TUI new-license wizard](license-manager/tui-wizard.md)

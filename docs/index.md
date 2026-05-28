@@ -360,7 +360,7 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 
 </details>
 
-<details><summary><strong>examples</strong> — 24 packages</summary>
+<details><summary><strong>examples</strong> — 32 packages</summary>
 
 | Package | Detection | Summary |
 |---|---|---|
@@ -371,6 +371,14 @@ _Each area is collapsed by default — click to expand. Detection level is the c
 | [`examples/inject-evasive`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/inject-evasive) | — | inject-evasive — panorama 2 of the doc-truth audit |
 | [`examples/kernel-byovd`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/kernel-byovd) | — | kernel-byovd — panorama 16 of the doc-truth audit |
 | [`examples/license-manager/01-issue-basic`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/01-issue-basic) | — | 01-issue-basic — runnable companion to examples/license-manager/README.md |
+| [`examples/license-manager/02-issue-with-bindings`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/02-issue-with-bindings) | — | 02-issue-with-bindings — runnable companion to README.md |
+| [`examples/license-manager/03-revoke-and-crl`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/03-revoke-and-crl) | — | 03-revoke-and-crl — runnable companion to README.md |
+| [`examples/license-manager/04-reissue`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/04-reissue) | — | 04-reissue — runnable companion to README.md |
+| [`examples/license-manager/05-hard-delete-roundtrip`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/05-hard-delete-roundtrip) | — | 05-hard-delete-roundtrip — runnable companion to README.md |
+| [`examples/license-manager/06-totp-secret`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/06-totp-secret) | — | 06-totp-secret — runnable companion to README.md |
+| [`examples/license-manager/09-import-and-verify`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/09-import-and-verify) | — | 09-import-and-verify — runnable companion to README.md |
+| [`examples/license-manager/tutorials/01-issue-and-verify`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/tutorials/01-issue-and-verify) | — | _(no doc.go summary)_ |
+| [`examples/license-manager/tutorials/01-issue-and-verify/client`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/license-manager/tutorials/01-issue-and-verify/client) | — | Tutorial 01 — verifier client |
 | [`examples/packer-shellcode`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/packer-shellcode) | — | packer-shellcode — runnable companion to Mode 6 of docs/techniques/pe/packer.md |
 | [`examples/packer-tour`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/packer-tour) | — | packer-tour — runnable companion to docs/examples/upx-style-packer.md |
 | [`examples/pe-modify`](https://pkg.go.dev/github.com/oioio-space/maldev/examples/pe-modify) | — | pe-modify — panorama 11 of the doc-truth audit |
