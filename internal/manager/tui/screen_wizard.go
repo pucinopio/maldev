@@ -189,10 +189,12 @@ func (m wizardModel) Update(msg tea.Msg) (wizardModel, tea.Cmd) {
 			// SIGINT key.
 			return m, func() tea.Msg { return WizardDoneMsg{Issued: nil} }
 		case "esc":
-			if m.step > wizStepIdentity {
-				return m.retreat()
-			}
-			// On step 1 (no progress yet) esc discards.
+			// Esc always discards and closes the wizard, matching the
+			// standard modal-overlay convention. Operators expecting a
+			// retreat-one-step gesture have ⇧Tab / ctrl+left for that.
+			// The previous esc-retreats-on-non-first-step behaviour made
+			// it impossible to exit the wizard with esc without paging
+			// all the way back to step 1.
 			return m, func() tea.Msg { return WizardDoneMsg{Issued: nil} }
 		case "ctrl+right", "ctrl+n":
 			// Explicit "next step" — skip the current step with whatever
@@ -426,10 +428,26 @@ func (m wizardModel) View() string {
 	}
 	cur := stepIdx + 1 // 1-based for display
 
+	// Effective usable width: the wizard renders INSIDE a Modal that adds
+	// border(1) + padding(1,2) on each side → 6 cells horizontal frame, and
+	// wizardOverlay.View() sizes the Modal to model.width-6, so the actual
+	// content area is m.width - 12 cells wide. Rendering at m.width without
+	// this correction made the progress bar overflow past the modal and
+	// shifted the sidebar by however many wrap-lines the strip produced —
+	// which is why sidebar step clicks landed on the wrong rows.
+	usableW := m.width - 12
+	if usableW < 60 {
+		usableW = 60
+	}
+
 	// ── Progress strip ────────────────────────────────────────────────────
 	meta := wizardStepMetas[stepIdx]
+	title := "NOUVELLE LICENCE"
+	if m.state.IsReissue {
+		title = "RÉ-ÉMETTRE LICENCE"
+	}
 	stripLeft := lipgloss.JoinHorizontal(lipgloss.Top,
-		GlowMagent.Render("NOUVELLE LICENCE"),
+		GlowMagent.Render(title),
 		Dim.Render("  étape  "),
 		Base.Render(fmt.Sprintf("%d/%d", cur, total)),
 		Dim.Render("  ·  "),
@@ -439,16 +457,20 @@ func (m wizardModel) View() string {
 		HintKey.Render("Tab"), HintText.Render(" suivant  "),
 		HintKey.Render("⇧Tab"), HintText.Render(" précédent  "),
 		HintKey.Render("1-8"), HintText.Render(" aller à  "),
-		HintKey.Render("esc"), HintText.Render(" précédent / annuler "),
-		HintKey.Render("ctrl+c"), HintText.Render(" discarder"),
+		HintKey.Render("esc"), HintText.Render(" quitter  "),
+		HintKey.Render("ctrl+←"), HintText.Render(" reculer"),
 	)
+	spacerW := usableW - lipgloss.Width(stripLeft) - lipgloss.Width(stripHints) - 2
+	if spacerW < 1 {
+		spacerW = 1
+	}
 	strip := lipgloss.JoinHorizontal(lipgloss.Top,
 		stripLeft,
-		lipgloss.NewStyle().Width(m.width-lipgloss.Width(stripLeft)-lipgloss.Width(stripHints)-2).Render(""),
+		lipgloss.NewStyle().Width(spacerW).Render(""),
 		stripHints,
 	)
 
-	bar := renderProgressBar(m.width, cur, total)
+	bar := renderProgressBar(usableW, cur, total)
 
 	progressStrip := lipgloss.JoinVertical(lipgloss.Left, strip, bar)
 
@@ -514,7 +536,7 @@ func (m wizardModel) View() string {
 		stepBody = m.stepReview.View()
 	}
 
-	contentW := m.width - sideW - 4
+	contentW := usableW - sideW - 4
 	if contentW < 20 {
 		contentW = 20
 	}
@@ -522,7 +544,7 @@ func (m wizardModel) View() string {
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, content)
 
-	hints := renderStatusBar([]string{"Tab", "next", "⇧Tab", "prev", "1-8", "goto", "esc", "cancel"}, m.width)
+	hints := renderStatusBar([]string{"Tab", "next", "⇧Tab", "prev", "1-8", "goto", "esc", "quit"}, usableW)
 	return lipgloss.JoinVertical(lipgloss.Left,
 		progressStrip,
 		body,

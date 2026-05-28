@@ -964,21 +964,26 @@ func TestE2E_WizardAdvancesThroughAllSteps(t *testing.T) {
 	}
 }
 
-// TestE2E_WizardEscRetreats covers Esc → back navigation across steps.
-func TestE2E_WizardEscRetreats(t *testing.T) {
-	wm := newWizardModel(nil)
-	wm, _ = wm.Update(wizard.IdentityChosenMsg{IssuerID: uuid.New().String()})
-	if wm.step != wizStepRecipient {
-		t.Fatalf("setup: step = %d, want %d", wm.step, wizStepRecipient)
-	}
-	wm, _ = wm.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if wm.step != wizStepIdentity {
-		t.Fatalf("after Esc, step = %d, want wizStepIdentity (%d)", wm.step, wizStepIdentity)
-	}
-	// Esc on first step is a no-op.
-	wm, _ = wm.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if wm.step != wizStepIdentity {
-		t.Fatalf("Esc on first step must stay, got %d", wm.step)
+// TestE2E_WizardEscQuitsAtAnyStep — Esc now closes the wizard regardless of
+// the current step (matches the standard modal-overlay convention). The
+// previous "retreats one step" behaviour made it impossible to exit the
+// wizard without paging all the way back to step 1; operator complaint:
+// "la touche echap ne fait pas quitter le workflow".
+func TestE2E_WizardEscQuitsAtAnyStep(t *testing.T) {
+	for _, startStep := range []wizardStep{wizStepIdentity, wizStepRecipient, wizStepValidity, wizStepReview} {
+		wm := newWizardModel(nil)
+		wm.step = startStep
+		_, cmd := wm.Update(tea.KeyMsg{Type: tea.KeyEsc})
+		if cmd == nil {
+			t.Fatalf("Esc at step %d produced no cmd; expected WizardDoneMsg", startStep)
+		}
+		done, ok := cmd().(WizardDoneMsg)
+		if !ok {
+			t.Fatalf("Esc at step %d produced %T, want WizardDoneMsg", startStep, cmd())
+		}
+		if done.Issued != nil {
+			t.Errorf("Esc at step %d emitted Issued=%v, want nil (discard)", startStep, done.Issued)
+		}
 	}
 }
 
