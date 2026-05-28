@@ -311,10 +311,16 @@ func (svc *LicenseService) Delete(ctx context.Context, id uuid.UUID, actor strin
 		}
 		// Only(ctx) returns NotFoundError when no revocation exists — that's
 		// the common path for non-revoked licences and is silently absorbed.
-		if rev, err := row.QueryRevocation().Only(ctx); err == nil {
+		// Other errors (DB timeout, etc.) MUST bubble up: otherwise a
+		// transient failure would skip the revocation delete, succeed at the
+		// License delete, and leave an orphaned Revocation row in the CRL.
+		switch rev, err := row.QueryRevocation().Only(ctx); {
+		case err == nil:
 			if err := tx.Revocation.DeleteOneID(rev.ID).Exec(ctx); err != nil {
 				return fmt.Errorf("delete revocation: %w", err)
 			}
+		case !ent.IsNotFound(err):
+			return fmt.Errorf("query revocation: %w", err)
 		}
 		if err := tx.License.DeleteOneID(id).Exec(ctx); err != nil {
 			return fmt.Errorf("delete license: %w", err)
@@ -341,11 +347,12 @@ func (svc *LicenseService) Delete(ctx context.Context, id uuid.UUID, actor strin
 // fields so an operator can tweak any subset (typically NotAfter alone)
 // without having to re-supply the rest.
 type ReIssueOptions struct {
-	NotAfter time.Time
-	Features []string        // nil = inherit
-	Audience []string        // nil = inherit
-	Payload  json.RawMessage // nil = inherit
-	Actor    string
+	NotBefore time.Time       // zero = inherit
+	NotAfter  time.Time       // zero = inherit
+	Features  []string        // nil = inherit
+	Audience  []string        // nil = inherit
+	Payload   json.RawMessage // nil = inherit
+	Actor     string
 }
 
 // ReIssue creates a new licence from the original's data, applying the
@@ -377,6 +384,10 @@ func (svc *LicenseService) ReIssue(ctx context.Context, originalID uuid.UUID, op
 	if err != nil {
 		return nil, err
 	}
+	notBefore := opts.NotBefore
+	if notBefore.IsZero() {
+		notBefore = parsed.NotBefore
+	}
 	notAfter := opts.NotAfter
 	if notAfter.IsZero() {
 		notAfter = parsed.NotAfter
@@ -397,7 +408,7 @@ func (svc *LicenseService) ReIssue(ctx context.Context, originalID uuid.UUID, op
 		IssuerID:     issuerRow.ID,
 		Subject:      parsed.Subject,
 		AudienceList: audience,
-		NotBefore:    parsed.NotBefore,
+		NotBefore:    notBefore,
 		NotAfter:     notAfter,
 		Bindings:     binds,
 		Features:     features,

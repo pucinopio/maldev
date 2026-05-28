@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -582,6 +583,15 @@ func openReissueWizardCmd(svc *service.Services, original *ent.License) tea.Cmd 
 			Audience:   strings.Join(original.Audience, ","),
 			Features:   original.Features,
 			FreeFields: map[string]string{},
+		}
+		// Resolve the issuer behind the original licence so the Review screen
+		// shows its UUID instead of "—" at the most critical confirmation step.
+		// Service-layer ReIssue resolves the issuer from origID independently,
+		// so this is a display fix; functional correctness is unaffected.
+		if svc != nil {
+			if iss, err := svc.Store.Client.License.QueryIssuer(original).Only(context.Background()); err == nil {
+				state.IssuerID = iss.ID.String()
+			}
 		}
 		// Inspect the PEM for the payload bytes — they aren't carried on
 		// the row in plaintext (PayloadKind tracks presence, the PEM holds

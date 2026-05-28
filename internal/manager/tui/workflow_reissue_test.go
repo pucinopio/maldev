@@ -83,7 +83,7 @@ func TestWorkflow_ReissueWizardEditsValidity(t *testing.T) {
 
 	// Review → Issue. Press 'enter' on the focused review step; drain the
 	// returned cmd to surface the IssueResultMsg.
-	mm, cmd = mm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("enter")})
+	mm, cmd = mm.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	for _, msg := range flattenCmd(cmd) {
 		mm, _ = mm.Update(msg)
 	}

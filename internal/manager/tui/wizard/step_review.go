@@ -117,9 +117,10 @@ func (s *StepReview) issueCmd() tea.Cmd {
 				return IssueResultMsg{Err: fmt.Errorf("invalid original id: %w", err)}
 			}
 			opts := service.ReIssueOptions{
-				NotAfter: st.NotAfter,
-				Actor:    "operator",
-				Payload:  st.PayloadCleartext,
+				NotBefore: st.NotBefore,
+				NotAfter:  st.NotAfter,
+				Actor:     "operator",
+				Payload:   st.PayloadCleartext,
 			}
 			// Audience: csv → []string. Empty input means "clear the audience"
 			// during a re-issue (operator intent), so we explicitly assign an

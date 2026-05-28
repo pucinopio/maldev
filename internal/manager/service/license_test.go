@@ -498,6 +498,25 @@ func TestLicenseReIssueOverrides(t *testing.T) {
 		}
 	})
 
+	t.Run("NotBefore override", func(t *testing.T) {
+		lic, origID, parsed := setup(t)
+		want := time.Now().Add(-7 * 24 * time.Hour).Truncate(time.Second)
+		out, err := lic.ReIssue(context.Background(), origID, ReIssueOptions{
+			NotBefore: want, Actor: "op",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _ := lic.Inspect(out.PEM)
+		if !got.NotBefore.Truncate(time.Second).Equal(want) {
+			t.Errorf("NotBefore = %v, want %v", got.NotBefore, want)
+		}
+		// NotAfter must still inherit when only NotBefore is overridden.
+		if !got.NotAfter.Truncate(time.Second).Equal(parsed.NotAfter.Truncate(time.Second)) {
+			t.Errorf("NotAfter drifted: got %v, want inherited %v", got.NotAfter, parsed.NotAfter)
+		}
+	})
+
 	t.Run("zero options inherit everything", func(t *testing.T) {
 		lic, origID, parsed := setup(t)
 		out, err := lic.ReIssue(context.Background(), origID, ReIssueOptions{Actor: "op"})
@@ -505,14 +524,17 @@ func TestLicenseReIssueOverrides(t *testing.T) {
 			t.Fatal(err)
 		}
 		got, _ := lic.Inspect(out.PEM)
+		if !got.NotBefore.Truncate(time.Second).Equal(parsed.NotBefore.Truncate(time.Second)) {
+			t.Errorf("NotBefore not inherited")
+		}
 		if !got.NotAfter.Truncate(time.Second).Equal(parsed.NotAfter.Truncate(time.Second)) {
 			t.Errorf("NotAfter not inherited")
 		}
 		if !sameStringSlice(got.Features, parsed.Features) {
-			t.Errorf("Features not inherited")
+			t.Errorf("Features not inherited: got %v want %v", got.Features, parsed.Features)
 		}
 		if !sameStringSlice(got.Audience, parsed.Audience) {
-			t.Errorf("Audience not inherited")
+			t.Errorf("Audience not inherited: got %v want %v", got.Audience, parsed.Audience)
 		}
 		if string(got.Payload) != string(parsed.Payload) {
 			t.Errorf("Payload not inherited")
