@@ -8,7 +8,7 @@ retraitées (retired).
                                                                                                                         
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Issuer keys Ed25519 (0)                   [↑↓]  nav ·  [d]  détail ·  [n]  générer ·  [i]  importer ·  [a]  activer  │
-│  ●  KEYID                              NAME                                              STATUS  CREATED  #SIGNED    │
+│     KEYID                              NAME                                              STATUS  CREATED  #SIGNED    │
 │                                                                                                                      │
 │                                                                                                                      │
 │                                     aucune clé d'émission — n pour créer la première                                 │

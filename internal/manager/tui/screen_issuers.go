@@ -72,7 +72,11 @@ type issuersModel struct {
 
 func newIssuersModel(svc *service.Services) issuersModel {
 	cols := []table.Column{
-		{Title: "●", Width: 2},
+		// First column is the active-issuer marker. Header is blank so the
+		// operator doesn't mistake the column title for a row marker — the
+		// dot character on the active row is the only one in this column,
+		// distinct from any decorative header glyph.
+		{Title: " ", Width: 3},
 		{Title: "KEYID", Width: 20},
 		{Title: "NAME", Width: 24},
 		{Title: "STATUS", Width: 10},
@@ -265,11 +269,16 @@ func (m *issuersModel) selectedRow() *ent.Issuer {
 func (m *issuersModel) rebuildTable() {
 	raw := make([][]string, 0, len(m.rows))
 	for _, r := range m.rows {
-		// Green dot in first column identifies the single active signing key at
-		// a glance without reading the STATUS column.
-		dot := "  "
+		// Active-issuer marker. The bubbles/table Selected style forces its
+		// own foreground over cell-level colours, so when the cursor sits
+		// on the active row a coloured "●" becomes indistinguishable from
+		// the header "●" (DS-I03 follow-up). We use a directional arrow
+		// "▶" — recognisable even when the colour is overridden, and the
+		// glyph itself differs from any header convention — and pair it
+		// with a leading space so the column has a stable 2-cell footprint.
+		dot := "   "
 		if r.Active {
-			dot = GlowGreen.Render("●")
+			dot = " " + GlowGreen.Render("▶") + " "
 		}
 		status := "inactive"
 		if r.Active {

@@ -61,6 +61,11 @@ at row 0 vs row N, narrow vs wide window). Mismatch → spec fails.
       `dashboard.refresh()` so the active-key tile updates without navigation.
 - [x] **DS-I03** — green-dot indicator column added. First column `●` width=2,
       renders `GlowGreen.Render("●")` for active issuer, blank for others.
+- [x] **DS-I03 follow-up** — original `●` glyph confused with column header
+      and lost its green colour on the selected row (bubbles/table's Selected
+      style overrides cell foreground). Marker swapped to `▶` and header
+      blanked so the active row remains distinguishable even without colour.
+      Guard: `TestLive_IssuersActiveRowMarker`.
 - [x] **DS-I04** — label unified to `retirer` everywhere (title-bar hint,
       detail panel actions). `retraiter` was the stale value.
 

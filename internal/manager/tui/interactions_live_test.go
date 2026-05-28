@@ -1965,9 +1965,13 @@ func TestLive_IssuerActivate_DashboardRefreshed(t *testing.T) {
 // Session 7 — DS-I03: green dot in issuers table for active row
 // ─────────────────────────────────────────────────────────────────────────────
 
-// TestLive_IssuersGreenDot_ActiveRow verifies that the active issuer's first
-// table column contains the green dot "●" and inactive rows do not.
-func TestLive_IssuersGreenDot_ActiveRow(t *testing.T) {
+// TestLive_IssuersActiveRowMarker verifies that the active issuer's first
+// table column contains the active arrow "▶" and inactive rows do not.
+// The original "●" was easy to miss because (a) it matched the column
+// header symbol and (b) bubbles/table's Selected style overrode the green
+// foreground on the cursor row, making active+selected indistinguishable.
+// The arrow stays distinctive even when colour is stripped.
+func TestLive_IssuersActiveRowMarker(t *testing.T) {
 	active := fakeIssuer()
 	active.Active = true
 	inactive := fakeIssuer()
@@ -1981,12 +1985,18 @@ func TestLive_IssuersGreenDot_ActiveRow(t *testing.T) {
 	if len(rows) < 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
 	}
-	// Column 0 is the dot column. Active row must contain "●", inactive must not.
-	if !strings.Contains(rows[0][0], "●") {
-		t.Errorf("active issuer row[0][0] = %q, want it to contain '●'", rows[0][0])
+	if !strings.Contains(rows[0][0], "▶") {
+		t.Errorf("active issuer row[0][0] = %q, want it to contain '▶'", rows[0][0])
 	}
-	if strings.Contains(rows[1][0], "●") {
-		t.Errorf("inactive issuer row[1][0] = %q, must not contain '●'", rows[1][0])
+	if strings.Contains(rows[1][0], "▶") {
+		t.Errorf("inactive issuer row[1][0] = %q, must not contain '▶'", rows[1][0])
+	}
+	// Header must NOT use the same glyph as the row marker — that was the
+	// root cause operators couldn't distinguish "column title" from "row
+	// indicator". A blank header is the unambiguous fix.
+	cols := m.table.Columns()
+	if strings.Contains(cols[0].Title, "▶") {
+		t.Errorf("column header reuses the active marker glyph: %q", cols[0].Title)
 	}
 }
 
