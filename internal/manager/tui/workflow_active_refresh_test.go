@@ -83,18 +83,63 @@ func TestWorkflow_WizardIdentityStepMarksActiveIssuer(t *testing.T) {
 	step.Update(wizard.IdentityLoadedMsg{Rows: rows})
 
 	view := step.View()
-	// The active issuer's row must carry the ">>" marker; the inactive one
-	// must NOT. Locate the lines by issuer name.
+	// The active issuer's row must carry the ">>" marker AND the cursor
+	// "> " prefix so pressing Enter immediately signs with the active key.
+	// The previous fix only added the marker; cursor stayed at row 0
+	// regardless of which row was active, defeating the convenience.
 	for _, line := range strings.Split(view, "\n") {
 		switch {
 		case strings.Contains(line, "alpha"):
 			if strings.Contains(line, ">>") {
 				t.Errorf("inactive issuer 'alpha' row carries '>>' marker: %q", line)
 			}
+			if strings.Contains(line, "> ") && !strings.Contains(line, ">> ") {
+				t.Errorf("inactive issuer 'alpha' row carries the cursor: %q", line)
+			}
 		case strings.Contains(line, "beta"):
 			if !strings.Contains(line, ">>") {
 				t.Errorf("active issuer 'beta' row missing '>>' marker: %q", line)
 			}
+			if !strings.Contains(line, "> ") {
+				t.Errorf("active issuer 'beta' row missing cursor '> ': %q", line)
+			}
 		}
+	}
+}
+
+// TestWorkflow_WizardIdentityStepPresselectsActive — the operator pressed
+// Enter on the freshly-opened wizard and expected the active issuer to
+// sign the licence without first having to ↓ to it. Pre-fix: cursor was
+// always at row 0, so Enter chose whichever issuer happened to be first
+// in the list (often a retired one). Now the cursor lands on the active
+// issuer at load time.
+func TestWorkflow_WizardIdentityStepPresselectsActive(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+	iss1, _ := svc.Issuer.Generate(ctx, "alpha", "k-alpha", "op")
+	iss2, _ := svc.Issuer.Generate(ctx, "beta", "k-beta", "op")
+	_ = iss1
+	if err := svc.Issuer.SetActive(ctx, iss2.ID, "op"); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := svc.Issuer.List(ctx)
+
+	step := wizard.NewStepIdentity(svc)
+	step.Focus()
+	step.Layout(core.Rect{W: 80, H: 30})
+	step.Update(wizard.IdentityLoadedMsg{Rows: rows})
+
+	// Press Enter — the chosen IdentityChosenMsg must carry iss2's ID.
+	_, cmd := step.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("Enter on identity step produced no cmd")
+	}
+	chosen, ok := cmd().(wizard.IdentityChosenMsg)
+	if !ok {
+		t.Fatalf("cmd produced %T, want IdentityChosenMsg", cmd())
+	}
+	if chosen.IssuerID != iss2.ID.String() {
+		t.Errorf("Enter chose %q, want active issuer %q (iss2 beta)",
+			chosen.IssuerID, iss2.ID.String())
 	}
 }

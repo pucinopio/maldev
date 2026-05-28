@@ -72,7 +72,16 @@ func (s *StepIdentity) Update(msg tea.Msg) (core.Widget, tea.Cmd) {
 			s.err = msg.Err.Error()
 		}
 		s.rows = msg.Rows
+		// Pre-select the active issuer so pressing Enter immediately
+		// signs the licence with the operator's intended key. Falls back
+		// to the first row when no row is active (e.g. fresh install).
 		s.cursor = 0
+		for i, r := range s.rows {
+			if r.Active {
+				s.cursor = i
+				break
+			}
+		}
 		return s, nil
 
 	case tea.KeyMsg:
