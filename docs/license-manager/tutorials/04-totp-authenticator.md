@@ -2,7 +2,7 @@
 
 ## In the TUI
 
-1. `4` → TOTP screen.
+1. `8` → TOTP screen.
 2. `n` → mint a fresh secret. The new row is selected.
 3. `Q` → pop the QR overlay. Hand your phone to the licensee
    and let them scan it into Google Authenticator / Authy /
@@ -16,7 +16,7 @@
 The secret never leaves the manager DB — only the QR was
 displayed, once.
 
-![tutorial 04 TUI flow](https://github.com/oioio-space/maldev/blob/master/vhs/out/tutorial-04-totp.gif?raw=true)
+![tutorial 04 TUI flow](./assets/tutorial-04-totp.gif)
 
 ## In your program
 

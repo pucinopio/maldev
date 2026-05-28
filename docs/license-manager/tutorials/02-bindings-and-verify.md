@@ -17,7 +17,7 @@
 The wizard captures the **password** evidence inline before
 step 8 — type `hunter2` when it asks.
 
-![tutorial 02 TUI flow](https://github.com/oioio-space/maldev/blob/master/vhs/out/tutorial-02-bindings.gif?raw=true)
+![tutorial 02 TUI flow](./assets/tutorial-02-bindings.gif)
 
 ## In your program
 

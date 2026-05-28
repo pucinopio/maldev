@@ -2,7 +2,7 @@
 
 ## In the TUI
 
-1. `5` → Servers screen.
+1. `7` → Servers screen.
 2. Cursor on **Revocation**, press `s` to start.
 3. The row shows `running` and a `Listen` address such as
    `127.0.0.1:8443`. Copy it.
@@ -13,7 +13,7 @@
 To revoke later: `2` → Licences → cursor on the row → `r` →
 type a reason → `Enter`. The CRL re-publishes immediately.
 
-![tutorial 03 TUI flow](https://github.com/oioio-space/maldev/blob/master/vhs/out/tutorial-03-revocation-server.gif?raw=true)
+![tutorial 03 TUI flow](./assets/tutorial-03-revocation-server.gif)
 
 ## In your program
 

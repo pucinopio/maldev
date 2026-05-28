@@ -6,7 +6,7 @@ key can read it.
 
 ## In the TUI
 
-1. `6` → Recipients screen.
+1. `4` → Recipients screen.
 2. `n` → mint a fresh X25519 keypair. The new row is selected.
 3. Note the recipient's `name` / `id` — the wizard will offer
    it as a target.
@@ -20,7 +20,7 @@ Ship the recipient's **private key** with the binary (embed,
 sealed section, secrets manager — your call). Never ship it
 alongside the licence in the same channel.
 
-![tutorial 05 TUI flow](https://github.com/oioio-space/maldev/blob/master/vhs/out/tutorial-05-sealed.gif?raw=true)
+![tutorial 05 TUI flow](./assets/tutorial-05-sealed.gif)
 
 ## In your program
 

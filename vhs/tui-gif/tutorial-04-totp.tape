@@ -15,7 +15,7 @@ Output vhs/out/tutorial-04-totp.gif
 Sleep 600ms
 
 # Switch to the TOTP screen.
-Key 4
+Key 8
 Seed totp 3
 Sleep 800ms
 

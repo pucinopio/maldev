@@ -15,7 +15,7 @@ Output vhs/out/tutorial-05-sealed.gif
 Sleep 600ms
 
 # Recipients screen.
-Key 6
+Key 4
 Seed recipients 2
 Sleep 800ms
 

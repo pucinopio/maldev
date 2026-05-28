@@ -15,7 +15,7 @@
 You now have two files: the licence PEM and the issuer's public
 key.
 
-![tutorial 01 TUI flow](https://github.com/oioio-space/maldev/blob/master/vhs/out/tutorial-01-issue-and-verify.gif?raw=true)
+![tutorial 01 TUI flow](./assets/tutorial-01-issue-and-verify.gif)
 
 ## In your program
 
