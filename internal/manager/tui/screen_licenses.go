@@ -91,6 +91,10 @@ type licensesModel struct {
 	// of them caught the real off-by-tens drift caused by the search/count
 	// columns sitting to the left of the chips.
 	chipHits *chipHitRow
+	// chainHits is populated by renderDetailChain so OnClick can translate
+	// a click inside the chain body back to the licence the operator
+	// pointed at. Pointer-held so value-receiver renders survive.
+	chainHits *chainHitRow
 }
 
 // chipHit is one (filter, rendered span) record produced by renderFilterBar.
@@ -122,6 +126,11 @@ func (c *chipHitRow) hit(x, y int) (licenseFilter, bool) {
 func newLicensesModel(svc *service.Services) licensesModel {
 	cols := []table.Column{
 		{Title: "STATUS", Width: 11},
+		// UUID column: licences are identified by their UUID, so every table
+		// listing licences must surface it. Short form (12 chars + ellipsis)
+		// keeps the column compact while still distinctive enough for
+		// cross-referencing with audit logs and the chain detail.
+		{Title: "UUID", Width: 13},
 		{Title: "SUBJECT", Width: 22},
 		{Title: "AUDIENCE", Width: 16},
 		{Title: "KEYID", Width: 18},
@@ -149,6 +158,7 @@ func newLicensesModel(svc *service.Services) licensesModel {
 		detail:      true,
 		titleHints:  &titleHintRow{},
 		chipHits:    &chipHitRow{},
+		chainHits:   &chainHitRow{},
 		pemViewport: viewport.New(80, 10),
 	}
 }
@@ -273,6 +283,27 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 		m.detailChain = msg.chain
 		m.detailChainErr = msg.err
 		m.detailChainLoading = false
+		return m, nil
+
+	case licenseChainClickMsg:
+		// Operator clicked a chain entry — navigate to that licence.
+		// Force filter→all so the target row is reachable even if it was
+		// hidden by the current filter, then move the cursor and reload
+		// the Chain tab for the new selection.
+		m.filter = licFilterAll
+		m.rebuildTable()
+		visible := m.visibleRows()
+		for i, r := range visible {
+			if r.LicenseUUID == msg.uuid {
+				m.table.SetCursor(i)
+				m.detail = true
+				m.detailTab = 4
+				m.detailChain = nil
+				m.detailChainLoading = true
+				m.detailChainErr = nil
+				return m, loadLicenseChainCmd(m.svc, r)
+			}
+		}
 		return m, nil
 
 	case licenseImportPickedMsg:
@@ -581,6 +612,7 @@ func (m *licensesModel) rebuildTable() {
 		}
 		raw = append(raw, []string{
 			status,
+			shortUUID(r.LicenseUUID),
 			r.Subject,
 			strings.Join(r.Audience, ","),
 			r.IssuerName,
@@ -590,10 +622,9 @@ func (m *licensesModel) rebuildTable() {
 	}
 
 	// Auto-size: ideals derived from header+content (cap 60). Weights:
-	// STATUS/EXPIRES fixed-format → 0; SUBJECT biggest share; AUDIENCE+
-	// FEATURES grow on lists; KEYID grows modestly. setAutoFitRows commits
-	// the rows post-truncation in one shot.
-	setAutoFitRows(&m.table, BoxedInner(m.width), []int{0, 3, 2, 1, 0, 2}, raw, 60)
+	// STATUS/UUID/EXPIRES fixed-format → 0; SUBJECT biggest share; AUDIENCE+
+	// FEATURES grow on lists; KEYID grows modestly.
+	setAutoFitRows(&m.table, BoxedInner(m.width), []int{0, 0, 3, 2, 1, 0, 2}, raw, 60)
 
 	// Use the same layout-reservation budget as WindowSizeMsg uses for the
 	// PEM viewport so table + detail body together fit exactly under the
@@ -741,6 +772,17 @@ func (m licensesModel) OnClick(x, y, _ int) tea.Cmd {
 		}
 		return nil
 	}
+	// Chain detail body click: when on the Chain tab, the body content
+	// starts 5 rows below the table bottom border (detail box top border +
+	// title row + tab strip + blank row). A click on a parent or successor
+	// chain entry dispatches licenseChainClickMsg to navigate there.
+	if m.detail && m.detailTab == 4 && m.selectedRow() != nil {
+		chainBaseY := tableEndY + 5
+		if uuid, ok := m.chainHits.hit(y, chainBaseY); ok {
+			target := uuid
+			return func() tea.Msg { return licenseChainClickMsg{uuid: target} }
+		}
+	}
 	// Detail [I/B/P/A/C] tab strip: detail box renders BELOW the table box.
 	//   tableEndY     box bottom border ─
 	//   tableEndY + 1 detail box top border ─
@@ -777,6 +819,43 @@ func (m licensesModel) OnClick(x, y, _ int) tea.Cmd {
 // licenseDetailTabClickMsg is dispatched when the operator clicks the
 // [I/B/P/A/C] tab strip in the license detail panel.
 type licenseDetailTabClickMsg struct{ tab int }
+
+// chainHit records the body-local row where one chain entry (parent, this,
+// or successor) was rendered along with its licence UUID. chainHitRow.baseY
+// holds the absolute terminal Y of the chain header so OnClick can
+// translate clicks into body-local rows and dispatch licenseChainClickMsg.
+type chainHit struct {
+	licUUID string
+	row     int
+}
+
+// chainHitRow is held by pointer on licensesModel so the value-receiver
+// render path can mutate it without losing the writes — same pattern as
+// chipHitRow and titleHintRow.
+type chainHitRow struct {
+	hits []chainHit
+}
+
+// hit translates an absolute click Y to a body-local chain row using the
+// caller-supplied baseY (= absolute Y of the chain "header" row). OnClick
+// owns the geometry so the renderer doesn't have to second-guess where the
+// detail box landed on screen.
+func (c *chainHitRow) hit(y, baseY int) (string, bool) {
+	if c == nil {
+		return "", false
+	}
+	local := y - baseY
+	for _, h := range c.hits {
+		if h.row == local {
+			return h.licUUID, true
+		}
+	}
+	return "", false
+}
+
+// licenseChainClickMsg asks the licences screen to navigate to the licence
+// with the given UUID (filter→all, cursor set to that row, chain tab kept).
+type licenseChainClickMsg struct{ uuid string }
 
 // licenseImportPickedMsg carries the path returned by the file picker when
 // the operator selected a PEM to import. Handled in Update.
@@ -978,6 +1057,18 @@ func (m licensesModel) renderDetailBody(row *ent.License) string {
 // Operates on display width via lipgloss.Width so ANSI-wrapped strings still
 // measure correctly. Pure ASCII assumed for slicing — fine for the values
 // fed here (subject/issuer/audience/UUID are all single-byte char).
+// shortUUID returns the first 12 chars of a licence UUID followed by "…",
+// or the value verbatim if it is shorter. Used in every list table that
+// displays licences so operators can cross-reference rows with audit
+// entries and the chain detail without seeing the full 36-char string.
+func shortUUID(s string) string {
+	const cut = 12
+	if len(s) <= cut {
+		return s
+	}
+	return s[:cut] + "…"
+}
+
 func truncate(s string, maxW int) string {
 	if lipgloss.Width(s) <= maxW {
 		return s
@@ -1131,6 +1222,12 @@ func loadLicenseChainCmd(svc *service.Services, row *ent.License) tea.Cmd {
 
 // renderDetailChain renders the real parent → this → successor lineage using
 // ReplacesLicenseID edges resolved by loadLicenseChainCmd.
+//
+// Side-effect: appends to m.chainHits.hits (one entry per parent/this/
+// successor row, body-local Y) so OnClick can dispatch a click on a chain
+// row to licenseChainClickMsg{uuid}. View() is responsible for storing the
+// absolute Y of the chain header in m.chainHits.baseY so OnClick can
+// translate. The pointer-struct pattern mirrors chipHits.
 func (m licensesModel) renderDetailChain(row *ent.License) string {
 	hint := HintKey.Render("[C]") + Dim.Render(" chaîne")
 	header := GlowCyan.Render("Chaîne de succession") + "  " + hint
@@ -1141,11 +1238,17 @@ func (m licensesModel) renderDetailChain(row *ent.License) string {
 	if m.detailChainErr != nil {
 		return header + "\n" + GlowRed.Render("  erreur : "+m.detailChainErr.Error())
 	}
+	// Reset hits — every render rewrites them so an old chain from a
+	// different row doesn't leak through OnClick.
+	if m.chainHits != nil {
+		m.chainHits.hits = m.chainHits.hits[:0]
+	}
+
 	// When chain has not been loaded yet, show the current row so the UUID and
 	// subject are always visible, with a prompt to load the full lineage.
 	if m.detailChain == nil {
 		const labelW = 14
-		thisVal := GlowMagent.Render(row.LicenseUUID[:8]+"…") + " " +
+		thisVal := GlowMagent.Render(row.LicenseUUID) + " " +
 			Base.Render(row.Subject) + " " + licStatusPill(row.Status)
 		prompt := Dim.Render("  (appuie sur [C] pour charger la chaîne complète)")
 		if row.Status == licenseent.StatusSuperseded {
@@ -1162,28 +1265,38 @@ func (m licensesModel) renderDetailChain(row *ent.License) string {
 	divider := Dim.Render(strings.Repeat("─", BoxedInner(m.width)))
 
 	var lines []string
+	// row 0 = header, row 1 = blank, parents start at row 2.
 	lines = append(lines, header, "")
+	rowIdx := 2
 
 	// Parents section (oldest first).
 	if len(m.detailChain.Parents) == 0 {
 		lines = append(lines, kvRow("parents", Mute.Render("aucun (racine de la chaîne)"), labelW))
+		rowIdx++
 	} else {
 		for i, p := range m.detailChain.Parents {
 			label := fmt.Sprintf("parent %d", i+1)
-			val := GlowCyan.Render(p.LicenseUUID[:8]+"…") + " " + Dim.Render(p.Subject) +
-				" " + licStatusPill(p.Status)
+			val := GlowCyan.Render(p.LicenseUUID) + " " + Dim.Render(p.Subject) +
+				" " + licStatusPill(p.Status) + " " + Dim.Render("(clic pour ouvrir)")
 			lines = append(lines, kvRow(label, val, labelW))
+			if m.chainHits != nil {
+				m.chainHits.hits = append(m.chainHits.hits, chainHit{licUUID: p.LicenseUUID, row: rowIdx})
+			}
+			rowIdx++
 		}
 	}
 
 	lines = append(lines, divider)
+	rowIdx++
 
-	// This licence.
-	thisVal := GlowMagent.Render(row.LicenseUUID[:8]+"…") + " " +
+	// This licence. Not clickable — it's the row the operator is already on.
+	thisVal := GlowMagent.Render(row.LicenseUUID) + " " +
 		Base.Render(row.Subject) + " " + licStatusPill(row.Status)
 	lines = append(lines, kvRow("cette lic.", thisVal, labelW))
+	rowIdx++
 
 	lines = append(lines, divider)
+	rowIdx++
 
 	// Successors section.
 	if len(m.detailChain.Successors) == 0 {
@@ -1191,9 +1304,13 @@ func (m licensesModel) renderDetailChain(row *ent.License) string {
 	} else {
 		for i, s := range m.detailChain.Successors {
 			label := fmt.Sprintf("successeur %d", i+1)
-			val := GlowCyan.Render(s.LicenseUUID[:8]+"…") + " " + Dim.Render(s.Subject) +
-				" " + licStatusPill(s.Status)
+			val := GlowCyan.Render(s.LicenseUUID) + " " + Dim.Render(s.Subject) +
+				" " + licStatusPill(s.Status) + " " + Dim.Render("(clic pour ouvrir)")
 			lines = append(lines, kvRow(label, val, labelW))
+			if m.chainHits != nil {
+				m.chainHits.hits = append(m.chainHits.hits, chainHit{licUUID: s.LicenseUUID, row: rowIdx})
+			}
+			rowIdx++
 		}
 	}
 

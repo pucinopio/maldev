@@ -201,17 +201,23 @@ func TestStretchColumns_LicensesGrowsWithWidth(t *testing.T) {
 	wide := snap()
 	t.Logf("narrow=%v wide=%v", narrow, wide)
 
+	// Column indices since UUID was inserted at position 1:
+	//   0 STATUS  1 UUID  2 SUBJECT  3 AUDIENCE  4 KEYID  5 EXPIRES  6 FEATURES
 	// SUBJECT (weight 3) must grow strictly.
-	if wide[1] <= narrow[1] {
-		t.Errorf("SUBJECT did not grow: narrow=%d wide=%d", narrow[1], wide[1])
+	if wide[2] <= narrow[2] {
+		t.Errorf("SUBJECT did not grow: narrow=%d wide=%d", narrow[2], wide[2])
 	}
 	// AUDIENCE (weight 2) must grow.
-	if wide[2] <= narrow[2] {
-		t.Errorf("AUDIENCE did not grow: narrow=%d wide=%d", narrow[2], wide[2])
+	if wide[3] <= narrow[3] {
+		t.Errorf("AUDIENCE did not grow: narrow=%d wide=%d", narrow[3], wide[3])
 	}
 	// EXPIRES (weight 0) must stay equal.
-	if wide[4] != narrow[4] {
-		t.Errorf("EXPIRES drifted: narrow=%d wide=%d (expected fixed)", narrow[4], wide[4])
+	if wide[5] != narrow[5] {
+		t.Errorf("EXPIRES drifted: narrow=%d wide=%d (expected fixed)", narrow[5], wide[5])
+	}
+	// UUID (weight 0) must stay equal — it's a fixed-format short form.
+	if wide[1] != narrow[1] {
+		t.Errorf("UUID drifted: narrow=%d wide=%d (expected fixed)", narrow[1], wide[1])
 	}
 }
 
@@ -1079,8 +1085,9 @@ func TestAutoFit_ShortAudienceFreesSpaceForSubject(t *testing.T) {
 	short := mk("prod")
 	normal := mk(strings.Repeat("x", 30))
 
-	shortSubject := short.table.Columns()[1].Width
-	normalSubject := normal.table.Columns()[1].Width
+	// SUBJECT is column 2 (UUID is column 1 since 2026-05 layout change).
+	shortSubject := short.table.Columns()[2].Width
+	normalSubject := normal.table.Columns()[2].Width
 	if shortSubject <= normalSubject {
 		t.Errorf("auto-fit not reclaiming AUDIENCE slack: SUBJECT short=%d normal=%d",
 			shortSubject, normalSubject)

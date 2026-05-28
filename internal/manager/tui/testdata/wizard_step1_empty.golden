@@ -9,7 +9,7 @@
                                                                                                                         
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Licences (0)           [↑↓]  nav ·  [d]  détail ·  [n]  nouvelle ·  [i]  importer ·  [E]  exporter ·  [x]  révoquer  │
-│  STATUS  SUBJECT                        AUDIENCE                 KEYID         EXPIRES  FEATURES                     │
+│  STATUS  UUID  SUBJECT                      AUDIENCE               KEYID        EXPIRES  FEATURES                    │
 │                                                                                                                      │
 │                                                                                                                      │
 │                                  aucune licence — n pour en émettre une, ? pour l'aide                               │
