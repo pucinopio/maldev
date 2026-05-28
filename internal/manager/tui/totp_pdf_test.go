@@ -101,3 +101,48 @@ func TestLive_TOTPExportPDF_PKeyNoopWhenNoView(t *testing.T) {
 		t.Error("[P] with nil view must return nil cmd")
 	}
 }
+
+// TestExportTOTPPDF_UTF8RoundTrip is the regression guard for the operator-
+// reported "un caractère A avec accent qui apparait" in the TOTP PDF.
+// Root cause: gofpdf's built-in fonts (Helvetica / Courier) render bytes
+// in CP1252. Any UTF-8 multi-byte character (·, é, à, …) was interpreted
+// by the PDF reader as two separate Latin-1 glyphs — the "Â·" mojibake
+// the operator saw. Fix: route every Cell/MultiCell text through
+// pdf.UnicodeTranslatorFromDescriptor("") which converts UTF-8 → CP1252
+// bytes the fonts can render. This test renders a PDF with a UTF-8 input
+// containing "é" and inspects the raw bytes for the corresponding UTF-8
+// double-byte sequence (\xC3\xA9) which MUST be absent post-fix.
+func TestExportTOTPPDF_UTF8RoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "out.pdf")
+	view := &service.TOTPSecretView{
+		AccountLabel: "café@example.com",
+		Secret:       "JBSWY3DPEHPK3PXP",
+		OtpauthURI:   "otpauth://totp/lab:café@example.com?secret=JBSWY3DPEHPK3PXP",
+	}
+	if err := tui.ExportTOTPPDFForTest(view, path); err != nil {
+		t.Fatalf("exportTOTPPDF: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// "é" is \xC3\xA9 in UTF-8; "·" is \xC2\xB7. Both used to leak through
+	// to the PDF content stream pre-fix. They must not appear now.
+	if contains2(data, 0xC3, 0xA9) {
+		t.Error("PDF contains raw UTF-8 bytes for 'é' (\xC3\xA9) — translator skipped, will render as 'Ã©'")
+	}
+	if contains2(data, 0xC2, 0xB7) {
+		t.Error("PDF contains raw UTF-8 bytes for '·' (\xC2\xB7) — translator skipped, will render as 'Â·'")
+	}
+}
+
+// contains2 reports whether s contains the two-byte sequence [a, b].
+func contains2(s []byte, a, b byte) bool {
+	for i := 0; i+1 < len(s); i++ {
+		if s[i] == a && s[i+1] == b {
+			return true
+		}
+	}
+	return false
+}
