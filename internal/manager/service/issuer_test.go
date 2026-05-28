@@ -3,7 +3,10 @@ package service
 import (
 	"context"
 	"crypto/ed25519"
+	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 
 	"github.com/oioio-space/maldev/internal/manager/crypto"
 	"github.com/oioio-space/maldev/license"
@@ -191,4 +194,51 @@ func TestIssuerList(t *testing.T) {
 	if len(all) != 3 {
 		t.Fatalf("list count=%d want 3", len(all))
 	}
+}
+
+// TestIssuerDelete verifies the new hard-delete + the safety guard that
+// refuses removal while licences still reference the issuer.
+func TestIssuerDelete(t *testing.T) {
+	t.Run("deletes orphan issuer", func(t *testing.T) {
+		ctx := context.Background()
+		s := newTestStore(t)
+		kek := newKEK(t)
+		audit := NewAuditService(s)
+		svc := NewIssuerService(s, kek, audit)
+		iss, _ := svc.Generate(ctx, "Lab", "k-1", "op")
+		if err := svc.Delete(ctx, iss.ID, "op"); err != nil {
+			t.Fatalf("Delete orphan: %v", err)
+		}
+		if _, err := svc.Get(ctx, iss.ID); err == nil {
+			t.Fatal("Issuer row still present after Delete")
+		}
+	})
+
+	t.Run("refuses while licences reference issuer", func(t *testing.T) {
+		lic, issuer, _, _, _, ctx := setupLicSvc(t)
+		iss, _ := issuer.Generate(ctx, "Lab", "k-1", "op")
+		_, err := lic.Issue(ctx, IssueRequest{
+			IssuerID: iss.ID, Subject: "alice", Actor: "op",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = issuer.Delete(ctx, iss.ID, "op")
+		if err == nil {
+			t.Fatal("expected refusal, got nil")
+		}
+		// Guard error message includes the count for the operator.
+		if !strings.Contains(err.Error(), "1 licence") {
+			t.Fatalf("error message missing licence count: %v", err)
+		}
+	})
+
+	t.Run("missing id errors", func(t *testing.T) {
+		ctx := context.Background()
+		s := newTestStore(t)
+		svc := NewIssuerService(s, newKEK(t), NewAuditService(s))
+		if err := svc.Delete(ctx, uuid.New(), "op"); err == nil {
+			t.Fatal("expected error for missing id")
+		}
+	})
 }

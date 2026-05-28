@@ -23,6 +23,8 @@ const (
 	OverlayIDIssuerExportPriv     = "issuer-export-priv"      // confirm step
 	OverlayIDIssuerExportPrivPath = "issuer-export-priv-path" // path-input step
 	OverlayIDIssuerRetire     = "issuer-retire"
+	OverlayIDIssuerDelete     = "issuer-delete"
+	OverlayIDRevocationDelete = "revocation-delete"
 	OverlayIDRecipientRename  = "recipient-rename"
 	OverlayIDRecipientDelete  = "recipient-delete"
 	OverlayIDIdentityRename   = "identity-rename"

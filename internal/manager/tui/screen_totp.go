@@ -171,7 +171,10 @@ func (m totpModel) Update(msg tea.Msg) (totpModel, tea.Cmd) {
 				return pushOverlayMsg{newInputOverlay("totp-label", "New TOTP secret",
 					"account label (e.g. user@app)", 80)}
 			}
-		case "x":
+		case "x", "D":
+			// Both [x] (legacy) and [D] (consistent with licences/issuers)
+			// trigger the same hard-delete confirm. Reusing the same overlay
+			// id keeps handleTOTPConfirmResult untouched.
 			row := m.selectedRow()
 			if row == nil {
 				return m, nil
@@ -302,7 +305,7 @@ func (m totpModel) View() string {
 		{Key: "n", Label: " générer ", Cmd: keyCmd("n")},
 		{Key: "E", Label: " export QR PNG ", Cmd: keyCmd("E")},
 		{Key: "P", Label: " export PDF ", Cmd: keyCmd("P")},
-		{Key: "x", Label: " supprimer ", Cmd: keyCmd("x")},
+		{Key: "x/D", Label: " supprimer ", Cmd: keyCmd("D")},
 		{Key: "r", Label: " rafraîchir", Cmd: keyCmd("r")},
 	}, 0, listInnerW)
 	introH := lipgloss.Height(lipgloss.NewStyle().Width(m.width).Render(intro))

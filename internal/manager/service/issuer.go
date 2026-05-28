@@ -144,6 +144,40 @@ func (svc *IssuerService) PrivateKey(ctx context.Context, id uuid.UUID) ([]byte,
 	return svc.kek.Unwrap(row.EncryptedPriv)
 }
 
+// Delete hard-removes an issuer row after refusing if any licence still
+// references it. The encrypted private key buffer is securely zeroed in
+// memory before the DB row is dropped. Refusal is the safe default because
+// removing the issuer also makes every signed licence un-verifiable on
+// re-import (the matching public key is gone). Operators wanting to retire
+// an issuer without breaking outstanding licences should use Retire (status
+// flip, no row deletion) — Delete is reserved for issuers that never signed
+// anything or for cleanup after every dependent licence was deleted first.
+func (svc *IssuerService) Delete(ctx context.Context, id uuid.UUID, actor string) error {
+	row, err := svc.store.Client.Issuer.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	licCount, err := svc.store.Client.Issuer.QueryLicenses(row).Count(ctx)
+	if err != nil {
+		return fmt.Errorf("count licences: %w", err)
+	}
+	if licCount > 0 {
+		return fmt.Errorf("issuer %q still has %d licence(s) — delete them first or use Retire",
+			row.Name, licCount)
+	}
+	return withTx(ctx, svc.store, func(ctx context.Context, tx *ent.Tx) error {
+		// Wipe the wrapped key bytes in-place before drop so the bytes are
+		// zeroed across the deleted page even if the DB never reuses it.
+		memory.SecureZero(row.EncryptedPriv)
+		if err := tx.Issuer.DeleteOneID(id).Exec(ctx); err != nil {
+			return fmt.Errorf("delete issuer: %w", err)
+		}
+		return svc.audit.AppendTx(ctx, tx, "issuer.delete", actor,
+			Target{Kind: "Issuer", ID: id.String()},
+			map[string]any{"name": row.Name, "key_id": row.KeyID})
+	})
+}
+
 // ExportPublic returns the public key as a PEM "MALDEV PUBLIC KEY" with the
 // KID header populated.
 func (svc *IssuerService) ExportPublic(ctx context.Context, id uuid.UUID) ([]byte, error) {

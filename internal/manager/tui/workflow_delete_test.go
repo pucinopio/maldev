@@ -146,3 +146,60 @@ func flattenCmd(cmd tea.Cmd) []tea.Msg {
 	}
 	return []tea.Msg{msg}
 }
+
+// TestWorkflow_DeleteRevokedLicence is the regression guard for the operator
+// report "on ne peut pas supprimer une licence révoquée". A revoked row is
+// reachable under filter=all OR filter=revoked, and [D] must succeed on it.
+func TestWorkflow_DeleteRevokedLicence(t *testing.T) {
+	svc, _ := newTestServices(t)
+	ctx := context.Background()
+
+	iss, _ := svc.Issuer.Generate(ctx, "lab", "k1", "op")
+	issued, _ := svc.License.Issue(ctx, service.IssueRequest{
+		IssuerID: iss.ID, Subject: "mallory",
+		NotAfter: time.Now().Add(24 * time.Hour), Actor: "op",
+	})
+	if err := svc.Revoke.Revoke(ctx, issued.Row.ID, "key compromise", "op"); err != nil {
+		t.Fatalf("Revoke seed: %v", err)
+	}
+	licUUID := issued.Row.LicenseUUID
+
+	var m tea.Model = New(svc, nil, SessionReady)
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 144, Height: 44})
+	m = driveRune(m, '2')
+	if cmd := ListLicensesCmd(svc); cmd != nil {
+		m, _ = m.Update(cmd())
+	}
+
+	// Cycle filter [f] until we land on "revoked" — proves the revoked row is
+	// addressable through the filter chip too, not just under "all".
+	for i := 0; i < 10; i++ {
+		root := rootOf(t, m)
+		if root.licenses.filter.String() == "revoked" {
+			break
+		}
+		m = driveRune(m, 'f')
+	}
+	root := rootOf(t, m)
+	if root.licenses.filter.String() != "revoked" {
+		t.Fatal("could not cycle filter to revoked")
+	}
+	if len(root.licenses.visibleRows()) != 1 {
+		t.Fatalf("revoked filter visible rows = %d, want 1", len(root.licenses.visibleRows()))
+	}
+
+	// Drive [D] → 'y' → drain → assert deletion.
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("D")})
+	push := cmd().(pushOverlayMsg)
+	mm, _ = mm.Update(push)
+	mm, cmd = mm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	done := cmd().(OverlayDoneMsg)
+	mm, cmd = mm.Update(done)
+	for _, msg := range flattenCmd(cmd) {
+		mm, _ = mm.Update(msg)
+	}
+
+	if _, err := svc.License.GetByUUID(ctx, licUUID); err == nil {
+		t.Fatal("revoked row still present after [D] workflow")
+	}
+}

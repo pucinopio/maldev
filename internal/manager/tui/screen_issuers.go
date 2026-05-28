@@ -118,6 +118,19 @@ func (m issuersModel) Update(msg tea.Msg) (issuersModel, tea.Cmd) {
 		m.table.SetCursor(msg.row)
 		return m, nil
 
+	case issuersDeletedMsg:
+		m.err = msg.err
+		if msg.err == nil {
+			m.rows = msg.rows
+			m.rebuildTable()
+			name := msg.name
+			return m, func() tea.Msg {
+				return pushOverlayMsg{NewOKOverlay("Suppression OK",
+					fmt.Sprintf("Issuer %q supprimé.", name))}
+			}
+		}
+		return m, nil
+
 	case issuerImportPickedMsg:
 		svc := m.svc
 		path := msg.path
@@ -214,6 +227,24 @@ func (m issuersModel) Update(msg tea.Msg) (issuersModel, tea.Cmd) {
 				return pushOverlayMsg{newConfirmOverlay(OverlayIDIssuerRetire, "Retire Issuer", sub, "retire", "cancel", true)}
 			}
 
+		case "D":
+			// Hard-delete an issuer row. IssuerService.Delete refuses if any
+			// licence still references it, so the worst case from the UI side
+			// is a clean error overlay — the operator gets the count.
+			row := m.selectedRow()
+			if row == nil {
+				return m, nil
+			}
+			sub := fmt.Sprintf(
+				"Supprimer définitivement l'Issuer %q (key %s) ?\n"+
+					"Échoue si des licences le référencent encore — supprime-les\n"+
+					"d'abord, ou utilise Retire (x) pour le marquer inactif sans\n"+
+					"casser les licences déjà émises.",
+				row.Name, row.KeyID)
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newConfirmOverlay(OverlayIDIssuerDelete, "Supprimer l'Issuer", sub, "supprimer", "annuler", true)}
+			}
+
 		case "r":
 			return m, listIssuersCmd(m.svc)
 		}
@@ -305,7 +336,8 @@ func (m issuersModel) View() string {
 		{Key: "i", Label: " importer ", Cmd: keyCmd("i")},
 		{Key: "a", Label: " activer ", Cmd: keyCmd("a")},
 		{Key: "E", Label: " export .pub ", Cmd: keyCmd("E")},
-		{Key: "x", Label: " retirer", Cmd: keyCmd("x")},
+		{Key: "x", Label: " retirer ", Cmd: keyCmd("x")},
+		{Key: "D", Label: " supprimer", Cmd: keyCmd("D")},
 	}, 0, BoxedInner(m.width))
 	// Title row Y = TopChromeRows + leading blank + introH + trailing blank
 	// + box top border. introH uses the rendered height so wrapped intros and
@@ -381,6 +413,38 @@ func (m issuersModel) renderDetail() string {
 		colStyle.Render(actions),
 	)
 	return BoxStyle.Width(BoxedWidth(m.width)).Render(cols)
+}
+
+// handleIssuerDeleteConfirm processes the OverlayIDIssuerDelete confirm reply.
+// On Confirm=true it calls svc.Issuer.Delete and reloads the list. The service
+// refuses if any licence still references the issuer — the resulting error is
+// surfaced verbatim via an error overlay so the operator sees the count.
+func (m issuersModel) handleIssuerDeleteConfirm(res ConfirmResultMsg) (issuersModel, tea.Cmd) {
+	if res.ID != OverlayIDIssuerDelete || !res.Confirm {
+		return m, nil
+	}
+	row := m.selectedRow()
+	if row == nil || m.svc == nil {
+		return m, nil
+	}
+	id := row.ID
+	name := row.Name
+	svc := m.svc
+	return m, func() tea.Msg {
+		if err := svc.Issuer.Delete(context.Background(), id, "operator"); err != nil {
+			return pushOverlayMsg{newErrorOverlay("Suppression refusée", err.Error())}
+		}
+		rows, err := svc.Issuer.List(context.Background())
+		return issuersDeletedMsg{rows: rows, err: err, name: name}
+	}
+}
+
+// issuersDeletedMsg carries the post-delete list reload + the name of the
+// removed issuer for the confirmation toast.
+type issuersDeletedMsg struct {
+	rows []*ent.Issuer
+	err  error
+	name string
 }
 
 // handleIssuerInputResult processes overlay results for the issuers screen.

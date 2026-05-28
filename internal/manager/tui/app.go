@@ -715,6 +715,11 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 						"Export Private Key", "/path/to/issuer.priv", 256)}
 				}
 			}
+			if res.ID == OverlayIDIssuerDelete {
+				updated, c := m.issuers.handleIssuerDeleteConfirm(res)
+				m.issuers = updated
+				m.pendingCmd = c
+			}
 		case ViewRecipients:
 			updated, c := m.recipients.handleRecipientConfirmResult(res)
 			m.recipients = updated

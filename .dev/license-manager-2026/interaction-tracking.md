@@ -521,6 +521,7 @@ local hints surfaced via the title bar.
 | `E` | ✓ | ✓ | Push input overlay → Export public key | `iss.exportpub.{kb,ms}` |
 | `K` | ✓ | ☐ | Push confirm overlay → Export private key (danger) | `iss.exportpriv.{kb,ms}` |
 | `x` | ✓ | ✓ | Push confirm overlay → Retire issuer (danger) | `iss.retire.{kb,ms}` |
+| `D` | ✓ | ✓ | Push confirm overlay → hard-delete issuer (refused if licences exist, danger) | `iss.delete.{kb,ms}` |
 | `r` | ✓ | ✓ | Refresh from store | `iss.refresh.{kb,ms}` |
 | Click table row | n/a | ✓ | Select row | `iss.row.ms` |
 
@@ -558,6 +559,7 @@ local hints surfaced via the title bar.
 | Trigger | KB | MS | Effect | Test ID |
 |---|---|---|---|---|
 | `x` | ✓ | ✓ | Push confirm overlay → Unrevoke selected | `rev.unrevoke.{kb,ms}` |
+| `D` | ✓ | ✓ | Push confirm overlay → hard-delete underlying licence (danger) | `rev.delete.{kb,ms}` |
 | `E` | ✓ | ✓ | Push input overlay → Export signed CRL | `rev.exportcrl.{kb,ms}` |
 | `r` | ✓ | ✓ | Refresh from store | `rev.refresh.{kb,ms}` |
 | Click table row | n/a | ✓ | Select row | `rev.row.ms` |
@@ -623,7 +625,7 @@ local hints surfaced via the title bar.
 | Trigger | KB | MS | Effect | Test ID |
 |---|---|---|---|---|
 | `n` | ✓ | ✓ | Push input overlay → Generate TOTP secret | `totp.new.{kb,ms}` |
-| `x` | ✓ | ✓ | Push confirm overlay → Delete TOTP secret | `totp.delete.{kb,ms}` |
+| `x` / `D` | ✓ | ✓ | Push confirm overlay → Delete TOTP secret (both keys, same action) | `totp.delete.{kb,ms}` |
 | `E` | ✓ | ✓ | Push input overlay → Export QR PNG | `totp.exportpng.{kb,ms}` |
 | `r` | ✓ | ✓ | Refresh | `totp.refresh.{kb,ms}` |
 | Click table row | n/a | ✓ | Select row (loads detail/QR) | `totp.row.ms` |

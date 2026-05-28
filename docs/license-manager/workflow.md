@@ -450,6 +450,15 @@ de la ligne.
 **Côté TUI :** sur l'écran *Licences*, sélectionne la ligne et presse `[D]`
 (majuscule, cohérent avec `[E]` exporter). Un confirm overlay rouge
 récapitule subject + UUID court avant validation par `y` ou *enter*.
+La même touche est aussi reliée à *Revocation* (suppression directe de
+la licence sous-jacente, distinct de `[x]` qui ne fait que la
+ré-activer), à *Issuers* (refuse tant que des licences référencent la
+clé — message d'erreur explicite avec le compte) et à *TOTP* (alias de
+`[x]` pour cohérence inter-écrans).
+
+`Issuer.Delete` zéroise la clé privée chiffrée en mémoire avant le drop
+SQL — la trace audit conserve `name` + `key_id` pour la forensique
+post-suppression.
 
 ---
 

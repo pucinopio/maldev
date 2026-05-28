@@ -131,6 +131,27 @@ func (m revocationModel) Update(msg tea.Msg) (revocationModel, tea.Cmd) {
 				return pushOverlayMsg{newInputOverlay("revocation-export", "Export Signed CRL", "/path/to/crl.pem", 256)}
 			}
 
+		case "D":
+			// Hard-delete the underlying licence row directly from the
+			// revocation list. [x] only unrevokes (status flip); [D] removes
+			// the licence entirely and drops it from the CRL.
+			row := m.selectedRow()
+			if row == nil {
+				return m, nil
+			}
+			short := row.LicenseUUID
+			if len(short) > 12 {
+				short = short[:8] + "…"
+			}
+			sub := fmt.Sprintf(
+				"Supprimer définitivement la licence révoquée %q (uuid %s) ?\n"+
+					"La ligne et son entrée de révocation seront effacées.\n"+
+					"La CRL signée ne référencera plus cet UUID.",
+				row.Subject, short)
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newConfirmOverlay(OverlayIDRevocationDelete, "Supprimer la licence", sub, "supprimer", "annuler", true)}
+			}
+
 		case "r":
 			return m, listRevocationCmd(m.svc)
 		}
@@ -208,6 +229,7 @@ func (m revocationModel) View() string {
 		{Key: "↑↓", Label: " nav ", Cmd: func() tea.Cmd { return nil }},
 		{Key: "d", Label: " détail ", Cmd: keyCmd("d")},
 		{Key: "x", Label: " retirer ", Cmd: keyCmd("x")},
+		{Key: "D", Label: " supprimer ", Cmd: keyCmd("D")},
 		{Key: "E", Label: " export CRL ", Cmd: keyCmd("E")},
 		{Key: "r", Label: " rafraîchir", Cmd: keyCmd("r")},
 	}, 0, BoxedInner(m.width))
@@ -392,6 +414,21 @@ func (m revocationModel) handleRevocationConfirmResult(res ConfirmResultMsg) (re
 				return RevocationLoadedMsg{Err: err}
 			}
 			rows, err := m.svc.Revoke.ListRevoked(context.Background())
+			return RevocationLoadedMsg{Rows: rows, Err: err}
+		}
+	}
+	if res.ID == OverlayIDRevocationDelete && res.Confirm {
+		row := m.selectedRow()
+		if row == nil || m.svc == nil {
+			return m, nil
+		}
+		id := row.LicenseID
+		svc := m.svc
+		return m, func() tea.Msg {
+			if err := svc.License.Delete(context.Background(), id, "operator"); err != nil {
+				return pushOverlayMsg{newErrorOverlay("Suppression échouée", err.Error())}
+			}
+			rows, err := svc.Revoke.ListRevoked(context.Background())
 			return RevocationLoadedMsg{Rows: rows, Err: err}
 		}
 	}
