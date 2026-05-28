@@ -202,7 +202,10 @@ func (m dashboardModel) buildWidgetTree() Widget {
 	heatBox := NewBoxWithHint(heatContent, "Activité licences (91j)", "émissions · expirations", false)
 	rightCol := NewFlex(Vertical, 1,
 		FlexChild{W: auditBox, Min: 6, Flex: 2},
-		FlexChild{W: heatBox, Min: 9, Max: 10},
+		// 11 rows = 7 day rows + 1 legend + 2 borders + 1 hint row. Min/Max
+		// must both accommodate this so the bottom border + legend aren't
+		// clipped on the narrow-flex layout the dashboard ships with.
+		FlexChild{W: heatBox, Min: 11, Max: 11},
 		FlexChild{W: shortcutsBox, Min: 5, Flex: 1},
 	)
 
@@ -286,21 +289,36 @@ func (m dashboardModel) keyCardContent(textW int) string {
 // serverPillOn/Off mirror the prototype StatusPill: a single-line padded chip
 // with a 1-cell coloured border. Cf .dev/license-manager-2026/design/prototype/
 // primitives.jsx (StatusPill).
+//
+// Heatmap cell styles are computed at render time via heatStyle() so they
+// always reflect the current theme/apparence. Pre-fix the styles were
+// captured as package-level vars at load time — BEFORE theme.go's init()
+// reseeded the Glow*/Fg* vars — so heatEmpty kept the zero lipgloss.Style
+// and every heatmap cell rendered without colour. The operator saw an
+// identical-looking grid regardless of actual activity.
 var (
 	serverPillOn  = GlowGreen
 	serverPillOff = Mute.Bold(true)
-
-	// Heatmap cell styles, precomputed once instead of allocating
-	// lipgloss.NewStyle() 91+ times per dashboard frame (7 rows × 13 cols).
-	// heatEmpty/heatOutOfRange are alias of Mute (theme); heatBorder/Green/Red
-	// stay local because they have no plain-color theme equivalent.
-	heatEmpty       = Mute
-	heatBorder      = FgBorderBright
-	heatGreen       = FgGreen
-	heatGreenStrong = GlowGreen // dense weeks (3+ issuances) — bold green
-	heatRed         = FgRed
-	heatOutOfRange  = Mute
 )
+
+// heatCellStyle returns the lipgloss style for one heatmap cell given the
+// per-day issuance + expiration counts. Resolved at render time so theme
+// switches (ApplyTheme) and apparence changes (ApplyApparence) take effect
+// without a restart.
+func heatCellStyle(issue, exp int, outOfRange bool) lipgloss.Style {
+	switch {
+	case exp > issue && exp > 0:
+		return FgRed
+	case issue >= 3:
+		return GlowGreen // dense weeks pop in bold
+	case issue >= 1:
+		return FgGreen
+	case outOfRange:
+		return Mute
+	default:
+		return FgBorderBright // empty days: dim but visible
+	}
+}
 
 // serverRow builds two lines for one server entry matching the reference layout:
 //
@@ -485,28 +503,18 @@ func (m dashboardModel) renderHeatmap() string {
 				issue = m.heatIssue[offset]
 				exp = m.heatExpiry[offset]
 			}
-			var cell lipgloss.Style
-			switch {
-			case exp > issue && exp > 0:
-				cell = heatRed
-			case issue >= 3:
-				cell = heatGreenStrong // dense weeks pop in bold
-			case issue >= 1:
-				cell = heatGreen
-			case offset < 0 || offset >= 91:
-				cell = heatOutOfRange
-			default:
-				cell = heatEmpty
-			}
+			cell := heatCellStyle(issue, exp, offset < 0 || offset >= 91)
 			row.WriteString(cell.Render("■ "))
 		}
 		lines = append(lines, row.String())
 	}
+	// Legend cells resolve through the same helper so the colours match
+	// what the grid actually renders.
 	legend := Mute.Render("  émissions") + " " +
-		heatEmpty.Render("■") + " " +
-		heatBorder.Render("■") + " " +
-		heatGreen.Render("■") + "  ·  " +
-		heatRed.Render("■") + " " +
+		heatCellStyle(0, 0, false).Render("■") + " " +
+		heatCellStyle(1, 0, false).Render("■") + " " +
+		heatCellStyle(3, 0, false).Render("■") + "  ·  " +
+		heatCellStyle(0, 1, false).Render("■") + " " +
 		Mute.Render("expirations > émissions")
 	return lipgloss.JoinVertical(lipgloss.Left, lines...) + "\n" + legend
 }
