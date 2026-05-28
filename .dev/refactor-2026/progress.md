@@ -1,6 +1,6 @@
 ---
-last_reviewed: 2026-05-19
-reflects_commit: 9f3967b
+last_reviewed: 2026-05-28
+reflects_commit: e88e634
 ---
 
 # Documentation refactor — progress tracker
@@ -8,6 +8,39 @@ reflects_commit: 9f3967b
 > **Read this file first** when picking the refactor up on another
 > machine or after a session break. It is the canonical view of what's
 > done, what's in flight, and what comes next.
+
+## 2026-05-28 session — license-manager tutorials 01–05 (TUI + client + VHS)
+
+Operator-facing tutorials shipped under
+`docs/license-manager/tutorials/` with matching runnable Go clients
+under `examples/license-manager/tutorials/`. Pattern: every tutorial
+is **TUI keys → client code**, fronted by `Objectif / Concepts /
+Attendu`. Each ships a VHS tape (`vhs/tui-gif/tutorial-NN-*.tape`),
+a `client/main.go`, and an `e2e_test.go` that drives both halves
+(positive + negative assertions) — so the documented keys + Go API
+calls cannot drift silently from reality.
+
+| # | Theme | Client API exercised | E2E runtime |
+|---|---|---|---|
+| 01 | Basic issue + verify | `license.Verify` | 5.45 s |
+| 02 | Bindings AND semantics | `WithMachineID` + `WithPassword` + `WithTOTPCode` | 5.98 s |
+| 03 | Live revocation server | `WithRevocation(HTTPSource)` + cache fallback | 8.46 s |
+| 04 | TOTP authenticator handoff | `WithTOTPCode` | 6.34 s |
+| 05 | Sealed payload (X25519) | `seal.Open` on `Verified.SealedPayload` | 4.69 s |
+
+Commits this session (most recent first):
+- `e88e634` add Objectif / Concepts / Attendu blockquote to each
+- `2133eb6` fix tab numbers (t03 5→7, t04 4→8, t05 6→4) + render
+  GIFs into `docs/.../tutorials/assets/` (was `vhs/out/`, gitignored)
+- `8f07433` ship tutorials 02–05 (tapes + clients + dual E2E + docs)
+- `433e3ea` tutorial 01 — initial pattern
+- `3aff9a8` Phase 1 examples scaffold + EN concepts
+
+**Next batch** (not started): wizard step numbers in t02/t04/t05 doc
+bodies were guessed (step 6 FreeFields, step 7 TOTP, step 4 Sealed
+payload) — verify against the actual wizard before claiming
+accuracy. Consider hiding verbose concept pages from primary nav
+per user feedback ("doc trop fouillie") if more polish lands.
 
 ## 2026-05-19 session — `runtime/bof` v0.156.0 ship
 
