@@ -99,6 +99,30 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 				return m, settingsPersistCmd(m.svc, func(q *ent.SettingUpdateOne) {
 					q.SetAutoStartServers(v)
 				})
+			case "stop_servers_on_exit":
+				m.row.StopServersOnExit = !m.row.StopServersOnExit
+				v := m.row.StopServersOnExit
+				return m, settingsPersistCmd(m.svc, func(q *ent.SettingUpdateOne) {
+					q.SetStopServersOnExit(v)
+				})
+			case "bold_saturated":
+				m.row.BoldSaturated = !m.row.BoldSaturated
+				v := m.row.BoldSaturated
+				return m, settingsPersistCmd(m.svc, func(q *ent.SettingUpdateOne) {
+					q.SetBoldSaturated(v)
+				})
+			case "comfort_density":
+				m.row.ComfortDensity = !m.row.ComfortDensity
+				v := m.row.ComfortDensity
+				return m, settingsPersistCmd(m.svc, func(q *ent.SettingUpdateOne) {
+					q.SetComfortDensity(v)
+				})
+			case "timestamps_local":
+				m.row.TimestampsLocal = !m.row.TimestampsLocal
+				v := m.row.TimestampsLocal
+				return m, settingsPersistCmd(m.svc, func(q *ent.SettingUpdateOne) {
+					q.SetTimestampsLocal(v)
+				})
 			}
 		}
 		return m, nil
@@ -140,6 +164,10 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 			return m, func() tea.Msg {
 				return pushOverlayMsg{newInputOverlay(OverlayIDSettingsBackup, "Backup chiffré", "/path/to/backup.tar.gz.enc", 256)}
 			}
+		case "restore":
+			return m, func() tea.Msg {
+				return pushOverlayMsg{newInputOverlay(OverlayIDSettingsRestore, "Restaurer un backup", "/path/to/backup.tar.gz.enc", 256)}
+			}
 		}
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -171,6 +199,16 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 			return m, func() tea.Msg { return settingsToggleMsg{key: "confirm_quit_with_servers"} }
 		case "U":
 			return m, func() tea.Msg { return settingsToggleMsg{key: "auto_start_servers"} }
+		case "S":
+			return m, func() tea.Msg { return settingsToggleMsg{key: "stop_servers_on_exit"} }
+		case "G":
+			return m, func() tea.Msg { return settingsToggleMsg{key: "bold_saturated"} }
+		case "D":
+			return m, func() tea.Msg { return settingsToggleMsg{key: "comfort_density"} }
+		case "T":
+			return m, func() tea.Msg { return settingsToggleMsg{key: "timestamps_local"} }
+		case "I":
+			return m, func() tea.Msg { return settingsActionMsg{kind: "restore"} }
 		}
 	}
 	return m, nil
@@ -331,7 +369,7 @@ func (m settingsModel) renderGrid(w int) string {
 	rightBoxes := []string{
 		m.boxArgonPreset(colW, r),
 		m.boxBaseDeDonnees(colW, r),
-		m.boxApparence(colW),
+		m.boxApparence(colW, r),
 	}
 
 	left := lipgloss.JoinVertical(lipgloss.Left, leftBoxes...)
@@ -411,6 +449,7 @@ func (m settingsModel) boxBaseDeDonnees(w int, _ *ent.Setting) string {
 		HintKey.Render("[P]") + Dim.Render(" changer la passphrase (rekey complet en transaction)"),
 		HintKey.Render("[V]") + Dim.Render(" vacuum + analyse"),
 		HintKey.Render("[B]") + Dim.Render(" backup chiffré → fichier…"),
+		HintKey.Render("[I]") + Dim.Render(" importer un backup ← fichier…"),
 	}, "\n")
 	return settingsBox(w, "Base de données", body)
 }
@@ -418,28 +457,35 @@ func (m settingsModel) boxBaseDeDonnees(w int, _ *ent.Setting) string {
 func (m settingsModel) boxCycleVieServeurs(w int, r *ent.Setting) string {
 	sep := max(0, w-6)
 	body := GlowCyan.Render("À la fermeture") + "\n" +
-		settingsToggle("confirm_quit_with_servers — modal si serveur(s) ON", r.ConfirmQuitWithServers) + "\n" +
-		settingsToggle("arrêter tous les serveurs avant de sortir", true) + "\n" +
+		settingsToggle("confirm_quit_with_servers — modal si serveur(s) ON ["+Mute.Render("Q")+"]", r.ConfirmQuitWithServers) + "\n" +
+		settingsToggle("stop_servers_on_exit — arrêter les serveurs avant tea.Quit ["+Mute.Render("S")+"]", r.StopServersOnExit) + "\n" +
 		Dim.Render(strings.Repeat("─", sep)) + "\n" +
 		GlowCyan.Render("Au démarrage") + "\n" +
-		settingsToggle("auto_start_servers — démarrer les serveurs au boot", r.AutoStartServers) + "\n" +
-		settingsToggle("ouvrir directement Dashboard (défaut)", true)
+		settingsToggle("auto_start_servers — démarrer les serveurs au boot ["+Mute.Render("U")+"]", r.AutoStartServers)
 	return settingsBox(w, "Cycle de vie serveurs HTTP", body)
 }
 
-func (m settingsModel) boxApparence(w int) string {
+func (m settingsModel) boxApparence(w int, r *ent.Setting) string {
 	// theme keys are N/M/O (not 1/2/3 which set argon preset).
-	// The View now matches the keyboard handler so pressing [N] sets neon, etc.
+	// Apparence toggles use G/D/T uppercase shortcuts.
 	themes := []string{
-		GlowGreen.Render("●") + " " + HintKey.Render("[N]") + " " + GlowGreen.Render("neon"),
-		Mute.Render(" ") + " " + HintKey.Render("[M]") + " " + Mute.Render("mono"),
-		Mute.Render(" ") + " " + HintKey.Render("[O]") + " " + Mute.Render("nord-soft"),
+		themeMarker(string(r.Theme), "neon", "[N]", "neon"),
+		themeMarker(string(r.Theme), "mono", "[M]", "mono"),
+		themeMarker(string(r.Theme), "nord-soft", "[O]", "nord-soft"),
 	}
 	body := Dim.Render("thème : ") + strings.Join(themes, "  ") + "\n" +
-		settingsToggle("bold + couleur saturée (équivalent glow en TUI)", true) + "\n" +
-		settingsToggle("densité confort (+1 ligne de padding partout)", false) + "\n" +
-		settingsToggle("show timestamps en local au lieu d'UTC", false)
+		settingsToggle("bold_saturated — couleurs vives, glow en TUI ["+Mute.Render("G")+"]", r.BoldSaturated) + "\n" +
+		settingsToggle("comfort_density — +1 ligne de padding partout ["+Mute.Render("D")+"]", r.ComfortDensity) + "\n" +
+		settingsToggle("timestamps_local — horodatages en local au lieu d'UTC ["+Mute.Render("T")+"]", r.TimestampsLocal)
 	return settingsBox(w, "Apparence", body)
+}
+
+// themeMarker renders a "● [key] label" entry, highlighting the active theme.
+func themeMarker(current, key, hotkey, label string) string {
+	if string(current) == key {
+		return GlowGreen.Render("●") + " " + HintKey.Render(hotkey) + " " + GlowGreen.Render(label)
+	}
+	return Mute.Render(" ") + " " + HintKey.Render(hotkey) + " " + Mute.Render(label)
 }
 
 // PassphraseSource is set by cmd/license-manager at boot to describe which

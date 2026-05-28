@@ -817,6 +817,10 @@ func (m rootModel) dispatchOverlayResult(result any) rootModel {
 				m.overlays = append(m.overlays, NewOKOverlay("Passphrase", "Rekey effectué (stub — service à câbler)."))
 			case OverlayIDSettingsBackup:
 				m.overlays = append(m.overlays, NewOKOverlay("Backup", "Backup écrit vers "+res.Value+" (stub)."))
+			case OverlayIDSettingsRestore:
+				m.overlays = append(m.overlays, NewOKOverlay("Restore",
+					"Restauration depuis "+res.Value+
+						" (stub — symétrique du backup ; la persistance arrive avec le format de backup défini)."))
 			}
 		case ViewServers:
 			if res.ID == OverlayIDServerEditBind && m.services != nil {

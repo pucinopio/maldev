@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	settingent "github.com/oioio-space/maldev/internal/manager/store/ent/setting"
 	licensekg "github.com/oioio-space/maldev/license"
 	"github.com/oioio-space/maldev/license/totp"
 )
@@ -552,4 +553,57 @@ func sameStringSlice(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// TestLicenseIssueUsesSettingsArgonPreset — operator-reported "le preset
+// argon est-il bien prise en compte ?" Pre-fix Issue ignored the Settings
+// row entirely and used licensekg.DefaultArgon2idParams unconditionally,
+// so the operator's UI choice had no effect. The new argonPresetParams
+// helper looks up the row and translates the preset; explicit b.Argon
+// still overrides as before.
+func TestLicenseIssueUsesSettingsArgonPreset(t *testing.T) {
+	for _, tc := range []struct {
+		preset    string
+		wantTime  uint32
+		wantMem   uint32
+	}{
+		{"fast", 2, 64 * 1024},
+		{"default", 3, 256 * 1024},
+		{"paranoid", 4, 512 * 1024},
+	} {
+		t.Run(tc.preset, func(t *testing.T) {
+			lic, issuer, _, _, _, ctx := setupLicSvc(t)
+			iss, _ := issuer.Generate(ctx, "lab", "k1", "op")
+			// Persist the preset choice.
+			if _, err := lic.store.Client.Setting.UpdateOneID(1).
+				SetDefaultArgonPreset(settingent.DefaultArgonPreset(tc.preset)).Save(ctx); err != nil {
+				t.Fatalf("set preset: %v", err)
+			}
+			out, err := lic.Issue(ctx, IssueRequest{
+				IssuerID: iss.ID, Subject: "alice",
+				NotAfter: time.Now().Add(24 * time.Hour), Actor: "op",
+				Bindings: []BindingSpec{{Type: "password", Values: []string{"hunter2"}}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			parsed, _ := licensekg.Inspect(out.PEM)
+			var got *licensekg.BindingParams
+			for _, b := range parsed.Bindings {
+				if b.Type == "password" && b.Params != nil {
+					got = b.Params
+					break
+				}
+			}
+			if got == nil {
+				t.Fatal("password binding missing or has no Params")
+			}
+			if got.ArgonTime != tc.wantTime {
+				t.Errorf("preset %q: ArgonTime = %d, want %d", tc.preset, got.ArgonTime, tc.wantTime)
+			}
+			if got.ArgonMemory != tc.wantMem {
+				t.Errorf("preset %q: ArgonMemory = %d, want %d", tc.preset, got.ArgonMemory, tc.wantMem)
+			}
+		})
+	}
 }

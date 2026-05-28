@@ -8,6 +8,7 @@ const (
 	OverlayIDSettingsRekey   = "settings-rekey"
 	OverlayIDSettingsVacuum  = "settings-vacuum"
 	OverlayIDSettingsBackup  = "settings-backup"
+	OverlayIDSettingsRestore = "settings-restore"
 	OverlayIDServerRegenTok  = "server-regen-token"
 	OverlayIDServerEditBind  = "server-edit-bind"
 	OverlayIDAuditExportCSV  = "audit-export-csv"

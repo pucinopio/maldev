@@ -109,6 +109,20 @@ func (_c *SettingCreate) SetNillableConfirmQuitWithServers(v *bool) *SettingCrea
 	return _c
 }
 
+// SetStopServersOnExit sets the "stop_servers_on_exit" field.
+func (_c *SettingCreate) SetStopServersOnExit(v bool) *SettingCreate {
+	_c.mutation.SetStopServersOnExit(v)
+	return _c
+}
+
+// SetNillableStopServersOnExit sets the "stop_servers_on_exit" field if the given value is not nil.
+func (_c *SettingCreate) SetNillableStopServersOnExit(v *bool) *SettingCreate {
+	if v != nil {
+		_c.SetStopServersOnExit(*v)
+	}
+	return _c
+}
+
 // SetTheme sets the "theme" field.
 func (_c *SettingCreate) SetTheme(v setting.Theme) *SettingCreate {
 	_c.mutation.SetTheme(v)
@@ -119,6 +133,48 @@ func (_c *SettingCreate) SetTheme(v setting.Theme) *SettingCreate {
 func (_c *SettingCreate) SetNillableTheme(v *setting.Theme) *SettingCreate {
 	if v != nil {
 		_c.SetTheme(*v)
+	}
+	return _c
+}
+
+// SetBoldSaturated sets the "bold_saturated" field.
+func (_c *SettingCreate) SetBoldSaturated(v bool) *SettingCreate {
+	_c.mutation.SetBoldSaturated(v)
+	return _c
+}
+
+// SetNillableBoldSaturated sets the "bold_saturated" field if the given value is not nil.
+func (_c *SettingCreate) SetNillableBoldSaturated(v *bool) *SettingCreate {
+	if v != nil {
+		_c.SetBoldSaturated(*v)
+	}
+	return _c
+}
+
+// SetComfortDensity sets the "comfort_density" field.
+func (_c *SettingCreate) SetComfortDensity(v bool) *SettingCreate {
+	_c.mutation.SetComfortDensity(v)
+	return _c
+}
+
+// SetNillableComfortDensity sets the "comfort_density" field if the given value is not nil.
+func (_c *SettingCreate) SetNillableComfortDensity(v *bool) *SettingCreate {
+	if v != nil {
+		_c.SetComfortDensity(*v)
+	}
+	return _c
+}
+
+// SetTimestampsLocal sets the "timestamps_local" field.
+func (_c *SettingCreate) SetTimestampsLocal(v bool) *SettingCreate {
+	_c.mutation.SetTimestampsLocal(v)
+	return _c
+}
+
+// SetNillableTimestampsLocal sets the "timestamps_local" field if the given value is not nil.
+func (_c *SettingCreate) SetNillableTimestampsLocal(v *bool) *SettingCreate {
+	if v != nil {
+		_c.SetTimestampsLocal(*v)
 	}
 	return _c
 }
@@ -192,9 +248,25 @@ func (_c *SettingCreate) defaults() {
 		v := setting.DefaultConfirmQuitWithServers
 		_c.mutation.SetConfirmQuitWithServers(v)
 	}
+	if _, ok := _c.mutation.StopServersOnExit(); !ok {
+		v := setting.DefaultStopServersOnExit
+		_c.mutation.SetStopServersOnExit(v)
+	}
 	if _, ok := _c.mutation.Theme(); !ok {
 		v := setting.DefaultTheme
 		_c.mutation.SetTheme(v)
+	}
+	if _, ok := _c.mutation.BoldSaturated(); !ok {
+		v := setting.DefaultBoldSaturated
+		_c.mutation.SetBoldSaturated(v)
+	}
+	if _, ok := _c.mutation.ComfortDensity(); !ok {
+		v := setting.DefaultComfortDensity
+		_c.mutation.SetComfortDensity(v)
+	}
+	if _, ok := _c.mutation.TimestampsLocal(); !ok {
+		v := setting.DefaultTimestampsLocal
+		_c.mutation.SetTimestampsLocal(v)
 	}
 }
 
@@ -217,6 +289,9 @@ func (_c *SettingCreate) check() error {
 	if _, ok := _c.mutation.ConfirmQuitWithServers(); !ok {
 		return &ValidationError{Name: "confirm_quit_with_servers", err: errors.New(`ent: missing required field "Setting.confirm_quit_with_servers"`)}
 	}
+	if _, ok := _c.mutation.StopServersOnExit(); !ok {
+		return &ValidationError{Name: "stop_servers_on_exit", err: errors.New(`ent: missing required field "Setting.stop_servers_on_exit"`)}
+	}
 	if _, ok := _c.mutation.Theme(); !ok {
 		return &ValidationError{Name: "theme", err: errors.New(`ent: missing required field "Setting.theme"`)}
 	}
@@ -224,6 +299,15 @@ func (_c *SettingCreate) check() error {
 		if err := setting.ThemeValidator(v); err != nil {
 			return &ValidationError{Name: "theme", err: fmt.Errorf(`ent: validator failed for field "Setting.theme": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.BoldSaturated(); !ok {
+		return &ValidationError{Name: "bold_saturated", err: errors.New(`ent: missing required field "Setting.bold_saturated"`)}
+	}
+	if _, ok := _c.mutation.ComfortDensity(); !ok {
+		return &ValidationError{Name: "comfort_density", err: errors.New(`ent: missing required field "Setting.comfort_density"`)}
+	}
+	if _, ok := _c.mutation.TimestampsLocal(); !ok {
+		return &ValidationError{Name: "timestamps_local", err: errors.New(`ent: missing required field "Setting.timestamps_local"`)}
 	}
 	if _, ok := _c.mutation.KekSalt(); !ok {
 		return &ValidationError{Name: "kek_salt", err: errors.New(`ent: missing required field "Setting.kek_salt"`)}
@@ -291,9 +375,25 @@ func (_c *SettingCreate) createSpec() (*Setting, *sqlgraph.CreateSpec) {
 		_spec.SetField(setting.FieldConfirmQuitWithServers, field.TypeBool, value)
 		_node.ConfirmQuitWithServers = value
 	}
+	if value, ok := _c.mutation.StopServersOnExit(); ok {
+		_spec.SetField(setting.FieldStopServersOnExit, field.TypeBool, value)
+		_node.StopServersOnExit = value
+	}
 	if value, ok := _c.mutation.Theme(); ok {
 		_spec.SetField(setting.FieldTheme, field.TypeEnum, value)
 		_node.Theme = value
+	}
+	if value, ok := _c.mutation.BoldSaturated(); ok {
+		_spec.SetField(setting.FieldBoldSaturated, field.TypeBool, value)
+		_node.BoldSaturated = value
+	}
+	if value, ok := _c.mutation.ComfortDensity(); ok {
+		_spec.SetField(setting.FieldComfortDensity, field.TypeBool, value)
+		_node.ComfortDensity = value
+	}
+	if value, ok := _c.mutation.TimestampsLocal(); ok {
+		_spec.SetField(setting.FieldTimestampsLocal, field.TypeBool, value)
+		_node.TimestampsLocal = value
 	}
 	if value, ok := _c.mutation.KekSalt(); ok {
 		_spec.SetField(setting.FieldKekSalt, field.TypeBytes, value)

@@ -232,7 +232,11 @@ var (
 		{Name: "operator_name", Type: field.TypeString, Nullable: true},
 		{Name: "auto_start_servers", Type: field.TypeBool, Default: false},
 		{Name: "confirm_quit_with_servers", Type: field.TypeBool, Default: true},
+		{Name: "stop_servers_on_exit", Type: field.TypeBool, Default: false},
 		{Name: "theme", Type: field.TypeEnum, Enums: []string{"neon", "mono", "nord-soft"}, Default: "neon"},
+		{Name: "bold_saturated", Type: field.TypeBool, Default: true},
+		{Name: "comfort_density", Type: field.TypeBool, Default: false},
+		{Name: "timestamps_local", Type: field.TypeBool, Default: false},
 		{Name: "kek_salt", Type: field.TypeBytes},
 		{Name: "kek_canary", Type: field.TypeBytes},
 	}

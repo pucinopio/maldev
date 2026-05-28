@@ -31,8 +31,16 @@ type Setting struct {
 	AutoStartServers bool `json:"auto_start_servers,omitempty"`
 	// ConfirmQuitWithServers holds the value of the "confirm_quit_with_servers" field.
 	ConfirmQuitWithServers bool `json:"confirm_quit_with_servers,omitempty"`
+	// StopServersOnExit holds the value of the "stop_servers_on_exit" field.
+	StopServersOnExit bool `json:"stop_servers_on_exit,omitempty"`
 	// Theme holds the value of the "theme" field.
 	Theme setting.Theme `json:"theme,omitempty"`
+	// BoldSaturated holds the value of the "bold_saturated" field.
+	BoldSaturated bool `json:"bold_saturated,omitempty"`
+	// ComfortDensity holds the value of the "comfort_density" field.
+	ComfortDensity bool `json:"comfort_density,omitempty"`
+	// TimestampsLocal holds the value of the "timestamps_local" field.
+	TimestampsLocal bool `json:"timestamps_local,omitempty"`
 	// KekSalt holds the value of the "kek_salt" field.
 	KekSalt []byte `json:"kek_salt,omitempty"`
 	// KekCanary holds the value of the "kek_canary" field.
@@ -47,7 +55,7 @@ func (*Setting) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case setting.FieldDefaultAudience, setting.FieldKekSalt, setting.FieldKekCanary:
 			values[i] = new([]byte)
-		case setting.FieldAutoStartServers, setting.FieldConfirmQuitWithServers:
+		case setting.FieldAutoStartServers, setting.FieldConfirmQuitWithServers, setting.FieldStopServersOnExit, setting.FieldBoldSaturated, setting.FieldComfortDensity, setting.FieldTimestampsLocal:
 			values[i] = new(sql.NullBool)
 		case setting.FieldID, setting.FieldDefaultTTLSeconds:
 			values[i] = new(sql.NullInt64)
@@ -118,11 +126,35 @@ func (_m *Setting) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ConfirmQuitWithServers = value.Bool
 			}
+		case setting.FieldStopServersOnExit:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field stop_servers_on_exit", values[i])
+			} else if value.Valid {
+				_m.StopServersOnExit = value.Bool
+			}
 		case setting.FieldTheme:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field theme", values[i])
 			} else if value.Valid {
 				_m.Theme = setting.Theme(value.String)
+			}
+		case setting.FieldBoldSaturated:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field bold_saturated", values[i])
+			} else if value.Valid {
+				_m.BoldSaturated = value.Bool
+			}
+		case setting.FieldComfortDensity:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field comfort_density", values[i])
+			} else if value.Valid {
+				_m.ComfortDensity = value.Bool
+			}
+		case setting.FieldTimestampsLocal:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field timestamps_local", values[i])
+			} else if value.Valid {
+				_m.TimestampsLocal = value.Bool
 			}
 		case setting.FieldKekSalt:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -193,8 +225,20 @@ func (_m *Setting) String() string {
 	builder.WriteString("confirm_quit_with_servers=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ConfirmQuitWithServers))
 	builder.WriteString(", ")
+	builder.WriteString("stop_servers_on_exit=")
+	builder.WriteString(fmt.Sprintf("%v", _m.StopServersOnExit))
+	builder.WriteString(", ")
 	builder.WriteString("theme=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Theme))
+	builder.WriteString(", ")
+	builder.WriteString("bold_saturated=")
+	builder.WriteString(fmt.Sprintf("%v", _m.BoldSaturated))
+	builder.WriteString(", ")
+	builder.WriteString("comfort_density=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ComfortDensity))
+	builder.WriteString(", ")
+	builder.WriteString("timestamps_local=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TimestampsLocal))
 	builder.WriteString(", ")
 	builder.WriteString("kek_salt=")
 	builder.WriteString(fmt.Sprintf("%v", _m.KekSalt))

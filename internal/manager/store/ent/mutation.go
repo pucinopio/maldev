@@ -6618,7 +6618,11 @@ type SettingMutation struct {
 	operator_name             *string
 	auto_start_servers        *bool
 	confirm_quit_with_servers *bool
+	stop_servers_on_exit      *bool
 	theme                     *setting.Theme
+	bold_saturated            *bool
+	comfort_density           *bool
+	timestamps_local          *bool
 	kek_salt                  *[]byte
 	kek_canary                *[]byte
 	clearedFields             map[string]struct{}
@@ -7058,6 +7062,42 @@ func (m *SettingMutation) ResetConfirmQuitWithServers() {
 	m.confirm_quit_with_servers = nil
 }
 
+// SetStopServersOnExit sets the "stop_servers_on_exit" field.
+func (m *SettingMutation) SetStopServersOnExit(b bool) {
+	m.stop_servers_on_exit = &b
+}
+
+// StopServersOnExit returns the value of the "stop_servers_on_exit" field in the mutation.
+func (m *SettingMutation) StopServersOnExit() (r bool, exists bool) {
+	v := m.stop_servers_on_exit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStopServersOnExit returns the old "stop_servers_on_exit" field's value of the Setting entity.
+// If the Setting object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SettingMutation) OldStopServersOnExit(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStopServersOnExit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStopServersOnExit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStopServersOnExit: %w", err)
+	}
+	return oldValue.StopServersOnExit, nil
+}
+
+// ResetStopServersOnExit resets all changes to the "stop_servers_on_exit" field.
+func (m *SettingMutation) ResetStopServersOnExit() {
+	m.stop_servers_on_exit = nil
+}
+
 // SetTheme sets the "theme" field.
 func (m *SettingMutation) SetTheme(s setting.Theme) {
 	m.theme = &s
@@ -7092,6 +7132,114 @@ func (m *SettingMutation) OldTheme(ctx context.Context) (v setting.Theme, err er
 // ResetTheme resets all changes to the "theme" field.
 func (m *SettingMutation) ResetTheme() {
 	m.theme = nil
+}
+
+// SetBoldSaturated sets the "bold_saturated" field.
+func (m *SettingMutation) SetBoldSaturated(b bool) {
+	m.bold_saturated = &b
+}
+
+// BoldSaturated returns the value of the "bold_saturated" field in the mutation.
+func (m *SettingMutation) BoldSaturated() (r bool, exists bool) {
+	v := m.bold_saturated
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBoldSaturated returns the old "bold_saturated" field's value of the Setting entity.
+// If the Setting object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SettingMutation) OldBoldSaturated(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBoldSaturated is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBoldSaturated requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBoldSaturated: %w", err)
+	}
+	return oldValue.BoldSaturated, nil
+}
+
+// ResetBoldSaturated resets all changes to the "bold_saturated" field.
+func (m *SettingMutation) ResetBoldSaturated() {
+	m.bold_saturated = nil
+}
+
+// SetComfortDensity sets the "comfort_density" field.
+func (m *SettingMutation) SetComfortDensity(b bool) {
+	m.comfort_density = &b
+}
+
+// ComfortDensity returns the value of the "comfort_density" field in the mutation.
+func (m *SettingMutation) ComfortDensity() (r bool, exists bool) {
+	v := m.comfort_density
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldComfortDensity returns the old "comfort_density" field's value of the Setting entity.
+// If the Setting object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SettingMutation) OldComfortDensity(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldComfortDensity is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldComfortDensity requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldComfortDensity: %w", err)
+	}
+	return oldValue.ComfortDensity, nil
+}
+
+// ResetComfortDensity resets all changes to the "comfort_density" field.
+func (m *SettingMutation) ResetComfortDensity() {
+	m.comfort_density = nil
+}
+
+// SetTimestampsLocal sets the "timestamps_local" field.
+func (m *SettingMutation) SetTimestampsLocal(b bool) {
+	m.timestamps_local = &b
+}
+
+// TimestampsLocal returns the value of the "timestamps_local" field in the mutation.
+func (m *SettingMutation) TimestampsLocal() (r bool, exists bool) {
+	v := m.timestamps_local
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTimestampsLocal returns the old "timestamps_local" field's value of the Setting entity.
+// If the Setting object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SettingMutation) OldTimestampsLocal(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTimestampsLocal is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTimestampsLocal requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTimestampsLocal: %w", err)
+	}
+	return oldValue.TimestampsLocal, nil
+}
+
+// ResetTimestampsLocal resets all changes to the "timestamps_local" field.
+func (m *SettingMutation) ResetTimestampsLocal() {
+	m.timestamps_local = nil
 }
 
 // SetKekSalt sets the "kek_salt" field.
@@ -7200,7 +7348,7 @@ func (m *SettingMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SettingMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 14)
 	if m.default_issuer_name != nil {
 		fields = append(fields, setting.FieldDefaultIssuerName)
 	}
@@ -7222,8 +7370,20 @@ func (m *SettingMutation) Fields() []string {
 	if m.confirm_quit_with_servers != nil {
 		fields = append(fields, setting.FieldConfirmQuitWithServers)
 	}
+	if m.stop_servers_on_exit != nil {
+		fields = append(fields, setting.FieldStopServersOnExit)
+	}
 	if m.theme != nil {
 		fields = append(fields, setting.FieldTheme)
+	}
+	if m.bold_saturated != nil {
+		fields = append(fields, setting.FieldBoldSaturated)
+	}
+	if m.comfort_density != nil {
+		fields = append(fields, setting.FieldComfortDensity)
+	}
+	if m.timestamps_local != nil {
+		fields = append(fields, setting.FieldTimestampsLocal)
 	}
 	if m.kek_salt != nil {
 		fields = append(fields, setting.FieldKekSalt)
@@ -7253,8 +7413,16 @@ func (m *SettingMutation) Field(name string) (ent.Value, bool) {
 		return m.AutoStartServers()
 	case setting.FieldConfirmQuitWithServers:
 		return m.ConfirmQuitWithServers()
+	case setting.FieldStopServersOnExit:
+		return m.StopServersOnExit()
 	case setting.FieldTheme:
 		return m.Theme()
+	case setting.FieldBoldSaturated:
+		return m.BoldSaturated()
+	case setting.FieldComfortDensity:
+		return m.ComfortDensity()
+	case setting.FieldTimestampsLocal:
+		return m.TimestampsLocal()
 	case setting.FieldKekSalt:
 		return m.KekSalt()
 	case setting.FieldKekCanary:
@@ -7282,8 +7450,16 @@ func (m *SettingMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldAutoStartServers(ctx)
 	case setting.FieldConfirmQuitWithServers:
 		return m.OldConfirmQuitWithServers(ctx)
+	case setting.FieldStopServersOnExit:
+		return m.OldStopServersOnExit(ctx)
 	case setting.FieldTheme:
 		return m.OldTheme(ctx)
+	case setting.FieldBoldSaturated:
+		return m.OldBoldSaturated(ctx)
+	case setting.FieldComfortDensity:
+		return m.OldComfortDensity(ctx)
+	case setting.FieldTimestampsLocal:
+		return m.OldTimestampsLocal(ctx)
 	case setting.FieldKekSalt:
 		return m.OldKekSalt(ctx)
 	case setting.FieldKekCanary:
@@ -7346,12 +7522,40 @@ func (m *SettingMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetConfirmQuitWithServers(v)
 		return nil
+	case setting.FieldStopServersOnExit:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStopServersOnExit(v)
+		return nil
 	case setting.FieldTheme:
 		v, ok := value.(setting.Theme)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTheme(v)
+		return nil
+	case setting.FieldBoldSaturated:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBoldSaturated(v)
+		return nil
+	case setting.FieldComfortDensity:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetComfortDensity(v)
+		return nil
+	case setting.FieldTimestampsLocal:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTimestampsLocal(v)
 		return nil
 	case setting.FieldKekSalt:
 		v, ok := value.([]byte)
@@ -7473,8 +7677,20 @@ func (m *SettingMutation) ResetField(name string) error {
 	case setting.FieldConfirmQuitWithServers:
 		m.ResetConfirmQuitWithServers()
 		return nil
+	case setting.FieldStopServersOnExit:
+		m.ResetStopServersOnExit()
+		return nil
 	case setting.FieldTheme:
 		m.ResetTheme()
+		return nil
+	case setting.FieldBoldSaturated:
+		m.ResetBoldSaturated()
+		return nil
+	case setting.FieldComfortDensity:
+		m.ResetComfortDensity()
+		return nil
+	case setting.FieldTimestampsLocal:
+		m.ResetTimestampsLocal()
 		return nil
 	case setting.FieldKekSalt:
 		m.ResetKekSalt()

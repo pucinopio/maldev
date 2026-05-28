@@ -48,6 +48,31 @@ type LicenseService struct {
 // cache for revoked licences. Called once by Services.New.
 func (svc *LicenseService) SetRevoke(r *RevokeService) { svc.revoke = r }
 
+// argonPresetParams reads the operator-chosen Argon preset from Settings
+// and translates it to licencekg.BindingParams. Returns (params, true) on
+// success. On any failure (no settings row yet, DB error, unknown preset)
+// returns (zero, false) so the caller falls back to the package defaults.
+//
+// Preset → params mapping is held HERE rather than in licencekg so the
+// service can evolve memory/time costs independently of the on-the-wire
+// licence format (BindingParams are stamped into the licence at issue
+// time and travel with it, so changing the preset never breaks Verify).
+func (svc *LicenseService) argonPresetParams(ctx context.Context) (licensekg.BindingParams, bool) {
+	row, err := svc.store.Client.Setting.Get(ctx, 1)
+	if err != nil {
+		return licensekg.BindingParams{}, false
+	}
+	switch row.DefaultArgonPreset {
+	case "fast":
+		return licensekg.BindingParams{ArgonTime: 2, ArgonMemory: 64 * 1024, ArgonThreads: 1, ArgonKeyLen: 32}, true
+	case "default":
+		return licensekg.BindingParams{ArgonTime: 3, ArgonMemory: 256 * 1024, ArgonThreads: 2, ArgonKeyLen: 32}, true
+	case "paranoid":
+		return licensekg.BindingParams{ArgonTime: 4, ArgonMemory: 512 * 1024, ArgonThreads: 2, ArgonKeyLen: 32}, true
+	}
+	return licensekg.BindingParams{}, false
+}
+
 func NewLicenseService(s *store.Store, k *crypto.KEK, a *AuditService,
 	iss *IssuerService, id *IdentityService, rec *RecipientService, t *TOTPService) *LicenseService {
 	return &LicenseService{
@@ -136,7 +161,17 @@ func (svc *LicenseService) Issue(ctx context.Context, req IssueRequest) (*Issued
 			if len(b.Values) != 1 {
 				return nil, fmt.Errorf("binding %d: password expects exactly 1 value", i)
 			}
+			// Argon parameters resolve in priority order:
+			//   1. Explicit b.Argon (caller-supplied — overrides everything)
+			//   2. The Settings.default_argon_preset row (operator-chosen)
+			//   3. Package defaults (fast-but-not-cryptographically-stale)
+			// Pre-fix the setting was persisted but never read here, so the
+			// operator's UI choice had no effect on issuance — a silent
+			// loss of UX intent.
 			params := licensekg.DefaultArgon2idParams()
+			if presetParams, ok := svc.argonPresetParams(ctx); ok {
+				params = presetParams
+			}
 			if b.Argon != nil {
 				params = *b.Argon
 			}

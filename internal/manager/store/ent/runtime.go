@@ -219,6 +219,22 @@ func init() {
 	settingDescConfirmQuitWithServers := settingFields[7].Descriptor()
 	// setting.DefaultConfirmQuitWithServers holds the default value on creation for the confirm_quit_with_servers field.
 	setting.DefaultConfirmQuitWithServers = settingDescConfirmQuitWithServers.Default.(bool)
+	// settingDescStopServersOnExit is the schema descriptor for stop_servers_on_exit field.
+	settingDescStopServersOnExit := settingFields[8].Descriptor()
+	// setting.DefaultStopServersOnExit holds the default value on creation for the stop_servers_on_exit field.
+	setting.DefaultStopServersOnExit = settingDescStopServersOnExit.Default.(bool)
+	// settingDescBoldSaturated is the schema descriptor for bold_saturated field.
+	settingDescBoldSaturated := settingFields[10].Descriptor()
+	// setting.DefaultBoldSaturated holds the default value on creation for the bold_saturated field.
+	setting.DefaultBoldSaturated = settingDescBoldSaturated.Default.(bool)
+	// settingDescComfortDensity is the schema descriptor for comfort_density field.
+	settingDescComfortDensity := settingFields[11].Descriptor()
+	// setting.DefaultComfortDensity holds the default value on creation for the comfort_density field.
+	setting.DefaultComfortDensity = settingDescComfortDensity.Default.(bool)
+	// settingDescTimestampsLocal is the schema descriptor for timestamps_local field.
+	settingDescTimestampsLocal := settingFields[12].Descriptor()
+	// setting.DefaultTimestampsLocal holds the default value on creation for the timestamps_local field.
+	setting.DefaultTimestampsLocal = settingDescTimestampsLocal.Default.(bool)
 	totpsecretFields := schema.TOTPSecret{}.Fields()
 	_ = totpsecretFields
 	// totpsecretDescCreatedAt is the schema descriptor for created_at field.

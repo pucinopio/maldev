@@ -27,8 +27,16 @@ const (
 	FieldAutoStartServers = "auto_start_servers"
 	// FieldConfirmQuitWithServers holds the string denoting the confirm_quit_with_servers field in the database.
 	FieldConfirmQuitWithServers = "confirm_quit_with_servers"
+	// FieldStopServersOnExit holds the string denoting the stop_servers_on_exit field in the database.
+	FieldStopServersOnExit = "stop_servers_on_exit"
 	// FieldTheme holds the string denoting the theme field in the database.
 	FieldTheme = "theme"
+	// FieldBoldSaturated holds the string denoting the bold_saturated field in the database.
+	FieldBoldSaturated = "bold_saturated"
+	// FieldComfortDensity holds the string denoting the comfort_density field in the database.
+	FieldComfortDensity = "comfort_density"
+	// FieldTimestampsLocal holds the string denoting the timestamps_local field in the database.
+	FieldTimestampsLocal = "timestamps_local"
 	// FieldKekSalt holds the string denoting the kek_salt field in the database.
 	FieldKekSalt = "kek_salt"
 	// FieldKekCanary holds the string denoting the kek_canary field in the database.
@@ -47,7 +55,11 @@ var Columns = []string{
 	FieldOperatorName,
 	FieldAutoStartServers,
 	FieldConfirmQuitWithServers,
+	FieldStopServersOnExit,
 	FieldTheme,
+	FieldBoldSaturated,
+	FieldComfortDensity,
+	FieldTimestampsLocal,
 	FieldKekSalt,
 	FieldKekCanary,
 }
@@ -69,6 +81,14 @@ var (
 	DefaultAutoStartServers bool
 	// DefaultConfirmQuitWithServers holds the default value on creation for the "confirm_quit_with_servers" field.
 	DefaultConfirmQuitWithServers bool
+	// DefaultStopServersOnExit holds the default value on creation for the "stop_servers_on_exit" field.
+	DefaultStopServersOnExit bool
+	// DefaultBoldSaturated holds the default value on creation for the "bold_saturated" field.
+	DefaultBoldSaturated bool
+	// DefaultComfortDensity holds the default value on creation for the "comfort_density" field.
+	DefaultComfortDensity bool
+	// DefaultTimestampsLocal holds the default value on creation for the "timestamps_local" field.
+	DefaultTimestampsLocal bool
 )
 
 // DefaultArgonPreset defines the type for the "default_argon_preset" enum field.
@@ -163,7 +183,27 @@ func ByConfirmQuitWithServers(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldConfirmQuitWithServers, opts...).ToFunc()
 }
 
+// ByStopServersOnExit orders the results by the stop_servers_on_exit field.
+func ByStopServersOnExit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStopServersOnExit, opts...).ToFunc()
+}
+
 // ByTheme orders the results by the theme field.
 func ByTheme(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTheme, opts...).ToFunc()
+}
+
+// ByBoldSaturated orders the results by the bold_saturated field.
+func ByBoldSaturated(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBoldSaturated, opts...).ToFunc()
+}
+
+// ByComfortDensity orders the results by the comfort_density field.
+func ByComfortDensity(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldComfortDensity, opts...).ToFunc()
+}
+
+// ByTimestampsLocal orders the results by the timestamps_local field.
+func ByTimestampsLocal(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTimestampsLocal, opts...).ToFunc()
 }

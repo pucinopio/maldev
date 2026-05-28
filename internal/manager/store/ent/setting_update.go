@@ -149,6 +149,20 @@ func (_u *SettingUpdate) SetNillableConfirmQuitWithServers(v *bool) *SettingUpda
 	return _u
 }
 
+// SetStopServersOnExit sets the "stop_servers_on_exit" field.
+func (_u *SettingUpdate) SetStopServersOnExit(v bool) *SettingUpdate {
+	_u.mutation.SetStopServersOnExit(v)
+	return _u
+}
+
+// SetNillableStopServersOnExit sets the "stop_servers_on_exit" field if the given value is not nil.
+func (_u *SettingUpdate) SetNillableStopServersOnExit(v *bool) *SettingUpdate {
+	if v != nil {
+		_u.SetStopServersOnExit(*v)
+	}
+	return _u
+}
+
 // SetTheme sets the "theme" field.
 func (_u *SettingUpdate) SetTheme(v setting.Theme) *SettingUpdate {
 	_u.mutation.SetTheme(v)
@@ -159,6 +173,48 @@ func (_u *SettingUpdate) SetTheme(v setting.Theme) *SettingUpdate {
 func (_u *SettingUpdate) SetNillableTheme(v *setting.Theme) *SettingUpdate {
 	if v != nil {
 		_u.SetTheme(*v)
+	}
+	return _u
+}
+
+// SetBoldSaturated sets the "bold_saturated" field.
+func (_u *SettingUpdate) SetBoldSaturated(v bool) *SettingUpdate {
+	_u.mutation.SetBoldSaturated(v)
+	return _u
+}
+
+// SetNillableBoldSaturated sets the "bold_saturated" field if the given value is not nil.
+func (_u *SettingUpdate) SetNillableBoldSaturated(v *bool) *SettingUpdate {
+	if v != nil {
+		_u.SetBoldSaturated(*v)
+	}
+	return _u
+}
+
+// SetComfortDensity sets the "comfort_density" field.
+func (_u *SettingUpdate) SetComfortDensity(v bool) *SettingUpdate {
+	_u.mutation.SetComfortDensity(v)
+	return _u
+}
+
+// SetNillableComfortDensity sets the "comfort_density" field if the given value is not nil.
+func (_u *SettingUpdate) SetNillableComfortDensity(v *bool) *SettingUpdate {
+	if v != nil {
+		_u.SetComfortDensity(*v)
+	}
+	return _u
+}
+
+// SetTimestampsLocal sets the "timestamps_local" field.
+func (_u *SettingUpdate) SetTimestampsLocal(v bool) *SettingUpdate {
+	_u.mutation.SetTimestampsLocal(v)
+	return _u
+}
+
+// SetNillableTimestampsLocal sets the "timestamps_local" field if the given value is not nil.
+func (_u *SettingUpdate) SetNillableTimestampsLocal(v *bool) *SettingUpdate {
+	if v != nil {
+		_u.SetTimestampsLocal(*v)
 	}
 	return _u
 }
@@ -272,8 +328,20 @@ func (_u *SettingUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.ConfirmQuitWithServers(); ok {
 		_spec.SetField(setting.FieldConfirmQuitWithServers, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.StopServersOnExit(); ok {
+		_spec.SetField(setting.FieldStopServersOnExit, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.Theme(); ok {
 		_spec.SetField(setting.FieldTheme, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.BoldSaturated(); ok {
+		_spec.SetField(setting.FieldBoldSaturated, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ComfortDensity(); ok {
+		_spec.SetField(setting.FieldComfortDensity, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.TimestampsLocal(); ok {
+		_spec.SetField(setting.FieldTimestampsLocal, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.KekSalt(); ok {
 		_spec.SetField(setting.FieldKekSalt, field.TypeBytes, value)
@@ -422,6 +490,20 @@ func (_u *SettingUpdateOne) SetNillableConfirmQuitWithServers(v *bool) *SettingU
 	return _u
 }
 
+// SetStopServersOnExit sets the "stop_servers_on_exit" field.
+func (_u *SettingUpdateOne) SetStopServersOnExit(v bool) *SettingUpdateOne {
+	_u.mutation.SetStopServersOnExit(v)
+	return _u
+}
+
+// SetNillableStopServersOnExit sets the "stop_servers_on_exit" field if the given value is not nil.
+func (_u *SettingUpdateOne) SetNillableStopServersOnExit(v *bool) *SettingUpdateOne {
+	if v != nil {
+		_u.SetStopServersOnExit(*v)
+	}
+	return _u
+}
+
 // SetTheme sets the "theme" field.
 func (_u *SettingUpdateOne) SetTheme(v setting.Theme) *SettingUpdateOne {
 	_u.mutation.SetTheme(v)
@@ -432,6 +514,48 @@ func (_u *SettingUpdateOne) SetTheme(v setting.Theme) *SettingUpdateOne {
 func (_u *SettingUpdateOne) SetNillableTheme(v *setting.Theme) *SettingUpdateOne {
 	if v != nil {
 		_u.SetTheme(*v)
+	}
+	return _u
+}
+
+// SetBoldSaturated sets the "bold_saturated" field.
+func (_u *SettingUpdateOne) SetBoldSaturated(v bool) *SettingUpdateOne {
+	_u.mutation.SetBoldSaturated(v)
+	return _u
+}
+
+// SetNillableBoldSaturated sets the "bold_saturated" field if the given value is not nil.
+func (_u *SettingUpdateOne) SetNillableBoldSaturated(v *bool) *SettingUpdateOne {
+	if v != nil {
+		_u.SetBoldSaturated(*v)
+	}
+	return _u
+}
+
+// SetComfortDensity sets the "comfort_density" field.
+func (_u *SettingUpdateOne) SetComfortDensity(v bool) *SettingUpdateOne {
+	_u.mutation.SetComfortDensity(v)
+	return _u
+}
+
+// SetNillableComfortDensity sets the "comfort_density" field if the given value is not nil.
+func (_u *SettingUpdateOne) SetNillableComfortDensity(v *bool) *SettingUpdateOne {
+	if v != nil {
+		_u.SetComfortDensity(*v)
+	}
+	return _u
+}
+
+// SetTimestampsLocal sets the "timestamps_local" field.
+func (_u *SettingUpdateOne) SetTimestampsLocal(v bool) *SettingUpdateOne {
+	_u.mutation.SetTimestampsLocal(v)
+	return _u
+}
+
+// SetNillableTimestampsLocal sets the "timestamps_local" field if the given value is not nil.
+func (_u *SettingUpdateOne) SetNillableTimestampsLocal(v *bool) *SettingUpdateOne {
+	if v != nil {
+		_u.SetTimestampsLocal(*v)
 	}
 	return _u
 }
@@ -575,8 +699,20 @@ func (_u *SettingUpdateOne) sqlSave(ctx context.Context) (_node *Setting, err er
 	if value, ok := _u.mutation.ConfirmQuitWithServers(); ok {
 		_spec.SetField(setting.FieldConfirmQuitWithServers, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.StopServersOnExit(); ok {
+		_spec.SetField(setting.FieldStopServersOnExit, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.Theme(); ok {
 		_spec.SetField(setting.FieldTheme, field.TypeEnum, value)
+	}
+	if value, ok := _u.mutation.BoldSaturated(); ok {
+		_spec.SetField(setting.FieldBoldSaturated, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ComfortDensity(); ok {
+		_spec.SetField(setting.FieldComfortDensity, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.TimestampsLocal(); ok {
+		_spec.SetField(setting.FieldTimestampsLocal, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.KekSalt(); ok {
 		_spec.SetField(setting.FieldKekSalt, field.TypeBytes, value)

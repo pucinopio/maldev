@@ -77,6 +77,26 @@ func ConfirmQuitWithServers(v bool) predicate.Setting {
 	return predicate.Setting(sql.FieldEQ(FieldConfirmQuitWithServers, v))
 }
 
+// StopServersOnExit applies equality check predicate on the "stop_servers_on_exit" field. It's identical to StopServersOnExitEQ.
+func StopServersOnExit(v bool) predicate.Setting {
+	return predicate.Setting(sql.FieldEQ(FieldStopServersOnExit, v))
+}
+
+// BoldSaturated applies equality check predicate on the "bold_saturated" field. It's identical to BoldSaturatedEQ.
+func BoldSaturated(v bool) predicate.Setting {
+	return predicate.Setting(sql.FieldEQ(FieldBoldSaturated, v))
+}
+
+// ComfortDensity applies equality check predicate on the "comfort_density" field. It's identical to ComfortDensityEQ.
+func ComfortDensity(v bool) predicate.Setting {
+	return predicate.Setting(sql.FieldEQ(FieldComfortDensity, v))
+}
+
+// TimestampsLocal applies equality check predicate on the "timestamps_local" field. It's identical to TimestampsLocalEQ.
+func TimestampsLocal(v bool) predicate.Setting {
+	return predicate.Setting(sql.FieldEQ(FieldTimestampsLocal, v))
+}
+
 // KekSalt applies equality check predicate on the "kek_salt" field. It's identical to KekSaltEQ.
 func KekSalt(v []byte) predicate.Setting {
 	return predicate.Setting(sql.FieldEQ(FieldKekSalt, v))
@@ -327,6 +347,16 @@ func ConfirmQuitWithServersNEQ(v bool) predicate.Setting {
 	return predicate.Setting(sql.FieldNEQ(FieldConfirmQuitWithServers, v))
 }
 
+// StopServersOnExitEQ applies the EQ predicate on the "stop_servers_on_exit" field.
+func StopServersOnExitEQ(v bool) predicate.Setting {
+	return predicate.Setting(sql.FieldEQ(FieldStopServersOnExit, v))
+}
+
+// StopServersOnExitNEQ applies the NEQ predicate on the "stop_servers_on_exit" field.
+func StopServersOnExitNEQ(v bool) predicate.Setting {
+	return predicate.Setting(sql.FieldNEQ(FieldStopServersOnExit, v))
+}
+
 // ThemeEQ applies the EQ predicate on the "theme" field.
 func ThemeEQ(v Theme) predicate.Setting {
 	return predicate.Setting(sql.FieldEQ(FieldTheme, v))
@@ -345,6 +375,36 @@ func ThemeIn(vs ...Theme) predicate.Setting {
 // ThemeNotIn applies the NotIn predicate on the "theme" field.
 func ThemeNotIn(vs ...Theme) predicate.Setting {
 	return predicate.Setting(sql.FieldNotIn(FieldTheme, vs...))
+}
+
+// BoldSaturatedEQ applies the EQ predicate on the "bold_saturated" field.
+func BoldSaturatedEQ(v bool) predicate.Setting {
+	return predicate.Setting(sql.FieldEQ(FieldBoldSaturated, v))
+}
+
+// BoldSaturatedNEQ applies the NEQ predicate on the "bold_saturated" field.
+func BoldSaturatedNEQ(v bool) predicate.Setting {
+	return predicate.Setting(sql.FieldNEQ(FieldBoldSaturated, v))
+}
+
+// ComfortDensityEQ applies the EQ predicate on the "comfort_density" field.
+func ComfortDensityEQ(v bool) predicate.Setting {
+	return predicate.Setting(sql.FieldEQ(FieldComfortDensity, v))
+}
+
+// ComfortDensityNEQ applies the NEQ predicate on the "comfort_density" field.
+func ComfortDensityNEQ(v bool) predicate.Setting {
+	return predicate.Setting(sql.FieldNEQ(FieldComfortDensity, v))
+}
+
+// TimestampsLocalEQ applies the EQ predicate on the "timestamps_local" field.
+func TimestampsLocalEQ(v bool) predicate.Setting {
+	return predicate.Setting(sql.FieldEQ(FieldTimestampsLocal, v))
+}
+
+// TimestampsLocalNEQ applies the NEQ predicate on the "timestamps_local" field.
+func TimestampsLocalNEQ(v bool) predicate.Setting {
+	return predicate.Setting(sql.FieldNEQ(FieldTimestampsLocal, v))
 }
 
 // KekSaltEQ applies the EQ predicate on the "kek_salt" field.
