@@ -52,10 +52,13 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 	case SettingsLoadedMsg:
 		m.err = msg.Err
 		m.row = msg.Row
-		// Apply the persisted theme so a restart shows the same palette
-		// the operator picked last session.
+		// Apply the persisted theme + apparence so a restart shows the
+		// same palette/weight/density/time-zone the operator picked last
+		// session. Pre-fix the toggles persisted correctly but the
+		// runtime helpers ignored them until restart anyway.
 		if m.row != nil {
 			ApplyTheme(string(m.row.Theme))
+			ApplyApparence(m.row.BoldSaturated, m.row.ComfortDensity, m.row.TimestampsLocal)
 		}
 		return m, nil
 	case settingsSetThemeMsg:
@@ -108,18 +111,21 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 			case "bold_saturated":
 				m.row.BoldSaturated = !m.row.BoldSaturated
 				v := m.row.BoldSaturated
+				ApplyApparence(v, m.row.ComfortDensity, m.row.TimestampsLocal)
 				return m, settingsPersistCmd(m.svc, func(q *ent.SettingUpdateOne) {
 					q.SetBoldSaturated(v)
 				})
 			case "comfort_density":
 				m.row.ComfortDensity = !m.row.ComfortDensity
 				v := m.row.ComfortDensity
+				ApplyApparence(m.row.BoldSaturated, v, m.row.TimestampsLocal)
 				return m, settingsPersistCmd(m.svc, func(q *ent.SettingUpdateOne) {
 					q.SetComfortDensity(v)
 				})
 			case "timestamps_local":
 				m.row.TimestampsLocal = !m.row.TimestampsLocal
 				v := m.row.TimestampsLocal
+				ApplyApparence(m.row.BoldSaturated, m.row.ComfortDensity, v)
 				return m, settingsPersistCmd(m.svc, func(q *ent.SettingUpdateOne) {
 					q.SetTimestampsLocal(v)
 				})

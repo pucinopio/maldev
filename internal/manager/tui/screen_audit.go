@@ -241,7 +241,8 @@ func (m *auditModel) rebuildTable() {
 			note = fmt.Sprintf("%v", n)
 		}
 		raw = append(raw, []string{
-			r.CreatedAt.Format("2006-01-02 15:04:05"),
+			// FormatTime respects the operator's timestamps_local preference.
+			FormatTime(r.CreatedAt, "2006-01-02 15:04:05"),
 			r.Kind,
 			r.Actor,
 			r.TargetKind + "/" + r.TargetID,
@@ -274,7 +275,7 @@ func (m auditModel) renderPayload(row *ent.AuditEvent) string {
 		fmt.Sprintf("  %-12s %s", "kind:", row.Kind),
 		fmt.Sprintf("  %-12s %s", "actor:", row.Actor),
 		fmt.Sprintf("  %-12s %s/%s", "target:", row.TargetKind, row.TargetID),
-		fmt.Sprintf("  %-12s %s", "timestamp:", row.CreatedAt.Format(time.RFC3339)),
+		fmt.Sprintf("  %-12s %s", "timestamp:", FormatTime(row.CreatedAt, time.RFC3339)),
 		"",
 		"  payload:",
 		"  " + string(b),

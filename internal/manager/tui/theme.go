@@ -14,10 +14,35 @@ package tui
 // definitions that intentionally hold raw hex literals.
 
 import (
+	"time"
+
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/oioio-space/maldev/internal/manager/tui/core"
 )
+
+// ApplyApparence updates the apparence runtime flags and reseeds the
+// style cache so the next render picks up the new toggle values. Called
+// from settings_screen after each toggle and at boot from the
+// SettingsLoadedMsg handler.
+func ApplyApparence(bold, comfort, localTS bool) {
+	apparenceBold = bold
+	apparenceComfort = comfort
+	apparenceLocalTS = localTS
+	reseedStyles()
+}
+
+// FormatTime renders t using the operator's timestamps_local preference:
+// when on, t is converted to the local timezone before formatting; when
+// off, UTC. Pass the same layout strings any caller would pass to t.Format
+// (e.g. "2006-01-02 15:04:05"). Pre-fix screens hardcoded
+// .Format("2006-01-02") which ignored the preference entirely.
+func FormatTime(t time.Time, layout string) string {
+	if apparenceLocalTS {
+		return t.Local().Format(layout)
+	}
+	return t.UTC().Format(layout)
+}
 
 // paletteData is the colour set a Theme resolves to. Three palettes ship
 // today: neon (default), mono, nord-soft. ApplyTheme swaps the active one.
@@ -55,6 +80,16 @@ var (
 // Palette is the active palette. Read by every screen via Palette.Xxx. Mutated
 // only by ApplyTheme; treat as read-only from caller code.
 var Palette = paletteNeon
+
+// Apparence runtime flags consulted by reseedStyles + FormatTime. Mutated
+// only by ApplyApparence (called from screen_settings.go on the
+// SettingsLoadedMsg and after each toggle). Defaults match the Setting
+// schema defaults so a fresh boot before the row loads renders correctly.
+var (
+	apparenceBold    = true
+	apparenceComfort = false
+	apparenceLocalTS = false
+)
 
 // Style vars below are recomputed from Palette by reseedStyles(). They are
 // not const because ApplyTheme swaps them when the operator picks a theme
@@ -137,17 +172,31 @@ func ApplyTheme(name string) {
 }
 
 func reseedStyles() {
+	// bold_saturated OFF → Glow* and HintKey skip the Bold(true) call so
+	// the rendered output stays plain-weight. Operators on minimal-emphasis
+	// terminals (some serial consoles, very wide ASCII outputs) prefer
+	// this. Saturated foreground colours still come from Palette, so the
+	// distinction is "emphasis weight" not "colour intensity".
+	bold := apparenceBold
+
 	Base = lipgloss.NewStyle().Foreground(Palette.Fg)
 	Dim = lipgloss.NewStyle().Foreground(Palette.FgDim)
 	Mute = lipgloss.NewStyle().Foreground(Palette.FgMute)
-	GlowCyan = lipgloss.NewStyle().Foreground(Palette.Cyan).Bold(true)
-	GlowMagent = lipgloss.NewStyle().Foreground(Palette.Magenta).Bold(true)
-	GlowGreen = lipgloss.NewStyle().Foreground(Palette.Green).Bold(true)
-	GlowRed = lipgloss.NewStyle().Foreground(Palette.Red).Bold(true)
-	GlowYellow = lipgloss.NewStyle().Foreground(Palette.Yellow).Bold(true)
-	GlowViolet = lipgloss.NewStyle().Foreground(Palette.Violet).Bold(true)
+	GlowCyan = lipgloss.NewStyle().Foreground(Palette.Cyan).Bold(bold)
+	GlowMagent = lipgloss.NewStyle().Foreground(Palette.Magenta).Bold(bold)
+	GlowGreen = lipgloss.NewStyle().Foreground(Palette.Green).Bold(bold)
+	GlowRed = lipgloss.NewStyle().Foreground(Palette.Red).Bold(bold)
+	GlowYellow = lipgloss.NewStyle().Foreground(Palette.Yellow).Bold(bold)
+	GlowViolet = lipgloss.NewStyle().Foreground(Palette.Violet).Bold(bold)
 
-	BoxStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(Palette.BorderBright).Padding(0, 1)
+	// comfort_density ON → BoxStyle gains a vertical padding row so every
+	// box reads less cramped. The single-row default keeps narrow screens
+	// usable; switching it on is a per-operator preference.
+	boxVPad := 0
+	if apparenceComfort {
+		boxVPad = 1
+	}
+	BoxStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(Palette.BorderBright).Padding(boxVPad, 1)
 	BoxFocused = BoxStyle.BorderForeground(Palette.Magenta)
 
 	TabActive = lipgloss.NewStyle().Foreground(Palette.Fg).Bold(true).Padding(0, 2).
@@ -165,7 +214,7 @@ func reseedStyles() {
 	ModalDanger = Modal.BorderForeground(Palette.Red)
 	ModalOK = Modal.BorderForeground(Palette.Green)
 
-	HintKey = lipgloss.NewStyle().Foreground(Palette.Magenta).Bold(true).Padding(0, 1)
+	HintKey = lipgloss.NewStyle().Foreground(Palette.Magenta).Bold(bold).Padding(0, 1)
 	HintText = lipgloss.NewStyle().Foreground(Palette.FgDim)
 
 	// Filter-chip styling. Pill* uses status colours (green/yellow/red/violet)
