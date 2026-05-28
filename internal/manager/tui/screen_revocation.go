@@ -176,15 +176,18 @@ func (m *revocationModel) rebuildTable() {
 	raw := make([][]string, 0, len(m.rows))
 	for _, r := range m.rows {
 		raw = append(raw, []string{
-			shortUUID(r.LicenseUUID),
+			// Full UUID — setAutoFitRows grows the column to ideal width
+			// (36 chars) when there's room, shrinks + truncates otherwise.
+			r.LicenseUUID,
 			r.Subject,
 			r.KeyID,
 			r.RevokedAt.Format("2006-01-02"),
 			r.Reason,
 		})
 	}
-	// Weights: UUID fixed-format → 0; LICENSE (subject) prioritized; REASON
-	// growing; KEYID modest; AT fixed-format.
+	// Weights: UUID stays at content-derived ideal (no growth-share);
+	// LICENSE (subject) prioritized; REASON growing; KEYID modest; AT
+	// fixed-format.
 	setAutoFitRows(&m.table, BoxedInner(m.width), []int{0, 3, 1, 0, 2}, raw, 60)
 	tableH := clampTableHeight(listTableHeight(m.hgt, m.width,
 		" La CRL (Certificate Revocation List) liste les licences révoquées. Le serveur revocation l'expose en HTTPS pour que les clients vérifient la validité d'une licence.")-5,

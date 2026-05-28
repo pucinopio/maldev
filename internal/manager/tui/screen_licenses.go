@@ -343,15 +343,10 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 
 	case tableSelectRowMsg:
 		m.table.SetCursor(msg.row)
-		// Keep the PEM preview in sync with the new selection when the PEM
-		// tab is currently open (mouse click on a different row).
-		if m.detail && m.detailTab == 2 {
-			if row := m.selectedRow(); row != nil {
-				m.pemViewport.SetContent(Base.Render(string(row.Pem)))
-				m.pemViewport.GotoTop()
-			}
-		}
-		return m, nil
+		// Refresh whichever detail tab is open against the newly-selected
+		// row. Without this the chain/audit/PEM tab keeps showing the
+		// previous licence's data after a mouse click on a different row.
+		return m, m.refreshDetailForSelection()
 
 	case tea.KeyMsg:
 		// Search mode absorbs keys.
@@ -541,13 +536,48 @@ func (m licensesModel) Update(msg tea.Msg) (licensesModel, tea.Cmd) {
 	prevCursor := m.table.Cursor()
 	var cmd tea.Cmd
 	m.table, cmd = m.table.Update(msg)
-	if m.detail && m.detailTab == 2 && m.table.Cursor() != prevCursor {
-		if row := m.selectedRow(); row != nil {
-			m.pemViewport.SetContent(Base.Render(string(row.Pem)))
-			m.pemViewport.GotoTop()
+	if m.detail && m.table.Cursor() != prevCursor {
+		// Keyboard cursor moved (↑/↓/j/k) — refresh the open detail tab
+		// against the new selection. Same path the click handler takes.
+		refresh := m.refreshDetailForSelection()
+		if refresh != nil {
+			cmd = tea.Batch(cmd, refresh)
 		}
 	}
 	return m, cmd
+}
+
+// refreshDetailForSelection re-loads whichever detail tab is currently
+// open against the row at the table cursor. Returns nil when nothing
+// needs loading (detail closed, no selection, or tab is the static
+// Identité/Bindings views which derive entirely from the row in memory).
+// The PEM viewport is updated synchronously since its content lives on
+// the model; Audit and Chain need an async fetch.
+func (m *licensesModel) refreshDetailForSelection() tea.Cmd {
+	if !m.detail {
+		return nil
+	}
+	row := m.selectedRow()
+	if row == nil {
+		return nil
+	}
+	switch m.detailTab {
+	case 2: // PEM
+		m.pemViewport.SetContent(Base.Render(string(row.Pem)))
+		m.pemViewport.GotoTop()
+		return nil
+	case 3: // Audit
+		m.detailAuditRows = nil
+		m.detailAuditLoading = true
+		m.detailAuditErr = nil
+		return loadLicenseAuditCmd(m.svc, row)
+	case 4: // Chain
+		m.detailChain = nil
+		m.detailChainLoading = true
+		m.detailChainErr = nil
+		return loadLicenseChainCmd(m.svc, row)
+	}
+	return nil
 }
 
 // pushOverlayMsg asks app.go to push an overlay onto the stack.
@@ -612,7 +642,11 @@ func (m *licensesModel) rebuildTable() {
 		}
 		raw = append(raw, []string{
 			status,
-			shortUUID(r.LicenseUUID),
+			// Feed the full 36-char UUID so setAutoFitRows can grow the
+			// column up to its full ideal when there's slack; on narrow
+			// terminals the per-cell truncate inside setAutoFitRows clips
+			// it to "<prefix>…" so nothing overflows.
+			r.LicenseUUID,
 			r.Subject,
 			strings.Join(r.Audience, ","),
 			r.IssuerName,
@@ -622,8 +656,11 @@ func (m *licensesModel) rebuildTable() {
 	}
 
 	// Auto-size: ideals derived from header+content (cap 60). Weights:
-	// STATUS/UUID/EXPIRES fixed-format → 0; SUBJECT biggest share; AUDIENCE+
-	// FEATURES grow on lists; KEYID grows modestly.
+	// STATUS/UUID/EXPIRES fixed-format → 0 so they stay at the content-
+	// derived ideal (36 chars for a full UUID, never overshooting into
+	// wasted padding); SUBJECT biggest share; AUDIENCE+FEATURES grow on
+	// lists; KEYID grows modestly. On narrow terminals the shrink phase
+	// in fitColumns proportionally clips UUID along with the others.
 	setAutoFitRows(&m.table, BoxedInner(m.width), []int{0, 0, 3, 2, 1, 0, 2}, raw, 60)
 
 	// Use the same layout-reservation budget as WindowSizeMsg uses for the
